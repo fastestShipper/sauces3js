@@ -42,7 +42,12 @@ export class Player {
     const sc = 1.8 / 3.3;
     ch.scale.setScalar(sc);
     ch.position.y = 0;
-    ch.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+    ch.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) { if (!m) continue; m.side = THREE.FrontSide; if (m.map) m.map.anisotropy = 8; }
+    });
     this.char = ch;
     this.root.add(ch);
     this.mixer = new THREE.AnimationMixer(ch);

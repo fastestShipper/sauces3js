@@ -2,7 +2,7 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260613b';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260614a';
 
 const CHAR_SCALE = 1.8 / 3.3;
 
@@ -21,6 +21,14 @@ export class StreetLife {
     for (const f of files) {
       try { protos.push(await loader.loadAsync('./assets/models/' + f)); }
       catch { /* opcional */ }
+    }
+    // sanitizar materiales de personajes: FrontSide corta overdraw; anisotropia mata el shimmer de piel/ropa
+    for (const p of protos) {
+      p.scene.traverse(o => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) { if (!m) continue; m.side = THREE.FrontSide; if (m.map) m.map.anisotropy = 8; }
+      });
     }
     const rng = mulberry32(2024);
     let placed = 0, guard = 0;
@@ -79,6 +87,14 @@ export class StreetLife {
     const carProtos = [];
     for (const f of carFiles) {
       try { carProtos.push(await loader.loadAsync('./assets/models/' + f)); } catch { }
+    }
+    // mismo sanitize que personajes: los autos comparten el atlas citybits, venian en anisotropia 1
+    for (const p of carProtos) {
+      p.scene.traverse(o => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) { if (!m) continue; m.side = THREE.FrontSide; if (m.map) m.map.anisotropy = 8; }
+      });
     }
     const trng = mulberry32(555);
     const nCars = Math.min(64, candidates.length * 2);

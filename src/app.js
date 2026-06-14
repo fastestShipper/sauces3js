@@ -4,11 +4,11 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260613b';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260613b';
-import { Player } from './player.js?v=20260613b';
-import { MiniMap } from './minimap.js?v=20260613b';
-import { StreetLife } from './npcs.js?v=20260613b';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260614a';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260614a';
+import { Player } from './player.js?v=20260614a';
+import { MiniMap } from './minimap.js?v=20260614a';
+import { StreetLife } from './npcs.js?v=20260614a';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -134,7 +134,15 @@ async function boot() {
     gltf.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const size = box.getSize(new THREE.Vector3());
+    const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     for (const src of meshes) {
+      // sanitizar material del GLB: FrontSide mata z-fighting y corta overdraw a la mitad;
+      // anisotropia mata el shimmer rasante del atlas de props (citybits venia en 1)
+      const sm = src.material;
+      if (sm) {
+        sm.side = THREE.FrontSide;
+        if (sm.map) sm.map.anisotropy = maxAniso;
+      }
       const im = new THREE.InstancedMesh(src.geometry, src.material, spots.length);
       im.castShadow = opts.shadows !== false;
       const m4 = new THREE.Matrix4();
