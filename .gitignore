@@ -1,0 +1,23 @@
+# Dev screenshots (throwaway playtest captures, not part of the deploy)
+shots/
+
+# Dependencies
+node_modules/
+
+# Secrets / env
+.env
+.env.*
+*.key
+*.pem
+id_*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# Deploy tarballs
+*.tar
+*.tar.gz

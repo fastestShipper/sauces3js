@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Los Sauces · San Borja</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e1116; height: 100%; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; top: 14px; left: 18px; color: #fff;
+    font: 600 14px/1.5 system-ui, sans-serif;
+    text-shadow: 0 1px 3px rgba(10,10,30,.9), 0 0 8px rgba(10,10,30,.5);
+    pointer-events: none; user-select: none;
+  }
+  #hud .title { font-size: 17px; font-weight: 800; }
+  #minimap {
+    position: fixed; top: 14px; right: 14px; width: 280px; height: 280px;
+    border-radius: 14px; border: 2px solid rgba(35,32,28,.95);
+    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  }
+  #loading {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    background: linear-gradient(180deg, #16324f, #0e1116);
+    color: #fff; font: 600 16px system-ui, sans-serif; z-index: 50;
+  }
+  #loading .bar { width: 280px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
+  #loading .bar i { display: block; height: 100%; width: 0%; background: #ffd166; transition: width .2s; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div class="title">Los Sauces · San Borja</div>
+  <div id="hint">WASD moverse · ESPACIO saltar · clic der girar · rueda zoom</div>
+</div>
+<canvas id="minimap" width="560" height="560"></canvas>
+<div id="loading"><div>Construyendo Los Sauces…</div><div class="bar"><i id="lbar"></i></div></div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/app.js?v=20260613b"></script>
+</body>
+</html>
