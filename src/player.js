@@ -1,6 +1,7 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { sanitizeImported } from './glbutil.js?v=20260614a';
 
 export class Player {
   constructor(scene, city, spawn) {
@@ -42,12 +43,8 @@ export class Player {
     const sc = 1.8 / 3.3;
     ch.scale.setScalar(sc);
     ch.position.y = 0;
-    ch.traverse(o => {
-      if (!o.isMesh) return;
-      o.castShadow = true;
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) { if (!m) continue; m.side = THREE.FrontSide; if (m.map) m.map.anisotropy = 8; }
-    });
+    ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    sanitizeImported(ch);
     this.char = ch;
     this.root.add(ch);
     this.mixer = new THREE.AnimationMixer(ch);

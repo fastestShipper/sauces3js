@@ -9,6 +9,7 @@ import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260614
 import { Player } from './player.js?v=20260614a';
 import { MiniMap } from './minimap.js?v=20260614a';
 import { StreetLife } from './npcs.js?v=20260614a';
+import { sanitizeImported } from './glbutil.js?v=20260614a';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -128,21 +129,14 @@ async function boot() {
   const instanced = async (file, spots, opts = {}) => {
     if (!spots.length) return;
     const gltf = await loader.loadAsync(MOD + file);
+    sanitizeImported(gltf.scene, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
     const rng = mulberry32(opts.seed ?? 7);
     const meshes = [];
     gltf.scene.updateMatrixWorld(true);
     gltf.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const size = box.getSize(new THREE.Vector3());
-    const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     for (const src of meshes) {
-      // sanitizar material del GLB: FrontSide mata z-fighting y corta overdraw a la mitad;
-      // anisotropia mata el shimmer rasante del atlas de props (citybits venia en 1)
-      const sm = src.material;
-      if (sm) {
-        sm.side = THREE.FrontSide;
-        if (sm.map) sm.map.anisotropy = maxAniso;
-      }
       const im = new THREE.InstancedMesh(src.geometry, src.material, spots.length);
       im.castShadow = opts.shadows !== false;
       const m4 = new THREE.Matrix4();
