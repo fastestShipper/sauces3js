@@ -4,15 +4,15 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617b';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617b';
-import { Player } from './player.js?v=20260617b';
-import { MiniMap } from './minimap.js?v=20260617b';
-import { StreetLife } from './npcs.js?v=20260617b';
-import { sanitizeImported } from './glbutil.js?v=20260617b';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617b';
-import { Net } from './net.js?v=20260617b';
-import { ChatUI, showBubble } from './chat.js?v=20260617b';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617c';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617c';
+import { Player } from './player.js?v=20260617c';
+import { MiniMap } from './minimap.js?v=20260617c';
+import { StreetLife } from './npcs.js?v=20260617c';
+import { sanitizeImported } from './glbutil.js?v=20260617c';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617c';
+import { Net } from './net.js?v=20260617c';
+import { ChatUI, showBubble } from './chat.js?v=20260617c';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -471,6 +471,7 @@ async function boot() {
   await life.load(40, seatSpots, P.parkTrees);
   window.__game = { player, city, scene };  // hooks de test
   const minimap = new MiniMap(city, document.getElementById('minimap'));
+  const coordsEl = document.getElementById('coords');   // ubicacion para compartir con otros
   const net = new Net(scene, player);   // multiplayer
   window.__game.net = net;
 
@@ -484,6 +485,18 @@ async function boot() {
   chat.onOpen = () => { player.locked = true; };
   chat.onClose = () => { player.locked = false; player.keys = {}; };
   net.onChat = (name, text) => chat.add(name, text, false);
+
+  // tecla B: teletransporte a la gruta de la Virgen del Parque Los Sauces
+  if (P.landmark) {
+    const [lx, lz] = P.landmark;
+    addEventListener('keydown', (e) => {
+      if (e.code === 'KeyB' && !player.locked) {
+        player.pos.set(lx, 0, lz + 8);    // en la plaza, frente a la gruta
+        player.velY = 0; player.grounded = true;
+        player.heading = Math.PI;         // mirando hacia la gruta
+      }
+    });
+  }
 
   let streetT = 0;
   const clock = new THREE.Clock();
@@ -501,7 +514,11 @@ async function boot() {
     sun.target.position.set(snapX, 0, snapZ);
     sun.target.updateMatrixWorld();
     streetT -= dt;
-    if (streetT <= 0) { streetT = 0.2; minimap.updateStreet(player.pos.x, player.pos.z); }
+    if (streetT <= 0) {
+      streetT = 0.2;
+      minimap.updateStreet(player.pos.x, player.pos.z);
+      coordsEl.textContent = 'X ' + Math.round(player.pos.x) + ' · Z ' + Math.round(player.pos.z);
+    }
     minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes);
     renderer.render(scene, camera);
   });

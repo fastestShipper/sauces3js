@@ -211,7 +211,7 @@ export class City {
       const s = Math.sin(-c.ang), co = Math.cos(-c.ang);
       const lx = dx * co - dz * s;
       const lz = dx * s + dz * co;
-      if (Math.abs(lz) < c.hw + 0.1 && Math.abs(lx) < c.hd + 0.1) return 1.45;
+      if (Math.abs(lz) < c.hw + 0.1 && Math.abs(lx) < c.hd + 0.1) return c.roofY ?? 1.75;
     }
     return 0;
   }

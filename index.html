@@ -80,15 +80,23 @@
     background: rgba(12,14,20,.93); color: #fff;
     font: 600 15px system-ui, sans-serif; outline: none;
   }
+  #coords {
+    position: fixed; right: 14px; top: 216px; z-index: 30;
+    padding: 5px 11px; border-radius: 9px;
+    background: rgba(20,22,28,.74); color: #fff;
+    font: 700 13px/1 ui-monospace, 'Cascadia Code', Menlo, monospace;
+    letter-spacing: .4px; user-select: text; cursor: text;
+  }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="hud">
   <div class="title">Los Sauces · San Borja</div>
-  <div id="hint">WASD moverse · ESPACIO saltar · clic der girar · rueda zoom · ENTER chat</div>
+  <div id="hint">WASD moverse · ESPACIO saltar · clic der girar · rueda zoom · ENTER chat · B gruta</div>
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
+<div id="coords">X 0 · Z 0</div>
 <div id="chat-log"></div>
 <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Escribe y Enter para enviar…">
 <div id="loading"><div>Construyendo Los Sauces…</div><div class="bar"><i id="lbar"></i></div></div>
@@ -111,6 +119,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260617b"></script>
+<script type="module" src="./src/app.js?v=20260617c"></script>
 </body>
 </html>

@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260617b';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260617b';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260617c';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260617c';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -526,7 +526,7 @@ export function buildParks(city) {
     const wantS = Math.max(4, Math.min(260, Math.floor((maxx - minx) * (maxz - minz) / 38)));
     for (let k = 0; k < wantS; k++) {
       const sx = minx + rng() * (maxx - minx), sz = minz + rng() * (maxz - minz);
-      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 0.8) || inPlaza(sx, sz, gi)) continue;
+      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 2.2) || inPlaza(sx, sz, gi)) continue;
       parkScatter.push([sx, sz]);
     }
     // bancas perimetrales mirando hacia adentro del parque
@@ -547,5 +547,5 @@ export function buildParks(city) {
     }
   }
   if (bigC) buildParkLandmark(plaza, feature, bigC[0], bigC[1]);
-  return { lawn, plaza, feature, parkTrees, parkBenches, parkScatter };
+  return { lawn, plaza, feature, parkTrees, parkBenches, parkScatter, landmark: bigC };
 }

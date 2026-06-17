@@ -2,9 +2,9 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260617b';
-import { sanitizeImported } from './glbutil.js?v=20260617b';
-import { equipWeapon } from './weapons.js?v=20260617b';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260617c';
+import { sanitizeImported } from './glbutil.js?v=20260617c';
+import { equipWeapon } from './weapons.js?v=20260617c';
 
 const ADV_SCALE = 1.9 / 2.54;   // personajes KayKit (rig Medium ~2.54u) a ~1.9m
 const ADV_FILES = ['char_knight.glb', 'char_barbarian.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue.glb', 'char_rogue_hooded.glb'];
@@ -123,7 +123,7 @@ export class StreetLife {
       wrap.add(car);
       car.position.y = -box.min.y * sc;
       this.scene.add(wrap);
-      const collider = { x: 0, z: 0, ang: 0, hw: 1.9, hd: 1.05 };
+      const collider = { x: 0, z: 0, ang: 0, hw: 1.9, hd: 1.05, roofY: CAR_H - 0.15 };
       this.city.carColliders.push(collider);
       this.traffic.push({
         node: wrap, pts: r.p, hw: (r.w ?? 6) * 0.5,
@@ -173,11 +173,22 @@ export class StreetLife {
       const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1];
       const L = Math.hypot(bx - ax, bz - az);
       if (L < 0.05) { car.seg = this.advance(car); continue; }
-      car.t += (car.spd * dt / L) * (car.fwd ? 1 : -1);
-      if (car.t >= 1) { car.t = 0; car.seg = this.advance(car); continue; }
-      if (car.t < 0) { car.t = 1; car.seg = this.advance(car); continue; }
       const ux = (bx - ax) / L, uz = (bz - az) / L;
       const lane = car.hw * 0.45 * (car.fwd ? 1 : -1);
+      // FRENO: si el jugador (a nivel de piso, no encima de un auto) esta ~3.5m
+      // adelante, el auto no avanza (no lo atropella). car-vs-car omitido para
+      // no generar deadlocks de trafico en cruces.
+      const px0 = ax + ux * L * car.t + (-uz) * lane;
+      const pz0 = az + uz * L * car.t + ux * lane;
+      const fdx = car.fwd ? ux : -ux, fdz = car.fwd ? uz : -uz;
+      const lookX = px0 + fdx * 3.5, lookZ = pz0 + fdz * 3.5;
+      const blocked = playerPos.y < 1.0 &&
+        Math.hypot(playerPos.x - lookX, playerPos.z - lookZ) < 2.3;
+      if (!blocked) {
+        car.t += (car.spd * dt / L) * (car.fwd ? 1 : -1);
+        if (car.t >= 1) { car.t = 0; car.seg = this.advance(car); continue; }
+        if (car.t < 0) { car.t = 1; car.seg = this.advance(car); continue; }
+      }
       const px = ax + ux * L * car.t + (-uz) * lane;
       const pz = az + uz * L * car.t + ux * lane;
       car.node.position.set(px, ROAD_Y, pz);
