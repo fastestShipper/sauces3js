@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260617c';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260617c';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260617d';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260617d';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -454,25 +454,67 @@ export function buildRoads(city) {
 // Plaza radial empedrada + gruta de la Virgen al centro del parque grande.
 // Replica el corazon real del Parque Los Sauces (plaza circular + gruta),
 // rasgo caracteristico de los parques de San Borja.
-function buildParkLandmark(plaza, feat, cx, cz) {
-  const STONE = [0.75, 0.72, 0.67], STONE2 = [0.66, 0.62, 0.57];
-  roofCyl(plaza, cx, 0.02, cz, 9.2, 0.05, STONE);   // pad de la plaza
-  roofCyl(plaza, cx, 0.07, cz, 3.3, 0.05, STONE2);  // anillo interior (lee radial)
-  // gruta: base + monticulo rocoso escalonado
-  const ROCK = [0.55, 0.54, 0.52], ROCKD = [0.47, 0.46, 0.45], BASE = [0.67, 0.65, 0.61];
-  roofCyl(feat, cx, 0.07, cz, 2.1, 0.4, BASE);
-  roofCyl(feat, cx, 0.47, cz, 1.7, 1.05, ROCK);
-  roofCyl(feat, cx, 1.5, cz, 1.15, 0.82, ROCKD);
-  roofCyl(feat, cx, 2.28, cz, 0.6, 0.5, ROCK);
-  // hornacina oscura en el frente (+z) con la Virgen (manto azul, tunica blanca)
-  const fz = cz + 1.5;
-  roofBox(feat, cx, 0.5, fz, 0.5, 1.35, 0.22, [0.16, 0.15, 0.18]);
-  roofCyl(feat, cx, 0.55, fz + 0.1, 0.26, 1.0, [0.42, 0.52, 0.78]);
-  roofCyl(feat, cx, 0.6, fz + 0.12, 0.17, 0.85, [0.93, 0.93, 0.96]);
-  roofCyl(feat, cx, 1.45, fz + 0.12, 0.12, 0.18, [0.86, 0.73, 0.61]);
-  // cruz sobre la gruta
-  roofBox(feat, cx, 2.78, cz, 0.06, 0.72, 0.06, [0.27, 0.21, 0.16]);
-  roofBox(feat, cx, 3.12, cz, 0.28, 0.12, 0.06, [0.27, 0.21, 0.16]);
+// banda anular plana (anillo de ladrillo) para el patron radial de la plaza
+function ringBand(B, cx, cz, rOut, rIn, y, c) {
+  const N = 28;
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1) / N) * Math.PI * 2;
+    B.quad(
+      [cx + Math.cos(a0) * rIn, y, cz + Math.sin(a0) * rIn],
+      [cx + Math.cos(a0) * rOut, y, cz + Math.sin(a0) * rOut],
+      [cx + Math.cos(a1) * rOut, y, cz + Math.sin(a1) * rOut],
+      [cx + Math.cos(a1) * rIn, y, cz + Math.sin(a1) * rIn],
+      [0, 1, 0], c);
+  }
+}
+
+// techo a dos aguas: pendientes (roofc) + timpanos triangulares (wallc). ridge en Z.
+function gableRoof(B, cx, y, cz, hw, hd, ph, roofc, wallc) {
+  const v = (x, yy, z) => [x, y + yy, z];
+  B.quad(v(cx + hw, 0, cz - hd), v(cx + hw, 0, cz + hd), v(cx, ph, cz + hd), v(cx, ph, cz - hd), [1, 0.6, 0], roofc);
+  B.quad(v(cx - hw, 0, cz + hd), v(cx - hw, 0, cz - hd), v(cx, ph, cz - hd), v(cx, ph, cz + hd), [-1, 0.6, 0], roofc);
+  const tri = (p0, p1, p2, n) => { B.vert(p0, n, wallc, [0, 0]); B.vert(p1, n, wallc, [0, 0]); B.vert(p2, n, wallc, [0, 0]); };
+  tri(v(cx - hw, 0, cz + hd), v(cx + hw, 0, cz + hd), v(cx, ph, cz + hd), [0, 0, 1]);
+  tri(v(cx + hw, 0, cz - hd), v(cx - hw, 0, cz - hd), v(cx, ph, cz - hd), [0, 0, -1]);
+}
+
+// Replica del centro REAL del Parque Los Sauces: plaza radial de concreto con
+// patron de ladrillo rojo/gris + santuario (capilla blanca, techo rojo a dos
+// aguas, imagen de la Virgen) al centro. benchOut recibe spots de banca.
+function buildParkLandmark(plaza, feat, benchOut, cx, cz) {
+  const R = 11;
+  const CONC = [0.74, 0.71, 0.64], REDB = [0.70, 0.20, 0.16], GREYB = [0.33, 0.33, 0.36];
+  roofCyl(plaza, cx, 0.0, cz, R, 0.04, CONC);               // disco de concreto (cap 0.04)
+  roofCyl(plaza, cx, 0.04, cz, 2.6, 0.022, REDB);           // disco central rojo
+  ringBand(plaza, cx, cz, R * 0.97, R * 0.90, 0.055, REDB); // aro rojo exterior (sobre el cap)
+  ringBand(plaza, cx, cz, R * 0.60, R * 0.52, 0.055, GREYB); // aro gris medio
+  for (let i = 0; i < 8; i++) {                             // petalos alternados (mandala)
+    const a = (i / 8) * Math.PI * 2, w = (Math.PI / 8) * 0.85, col = i % 2 ? REDB : GREYB;
+    plaza.quad(
+      [cx + Math.cos(a - w) * 2.9, 0.056, cz + Math.sin(a - w) * 2.9],
+      [cx + Math.cos(a - w) * R * 0.86, 0.056, cz + Math.sin(a - w) * R * 0.86],
+      [cx + Math.cos(a + w) * R * 0.86, 0.056, cz + Math.sin(a + w) * R * 0.86],
+      [cx + Math.cos(a + w) * 2.9, 0.056, cz + Math.sin(a + w) * 2.9],
+      [0, 1, 0], col);
+  }
+
+  // SANTUARIO: base oscura + capilla blanca + techo rojo a dos aguas + Virgen
+  const WHITE = [0.93, 0.93, 0.95], DARK = [0.11, 0.11, 0.14], RED = [0.66, 0.22, 0.18], GOLD = [0.80, 0.67, 0.30];
+  roofCyl(feat, cx, 0.09, cz, 1.5, 0.5, DARK);             // base redonda
+  roofBox(feat, cx, 0.59, cz, 1.0, 0.22, 0.78, DARK);      // plinto
+  roofBox(feat, cx, 0.81, cz, 0.82, 1.5, 0.58, WHITE);     // cuerpo blanco (vitrina)
+  gableRoof(feat, cx, 2.31, cz, 0.98, 0.74, 0.72, RED, WHITE);
+  const fz = cz + 0.6;                                      // imagen de la Virgen al frente
+  roofBox(feat, cx, 1.02, fz, 0.46, 1.0, 0.04, DARK);       // marco
+  roofBox(feat, cx, 1.16, fz + 0.02, 0.32, 0.64, 0.03, [0.60, 0.71, 0.9]); // manto celeste
+  roofBox(feat, cx, 1.26, fz + 0.03, 0.12, 0.3, 0.02, [0.96, 0.96, 0.98]); // figura clara
+  roofBox(feat, cx, 0.62, fz + 0.01, 0.34, 0.12, 0.02, GOLD); // placa dorada
+
+  for (let i = 0; i < 6; i++) {                             // banquitas mirando al santuario
+    const a = (i / 6) * Math.PI * 2 + 0.4;
+    const bx = cx + Math.cos(a) * (R - 1.7), bz = cz + Math.sin(a) * (R - 1.7);
+    benchOut.push([bx, bz, Math.atan2(cx - bx, cz - bz)]);
+  }
 }
 
 export function buildParks(city) {
@@ -486,18 +528,10 @@ export function buildParks(city) {
   // Parque Los Sauces REAL (centro del barrio, proyectado a coords de juego ~
   // [-90,-25]): la plaza radial + gruta van AQUI, no en el green mas grande
   // (que es otro parque al este). Elige el parque mas cercano al ancla real.
-  const PLS_ANCHOR = [-90, -25];
-  let bigIdx = -1, bestD = 1e18, bigC = null;
-  for (let gi = 0; gi < city.data.green.length; gi++) {
-    const gp = city.data.green[gi].p;
-    if (gp.length < 3 || Math.abs(ringArea(gp)) < 1500) continue;  // solo parques de verdad
-    let mx = 0, mz = 0; for (const p of gp) { mx += p[0]; mz += p[1]; }
-    const c = [mx / gp.length, mz / gp.length];
-    const d = Math.hypot(c[0] - PLS_ANCHOR[0], c[1] - PLS_ANCHOR[1]);
-    if (d < bestD) { bestD = d; bigIdx = gi; bigC = c; }
-  }
-  const PLAZA_R = 9.6;
-  const inPlaza = (x, z, gi) => gi === bigIdx && bigC && Math.hypot(x - bigC[0], z - bigC[1]) < PLAZA_R;
+  // Centro de la gruta PINNED por el comandante (coord exacta del juego).
+  const PLAZA_R = 11;
+  const bigC = [-62, -15];
+  const inPlaza = (x, z) => Math.hypot(x - bigC[0], z - bigC[1]) < PLAZA_R + 0.5;
   for (let gi = 0; gi < city.data.green.length; gi++) {
     const g = city.data.green[gi];
     const ring = g.p;
@@ -508,7 +542,7 @@ export function buildParks(city) {
     for (let gx = minx; gx < maxx; gx += LCELL) {
       for (let gz = minz; gz < maxz; gz += LCELL) {
         const cx = gx + LCELL * 0.5, cz = gz + LCELL * 0.5;
-        if (!city.pointInRing(cx, cz, ring) || city.onAnyRoad(cx, cz, 0.3) || inPlaza(cx, cz, gi)) continue;
+        if (!city.pointInRing(cx, cz, ring) || city.onAnyRoad(cx, cz, 0.3) || inPlaza(cx, cz)) continue;
         // variacion sutil de tono, sin parches de color (leian como tierra)
         const shade = 0.90 + rng() * 0.10;
         const col = [shade * 0.92, shade, shade * 0.88];
@@ -519,14 +553,14 @@ export function buildParks(city) {
     const want = Math.max(2, Math.min(60, Math.floor((maxx - minx) * (maxz - minz) / 170)));
     for (let k = 0; k < want; k++) {
       const tx = minx + rng() * (maxx - minx), tz = minz + rng() * (maxz - minz);
-      if (!city.pointInRing(tx, tz, ring) || city.onAnyRoad(tx, tz, 1.0) || inPlaza(tx, tz, gi)) continue;
+      if (!city.pointInRing(tx, tz, ring) || city.onAnyRoad(tx, tz, 1.0) || inPlaza(tx, tz)) continue;
       parkTrees.push([tx, tz]);
     }
     // puntos chicos (mas densos que los arboles) para arbustos / rocas / pasto
     const wantS = Math.max(4, Math.min(260, Math.floor((maxx - minx) * (maxz - minz) / 38)));
     for (let k = 0; k < wantS; k++) {
       const sx = minx + rng() * (maxx - minx), sz = minz + rng() * (maxz - minz);
-      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 2.2) || inPlaza(sx, sz, gi)) continue;
+      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 2.2) || inPlaza(sx, sz)) continue;
       parkScatter.push([sx, sz]);
     }
     // bancas perimetrales mirando hacia adentro del parque
@@ -546,6 +580,6 @@ export function buildParks(city) {
       }
     }
   }
-  if (bigC) buildParkLandmark(plaza, feature, bigC[0], bigC[1]);
+  if (bigC) buildParkLandmark(plaza, feature, parkBenches, bigC[0], bigC[1]);
   return { lawn, plaza, feature, parkTrees, parkBenches, parkScatter, landmark: bigC };
 }

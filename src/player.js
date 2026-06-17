@@ -1,9 +1,9 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260617c';
-import { makeNametag } from './nametag.js?v=20260617c';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617c';
+import { sanitizeImported } from './glbutil.js?v=20260617d';
+import { makeNametag } from './nametag.js?v=20260617d';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617d';
 
 export class Player {
   constructor(scene, city, spawn, opts = {}) {
