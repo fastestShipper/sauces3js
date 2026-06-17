@@ -53,10 +53,14 @@ export class MiniMap {
   }
 
   draw(px, pz, heading, remotes = null) {
-    // si hay otros humanos cerca, redibujar SIEMPRE (su marcador se mueve aunque
-    // yo este quieto); si estoy solo, mantener la optimizacion de no redibujar.
+    // redibujar al moverme/zoom; si hay humanos cerca, a lo mas cada 140ms (su
+    // marcador se mueve aunque yo este quieto) — NUNCA cada frame: el minimapa
+    // es vectorial (332 calles + edificios) y redibujarlo 60x/s tira TODO a 1fps.
+    const moved = Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) >= 0.4 || this.radius !== this.lastRadius;
     const hasRemotes = remotes && remotes.size > 0;
-    if (!hasRemotes && Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) < 0.4 && this.radius === this.lastRadius) return;
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (!moved && !(hasRemotes && now - (this._lastT || 0) > 140)) return;
+    this._lastT = now;
     this.lastPos = [px, pz];
     this.lastRadius = this.radius;
     const ctx = this.ctx, S = this.cv.width;
