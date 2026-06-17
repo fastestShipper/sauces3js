@@ -52,8 +52,11 @@ export class MiniMap {
     if (name) this.street = name;
   }
 
-  draw(px, pz, heading, npcs = []) {
-    if (Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) < 0.4 && this.radius === this.lastRadius) return;
+  draw(px, pz, heading, remotes = null) {
+    // si hay otros humanos cerca, redibujar SIEMPRE (su marcador se mueve aunque
+    // yo este quieto); si estoy solo, mantener la optimizacion de no redibujar.
+    const hasRemotes = remotes && remotes.size > 0;
+    if (!hasRemotes && Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) < 0.4 && this.radius === this.lastRadius) return;
     this.lastPos = [px, pz];
     this.lastRadius = this.radius;
     const ctx = this.ctx, S = this.cv.width;
@@ -110,14 +113,21 @@ export class MiniMap {
         ctx.stroke();
       }
     }
-    // npcs
-    for (const n of npcs) {
-      const mx = X(n.pos.x), mz = Z(n.pos.z);
-      if (mx < 8 || mx > S - 8 || mz < 8 || mz > S - 8) continue;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(mx, mz, 7, 0, 7); ctx.fill();
-      ctx.fillStyle = n.dead ? '#8a8a8a' : '#f08a18';
-      ctx.beginPath(); ctx.arc(mx, mz, 5, 0, 7); ctx.fill();
+    // otros HUMANOS (multiplayer): marcador celeste con halo (distinto de la
+    // flecha roja del jugador) = "hay otra persona real cerca"
+    if (remotes) {
+      for (const r of remotes.values()) {
+        if (!r.ready) continue;
+        const mx = X(r.x), mz = Z(r.z);
+        if (mx < 7 || mx > S - 7 || mz < 7 || mz > S - 7) continue;
+        ctx.fillStyle = 'rgba(255,255,255,.95)';
+        ctx.beginPath(); ctx.arc(mx, mz, 8.5, 0, 7); ctx.fill();
+        ctx.fillStyle = '#2196f3';
+        ctx.beginPath(); ctx.arc(mx, mz, 6, 0, 7); ctx.fill();
+        // puntito cabeza (sugiere persona)
+        ctx.fillStyle = 'rgba(255,255,255,.92)';
+        ctx.beginPath(); ctx.arc(mx, mz - 1.5, 2.2, 0, 7); ctx.fill();
+      }
     }
     // flecha del jugador
     ctx.translate(half, half);

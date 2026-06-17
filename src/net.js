@@ -3,10 +3,11 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260617a';
-import { makeNametag } from './nametag.js?v=20260617a';
-import { cloneSkinned } from './npcs.js?v=20260617a';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617a';
+import { sanitizeImported } from './glbutil.js?v=20260617b';
+import { makeNametag } from './nametag.js?v=20260617b';
+import { cloneSkinned } from './npcs.js?v=20260617b';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617b';
+import { showBubble } from './chat.js?v=20260617b';
 
 const WS_URL = 'wss://sauces.controla.group/ws';   // server unico (sirve tambien en dev local)
 const SCALE = 1.9 / 2.54;
@@ -20,6 +21,7 @@ export class Net {
     this.loader = new GLTFLoader();
     this.clips = [];
     this.acc = 0;
+    this.onChat = null;   // (name, text) -> pintar en el log (lo setea app.js)
     addEventListener('mousedown', (e) => {
       if (e.button === 0 && this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'atk' }));
     });
@@ -51,6 +53,16 @@ export class Net {
     else if (m.t === 's') { const r = this.remotes.get(m.id); if (r) { r.tx = m.x; r.tz = m.z; r.th = m.h; r.anim = m.a; } }
     else if (m.t === 'atk') { const r = this.remotes.get(m.id); if (r) this._remoteAttack(r); }
     else if (m.t === 'leave') { const r = this.remotes.get(m.id); if (r) { this.scene.remove(r.root); this.remotes.delete(m.id); } }
+    else if (m.t === 'chat') {
+      if (this.onChat) this.onChat(m.name, m.text);
+      const r = this.remotes.get(m.id);
+      if (r && r.ready) showBubble(r.root, m.text, r);   // burbuja sobre el remoto
+    }
+  }
+
+  // envia un mensaje de chat al relay (el server lo reenvia con el nombre)
+  sendChat(text) {
+    if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text }));
   }
 
   // dispara el ataque one-shot de un remoto (clip real, corta walk/idle)

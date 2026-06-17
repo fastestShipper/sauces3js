@@ -63,15 +63,34 @@
   }
   #ob-go:disabled { background: #c4c0b6; cursor: not-allowed; }
   .ob-hint { color: #8a8f97; font-size: 12px; margin-top: 14px; }
+  #chat-log {
+    position: fixed; left: 18px; bottom: 64px; width: min(440px, 62vw);
+    display: flex; flex-direction: column; gap: 4px; pointer-events: none; z-index: 30;
+  }
+  #chat-log .chat-line {
+    align-self: flex-start; max-width: 100%; color: #fff;
+    font: 600 14px/1.35 system-ui, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.9);
+    background: rgba(10,12,18,.34); padding: 3px 9px; border-radius: 9px;
+    transition: opacity .8s; word-break: break-word;
+  }
+  #chat-input {
+    position: fixed; left: 18px; bottom: 26px; width: min(440px, 62vw); display: none;
+    box-sizing: border-box; padding: 10px 14px; z-index: 31;
+    border: 2px solid rgba(255,209,102,.9); border-radius: 11px;
+    background: rgba(12,14,20,.93); color: #fff;
+    font: 600 15px system-ui, sans-serif; outline: none;
+  }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="hud">
   <div class="title">Los Sauces · San Borja</div>
-  <div id="hint">WASD moverse · ESPACIO saltar · clic der girar · rueda zoom</div>
+  <div id="hint">WASD moverse · ESPACIO saltar · clic der girar · rueda zoom · ENTER chat</div>
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
+<div id="chat-log"></div>
+<input id="chat-input" maxlength="200" autocomplete="off" placeholder="Escribe y Enter para enviar…">
 <div id="loading"><div>Construyendo Los Sauces…</div><div class="bar"><i id="lbar"></i></div></div>
 <div id="onboard">
   <div class="ob-card">
@@ -92,6 +111,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260617a"></script>
+<script type="module" src="./src/app.js?v=20260617b"></script>
 </body>
 </html>

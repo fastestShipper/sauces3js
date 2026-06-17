@@ -16,6 +16,11 @@ function broadcast(exceptId, obj) {
   for (const [id, c] of clients) if (id !== exceptId && c.ws.readyState === 1) c.ws.send(s);
 }
 
+// quita caracteres de control (< 32) sin regex de escapes; recorta a max chars
+function clean(raw, max) {
+  return [...String(raw || '')].filter((c) => c.charCodeAt(0) >= 32).join('').trim().slice(0, max);
+}
+
 wss.on('connection', (ws, req) => {
   const id = nextId++;
   const me = { ws, name: 'Anon', char: 'char_knight.glb', x: 0, z: 0, h: 0, a: 'Idle' };
@@ -27,7 +32,7 @@ wss.on('connection', (ws, req) => {
     let m;
     try { m = JSON.parse(buf); } catch { return; }
     if (m.t === 'hi') {
-      me.name = String(m.name || 'Anon').slice(0, 16);
+      me.name = clean(m.name, 16) || 'Anon';
       me.char = String(m.char || 'char_knight.glb').slice(0, 40);
       const players = [];
       for (const [oid, c] of clients) {
@@ -40,6 +45,10 @@ wss.on('connection', (ws, req) => {
       broadcast(id, { t: 's', id, x: m.x, z: m.z, h: m.h, a: m.a });
     } else if (m.t === 'atk') {
       broadcast(id, { t: 'atk', id });
+    } else if (m.t === 'chat') {
+      const text = clean(m.text, 200);   // chat de mundo: saneado + reenviado con el nombre del server
+      if (!text) return;
+      broadcast(id, { t: 'chat', id, name: me.name, text });
     }
   });
 

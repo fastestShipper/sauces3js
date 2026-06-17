@@ -4,14 +4,15 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617a';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617a';
-import { Player } from './player.js?v=20260617a';
-import { MiniMap } from './minimap.js?v=20260617a';
-import { StreetLife } from './npcs.js?v=20260617a';
-import { sanitizeImported } from './glbutil.js?v=20260617a';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617a';
-import { Net } from './net.js?v=20260617a';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617b';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617b';
+import { Player } from './player.js?v=20260617b';
+import { MiniMap } from './minimap.js?v=20260617b';
+import { StreetLife } from './npcs.js?v=20260617b';
+import { sanitizeImported } from './glbutil.js?v=20260617b';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617b';
+import { Net } from './net.js?v=20260617b';
+import { ChatUI, showBubble } from './chat.js?v=20260617b';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -473,6 +474,17 @@ async function boot() {
   const net = new Net(scene, player);   // multiplayer
   window.__game.net = net;
 
+  // chat de mundo (Enter): mientras escribes, el player queda bloqueado
+  const localBubble = {};
+  const chat = new ChatUI((text) => {
+    net.sendChat(text);
+    chat.add(player.name || 'Tú', text, true);   // eco local
+    showBubble(player.root, text, localBubble);   // burbuja sobre mi propia cabeza
+  });
+  chat.onOpen = () => { player.locked = true; };
+  chat.onClose = () => { player.locked = false; player.keys = {}; };
+  net.onChat = (name, text) => chat.add(name, text, false);
+
   let streetT = 0;
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
@@ -490,7 +502,7 @@ async function boot() {
     sun.target.updateMatrixWorld();
     streetT -= dt;
     if (streetT <= 0) { streetT = 0.2; minimap.updateStreet(player.pos.x, player.pos.z); }
-    minimap.draw(player.pos.x, player.pos.z, player.heading);
+    minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes);
     renderer.render(scene, camera);
   });
 }

@@ -1,9 +1,9 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260617a';
-import { makeNametag } from './nametag.js?v=20260617a';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617a';
+import { sanitizeImported } from './glbutil.js?v=20260617b';
+import { makeNametag } from './nametag.js?v=20260617b';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617b';
 
 export class Player {
   constructor(scene, city, spawn, opts = {}) {
@@ -27,6 +27,7 @@ export class Player {
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     this.dragging = false;
     this.attackT = 0;
+    this.locked = false;   // true mientras el chat esta abierto: ignora WASD/salto/ataque
     addEventListener('mousedown', e => {
       if (e.button === 2) this.dragging = true;
       else if (e.button === 0) this.attack();   // clic izq = ataque
@@ -82,7 +83,7 @@ export class Player {
   // ataque one-shot con un clip real; bloquea reintento y locomocion mientras dura
   attack() {
     const a = this.actions['Attack'];
-    if (this.attackT > 0 || !a) return;
+    if (this.locked || this.attackT > 0 || !a) return;
     a.reset();
     a.setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
@@ -107,10 +108,12 @@ export class Player {
 
   update(dt, camera) {
     let fwd = 0, strafe = 0;
-    if (this.keys['KeyW']) fwd += 1;
-    if (this.keys['KeyS']) fwd -= 1;
-    if (this.keys['KeyA']) strafe -= 1;
-    if (this.keys['KeyD']) strafe += 1;
+    if (!this.locked) {
+      if (this.keys['KeyW']) fwd += 1;
+      if (this.keys['KeyS']) fwd -= 1;
+      if (this.keys['KeyA']) strafe -= 1;
+      if (this.keys['KeyD']) strafe += 1;
+    }
     const moving = fwd !== 0 || strafe !== 0;
     let spd = 9.0 * (this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? 2 : 1);
     if (moving) {
@@ -129,7 +132,7 @@ export class Player {
       }
       this.heading = Math.atan2(dx, dz);
     }
-    if (this.keys['Space'] && this.grounded) { this.velY = 8.4; this.grounded = false; }
+    if (!this.locked && this.keys['Space'] && this.grounded) { this.velY = 8.4; this.grounded = false; }
     const roofY = this.city.carRoofAt(this.pos.x, this.pos.z);
     if (!this.grounded) {
       this.pos.y += this.velY * dt;
