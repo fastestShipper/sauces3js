@@ -114,12 +114,14 @@ async function boot() {
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.background = hdr;
   scene.environment = hdr;
-  scene.environmentIntensity = 0.30;
-  scene.backgroundIntensity = 0.88;
+  // bajo el IBL plano del HDR de mediodia para que el sol direccional mande:
+  // mas contraste y direccion = menos look "render plano"
+  scene.environmentIntensity = 0.22;
+  scene.backgroundIntensity = 0.92;
   setProgress(0.15);
 
-  const sun = new THREE.DirectionalLight(0xffedd0, 2.3);
-  sun.position.set(60, 90, -40);
+  const sun = new THREE.DirectionalLight(0xffd79a, 3.1);
+  sun.position.set(80, 70, -58);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
@@ -127,8 +129,11 @@ async function boot() {
   sun.shadow.camera.far = 400;
   sun.shadow.bias = -0.0015;
   scene.add(sun);
-  // ambiente medio: sombras presentes (anclan al piso) sin negro carbon
-  scene.add(new THREE.AmbientLight(0xa8b4cc, 0.40));
+  // hemisferio (cielo frio arriba, tierra calida abajo) en vez de ambient plano:
+  // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
+  scene.add(new THREE.HemisphereLight(0xbcd2f2, 0x9c8568, 0.55));
+  // niebla aerea sutil: profundidad de tarde + suaviza el borde lejano del mapa
+  scene.fog = new THREE.Fog(0xc7d3e3, 170, 860);
 
   // suelo base
   const ground = new THREE.Mesh(
@@ -478,7 +483,7 @@ async function boot() {
     const texel = 180 / 2048;
     const snapX = Math.round(player.pos.x / texel) * texel;
     const snapZ = Math.round(player.pos.z / texel) * texel;
-    sun.position.set(snapX + 60, 90, snapZ - 40);
+    sun.position.set(snapX + 80, 70, snapZ - 58);
     sun.target.position.set(snapX, 0, snapZ);
     sun.target.updateMatrixWorld();
     streetT -= dt;
