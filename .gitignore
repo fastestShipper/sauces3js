@@ -21,3 +21,7 @@ Thumbs.db
 # Deploy tarballs
 *.tar
 *.tar.gz
+
+# Backups
+*.bak
+*.bak-*

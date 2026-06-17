@@ -2,10 +2,23 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260614a';
-import { sanitizeImported } from './glbutil.js?v=20260614a';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260616b';
+import { sanitizeImported } from './glbutil.js?v=20260616b';
+import { equipWeapon } from './weapons.js?v=20260616b';
 
-const CHAR_SCALE = 1.8 / 3.3;
+const ADV_SCALE = 1.9 / 2.54;   // personajes KayKit (rig Medium ~2.54u) a ~1.9m
+const ADV_FILES = ['char_knight.glb', 'char_barbarian.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue.glb', 'char_rogue_hooded.glb'];
+const CAR_H = 1.9;   // autos toon Kenney a ~1.9m de alto (proporcion enterable con el chibi)
+// densidad de trafico/peatones por HORA DE LIMA (GMT-5): rush AM/PM lleno, madrugada vacio.
+// curva real "horas pico" sin API; interpola suave entre horas.
+function limaDensity() {
+  const now = new Date();
+  const h = ((now.getUTCHours() - 5 + 24) % 24) + now.getUTCMinutes() / 60;
+  const t = [0.15, 0.12, 0.10, 0.10, 0.15, 0.30, 0.60, 0.95, 1.00, 0.85, 0.62, 0.60,
+            0.70, 0.70, 0.65, 0.66, 0.78, 0.92, 1.00, 0.95, 0.72, 0.52, 0.36, 0.24];
+  const i = Math.floor(h) % 24, j = (i + 1) % 24, f = h - Math.floor(h);
+  return t[i] * (1 - f) + t[j] * f;
+}
 
 export class StreetLife {
   constructor(scene, city) {
@@ -15,16 +28,46 @@ export class StreetLife {
     this.traffic = [];
   }
 
-  async load(count = 28, seats = []) {
+  async load(count = 28, seats = [], advSpots = []) {
     const loader = new GLTFLoader();
-    const files = ['casual.glb', 'suit.glb', 'casual3_male.glb', 'casual_female.glb', 'casual2_female.glb', 'casual_bald.glb'];
+    const dens = limaDensity();              // escala peatones + autos por hora de Lima
+    count = Math.max(6, Math.round(count * dens));
+    // TODOS los NPCs son personajes KayKit (anim en archivos compartidos, rig Medium)
     const protos = [];
-    for (const f of files) {
-      try { protos.push(await loader.loadAsync('./assets/models/' + f)); }
+    for (const f of ADV_FILES) {
+      try { const gl = await loader.loadAsync('./assets/models/' + f); gl._file = f; protos.push(gl); }
       catch { /* opcional */ }
     }
     for (const p of protos) sanitizeImported(p.scene);
+    const clips = [];
+    for (const af of ['char_anims_general.glb', 'char_anims.glb']) {
+      try { clips.push(...(await loader.loadAsync('./assets/models/' + af)).animations); } catch { /* opcional */ }
+    }
+    const walkClip = clips.find(c => c.name === 'Walking_A') || clips.find(c => /walk/i.test(c.name));
+    const idleClip = clips.find(c => c.name === 'Idle_A') || clips.find(c => /idle/i.test(c.name)) || walkClip;
     const rng = mulberry32(2024);
+    // un NPC KayKit en (px,pz): deambula (stationary=false) o queda quieto en idle
+    const spawnNPC = (px, pz, heading, stationary) => {
+      if (!protos.length || !walkClip) return;
+      const proto = protos[Math.floor(rng() * protos.length)];
+      const ch = cloneSkinned(proto.scene);
+      ch.scale.setScalar(ADV_SCALE);
+      ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      const root = new THREE.Group();
+      root.position.set(px, 0, pz);
+      root.rotation.y = heading;
+      root.add(ch);
+      equipWeapon(loader, ch, proto._file).catch(() => {});   // arma de clase (cosmetico)
+      this.scene.add(root);
+      const mixer = new THREE.AnimationMixer(ch);
+      const walkA = mixer.clipAction(walkClip);
+      const idleA = idleClip ? mixer.clipAction(idleClip) : walkA;
+      (stationary ? idleA : walkA).play();
+      this.npcs.push({
+        root, mixer, walkA, idleA, walking: !stationary, seated: stationary,
+        x: px, z: pz, heading, rot: heading, wt: stationary ? 1e9 : 0,
+      });
+    };
     let placed = 0, guard = 0;
     const spawnX = -4.2, spawnZ = 47.1;
     while (placed < count && guard++ < count * 10) {
@@ -42,25 +85,7 @@ export class StreetLife {
       const side = rng() < 0.5 ? 1 : -1;
       const px = ax + nx * (s[4] + 1.5) * side, pz = az + nz * (s[4] + 1.5) * side;
       if (this.city.inRealBuilding(px, pz, 0.4) || this.city.inAnyGreen(px, pz)) continue;
-      const proto = protos[Math.floor(rng() * protos.length)];
-      const ch = cloneSkinned(proto.scene);
-      ch.scale.setScalar(CHAR_SCALE);
-      ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      const root = new THREE.Group();
-      root.position.set(px, 0, pz);
-      root.add(ch);
-      this.scene.add(root);
-      const mixer = new THREE.AnimationMixer(ch);
-      const clip = proto.animations.find(c => c.name === 'Walk') || proto.animations[0];
-      const idle = proto.animations.find(c => c.name === 'Idle');
-      const walkA = mixer.clipAction(clip);
-      const idleA = idle ? mixer.clipAction(idle) : walkA;
-      walkA.play();
-      const heading0 = rng() * Math.PI * 2;
-      this.npcs.push({
-        root, mixer, walkA, idleA, walking: true,
-        x: px, z: pz, heading: heading0, rot: heading0, wt: 0,
-      });
+      spawnNPC(px, pz, rng() * Math.PI * 2, false);
       placed++;
     }
     // trafico: denso o el mundo se siente muerto (feedback playtest)
@@ -77,14 +102,14 @@ export class StreetLife {
     });
     // la mitad de la flota garantizada cerca del spawn (primeros minutos del jugador)
     const nearby = candidates.filter(r => spawnDist(r) < 220);
-    const carFiles = ['car_sedan.gltf', 'car_taxi.gltf', 'car_hatchback.gltf', 'car_stationwagon.gltf'];
+    const carFiles = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
     const carProtos = [];
     for (const f of carFiles) {
       try { carProtos.push(await loader.loadAsync('./assets/models/' + f)); } catch { }
     }
     for (const p of carProtos) sanitizeImported(p.scene);
     const trng = mulberry32(555);
-    const nCars = Math.min(64, candidates.length * 2);
+    const nCars = Math.max(3, Math.round(Math.min(38, candidates.length * 1.3) * dens));
     for (let k = 0; k < nCars; k++) {
       const pool = (k % 2 === 0 && nearby.length) ? nearby : candidates;
       const r = pool[Math.floor(trng() * pool.length)];
@@ -92,13 +117,13 @@ export class StreetLife {
       const car = proto.scene.clone(true);
       const box = new THREE.Box3().setFromObject(proto.scene);
       const size = box.getSize(new THREE.Vector3());
-      const sc = 1.45 / Math.max(size.y, 0.1);
+      const sc = CAR_H / Math.max(size.y, 0.1);
       car.scale.setScalar(sc);
       const wrap = new THREE.Group();
       wrap.add(car);
       car.position.y = -box.min.y * sc;
       this.scene.add(wrap);
-      const collider = { x: 0, z: 0, ang: 0, hw: 1.85, hd: 0.8 };
+      const collider = { x: 0, z: 0, ang: 0, hw: 1.9, hd: 1.05 };
       this.city.carColliders.push(collider);
       this.traffic.push({
         node: wrap, pts: r.p, hw: (r.w ?? 6) * 0.5,
@@ -106,27 +131,16 @@ export class StreetLife {
         t: trng(), fwd: trng() < 0.5, spd: 6.5 + trng() * 3.5, collider,
       });
     }
-    // vecinos SENTADOS en bancas (la anim de sentarse existia sin usarse)
-    for (const sp of seats) {
-      if (!protos.length) break;
-      const proto = protos[Math.floor(rng() * protos.length)];
-      const ch = cloneSkinned(proto.scene);
-      ch.scale.setScalar(CHAR_SCALE);
-      const root = new THREE.Group();
-      root.position.set(sp[0], 0.18, sp[1]);
-      root.rotation.y = sp[2];
-      root.add(ch);
-      this.scene.add(root);
-      const mixer = new THREE.AnimationMixer(ch);
-      const clip = proto.animations.find(c => /sit/i.test(c.name)) ||
-        proto.animations.find(c => c.name === 'Idle') || proto.animations[0];
-      const act = mixer.clipAction(clip);
-      if (/sit/i.test(clip.name)) { act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; }
-      act.play();
-      this.npcs.push({
-        root, mixer, walkA: act, idleA: act, walking: false, seated: true,
-        x: sp[0], z: sp[1], heading: sp[2], wt: 1e9,
-      });
+    // KayKit no trae anim de sentarse -> vecinos QUIETOS (idle) junto a las bancas
+    for (const sp of seats) spawnNPC(sp[0], sp[1], sp[2], true);
+    // poblar tambien el parque con NPCs que deambulan
+    if (advSpots.length) {
+      const arng = mulberry32(8080);
+      const nAdv = Math.min(10, advSpots.length);
+      for (let k = 0; k < nAdv; k++) {
+        const sp = advSpots[Math.floor(arng() * advSpots.length)];
+        spawnNPC(sp[0], sp[1], arng() * Math.PI * 2, false);
+      }
     }
   }
 
@@ -189,7 +203,7 @@ export class StreetLife {
 }
 
 // clon de escenas con SkinnedMesh (SkeletonUtils inline minimo)
-function cloneSkinned(source) {
+export function cloneSkinned(source) {
   const sourceLookup = new Map();
   const cloneLookup = new Map();
   const clone = source.clone(true);

@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260614a';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260614a';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260616b';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260616b';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -281,8 +281,15 @@ function roofBox(B, cx, y, cz, sx, sy, sz, c) {
 }
 
 export function buildRoads(city) {
-  const road = new Bucket(), walk = new Bucket(), paint = new Bucket(), median = new Bucket(), berma = new Bucket(), curb = new Bucket(), path = new Bucket();
-  const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [] };
+  const road = new Bucket(), walk = new Bucket(), paint = new Bucket(), median = new Bucket(), berma = new Bucket(), curb = new Bucket(), path = new Bucket(), deck = new Bucket();
+  const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [], pillars: [] };
+  // elevacion por capa OSM: la data trae `layer` pero NO altura -> la sintetizo.
+  // layer 1 = puente/overpass, 2 = pasarela peatonal sobre el, -1 = subterraneo.
+  const LAYER_H = (lay) => (lay === 1 ? 5.5 : lay === 2 ? 8.5 : lay === -1 ? -4 : 0);
+  const RAMP = 22, DECK_T = 0.5, PARAPET = 0.7, DECK_COL = [0.6, 0.6, 0.58];
+  // Y por jerarquia de via: en un cruce, la via de mayor clase queda ARRIBA
+  // (resuelve el z-fight de ramales coplanares sin pasos visibles, escala ~cm).
+  const TYPE_Y = { motorway: 0.024, motorway_link: 0.021, trunk: 0.024, trunk_link: 0.021, primary: 0.018, primary_link: 0.017, secondary: 0.014, tertiary: 0.011, residential: 0.007, service: 0.004, cycleway: 0.003, pedestrian: 0.0015, footway: 0, path: 0, steps: 0 };
   const quadUV = (B, ax, az, bx, bz, ux, uz, half, offset, ya, yb, col, uvScale) => {
     const nx = -uz, nz = ux;
     const oax = ax + nx * offset, oaz = az + nz * offset;
@@ -313,18 +320,45 @@ export function buildRoads(city) {
     const run = [];
     // jitter de altura POR CALLE: dos pistas que se cruzan ya no comparten
     // el plano exacto (z-fight en cada interseccion = el "blinking")
-    const yo = (ri++ % 5) * 0.002;
+    const yo = (TYPE_Y[r.t] ?? 0.02) + (ri++ % 3) * 0.0015;
+    const ez = LAYER_H(r.layer || 0);
+    const isElev = ez !== 0;
+    let RL = 0;
+    for (let i = 0; i < pts.length - 1; i++) RL += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+    const elevAt = (d) => isElev ? ez * Math.max(0, Math.min(1, d / RAMP, (RL - d) / RAMP)) : 0;
+    let dAcc = 0;
     for (let i = 0; i < pts.length - 1; i++) {
       const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1];
       const L = Math.hypot(bx - ax, bz - az);
       if (L < 0.01) continue;
       const ux = (bx - ax) / L, uz = (bz - az) / L;
+      const dStart = dAcc, dEnd = dAcc + L; dAcc = dEnd;
+      const yaE = ROAD_Y + yo + elevAt(dStart), ybE = ROAD_Y + yo + elevAt(dEnd);
       // sendas peatonales (parques) son loseta de concreto, NO asfalto
       const RB = ped ? path : road;
-      quadUV(RB, ax, az, bx, bz, ux, uz, hw, 0, ROAD_Y + yo, ROAD_Y + yo, white, ped ? 0.4 : 0.16);
-      disc(RB, ax, az, ROAD_Y + yo + 0.005, hw, white);
-      disc(RB, bx, bz, ROAD_Y + yo + 0.005, hw, white);
+      quadUV(RB, ax, az, bx, bz, ux, uz, hw, 0, yaE, ybE, white, ped ? 0.4 : 0.16);
+      disc(RB, ax, az, yaE + 0.005, hw, white);
+      disc(RB, bx, bz, ybE + 0.005, hw, white);
       if (ped) continue;
+      // vias elevadas (trebol/puentes): tablero con espesor + parapetos + pilares,
+      // SIN veredas/berma/carriles encima (v1). el suelo pasa por debajo.
+      if (isElev) {
+        const nx = -uz, nz = ux;
+        deck.quad(
+          [ax - nx * hw, yaE - DECK_T, az - nz * hw], [ax + nx * hw, yaE - DECK_T, az + nz * hw],
+          [bx + nx * hw, ybE - DECK_T, bz + nz * hw], [bx - nx * hw, ybE - DECK_T, bz - nz * hw],
+          [0, -1, 0], DECK_COL);
+        for (const s of [1, -1]) {
+          const ox = nx * hw * s, oz = nz * hw * s;
+          deck.quad(
+            [ax + ox, yaE, az + oz], [bx + ox, ybE, bz + oz],
+            [bx + ox, ybE + PARAPET, bz + oz], [ax + ox, yaE + PARAPET, az + oz],
+            [nx * s, 0, nz * s], DECK_COL);
+        }
+        const midY = ROAD_Y + yo + elevAt((dStart + dEnd) * 0.5);
+        if (midY - (ROAD_Y + yo) > 2.0) furniture.pillars.push([ax + ux * L * 0.5, az + uz * L * 0.5, midY - DECK_T]);
+        continue;
+      }
       // veredas por tramos, descartadas sobre otras calles + mobiliario
       for (let d = 0; d < L;) {
         const step = Math.min(3.0, L - d);
@@ -339,7 +373,7 @@ export function buildRoads(city) {
           if (!city.onAnyRoad(px, pz, 1.2) && !city.onAnyRoad(qax, qaz, 1.2) && !city.onAnyRoad(qbx, qbz, 1.2)) {
             // san borja real: sardinel → BERMA verde con arboles → vereda de losetas
             quadUV(berma, eax, eaz, ebx, ebz, ux, uz, 0.5, (hw + 0.9) * side, WALK_Y + yo - 0.015, WALK_Y + yo - 0.015, white, 0.35);
-            quadUV(walk, eax, eaz, ebx, ebz, ux, uz, 0.8, (hw + 2.2) * side, WALK_Y + yo, WALK_Y + yo, white, 0.30);
+            quadUV(walk, eax, eaz, ebx, ebz, ux, uz, 1.0, (hw + 2.4) * side, WALK_Y + yo, WALK_Y + yo, white, 0.30);
             // sardinel 3D: cara vertical visible desde la pista,
             // pintado AMARILLO cerca de las esquinas (zona rigida limeña)
             const snx = (-uz) * side, snz = ux * side;
@@ -414,7 +448,7 @@ export function buildRoads(city) {
     }
     if (run.length > 1) furniture.poleRuns.push(run);
   }
-  return { road, walk, paint, median, berma, curb, path, furniture };
+  return { road, walk, paint, median, berma, curb, path, deck, furniture };
 }
 
 export function buildParks(city) {
@@ -422,6 +456,7 @@ export function buildParks(city) {
   const rng = mulberry32(444);
   const parkTrees = [];
   const parkBenches = [];
+  const parkScatter = [];
   for (const g of city.data.green) {
     const ring = g.p;
     if (ring.length < 3) continue;
@@ -439,11 +474,18 @@ export function buildParks(city) {
         lawn.quad([gx, 0.015, gz], [gx, 0.015, z1], [x1, 0.015, z1], [x1, 0.015, gz], [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
       }
     }
-    const want = Math.max(2, Math.min(130, Math.floor((maxx - minx) * (maxz - minz) / 85)));
+    const want = Math.max(2, Math.min(60, Math.floor((maxx - minx) * (maxz - minz) / 170)));
     for (let k = 0; k < want; k++) {
       const tx = minx + rng() * (maxx - minx), tz = minz + rng() * (maxz - minz);
       if (!city.pointInRing(tx, tz, ring) || city.onAnyRoad(tx, tz, 1.0)) continue;
       parkTrees.push([tx, tz]);
+    }
+    // puntos chicos (mas densos que los arboles) para arbustos / rocas / pasto
+    const wantS = Math.max(4, Math.min(260, Math.floor((maxx - minx) * (maxz - minz) / 38)));
+    for (let k = 0; k < wantS; k++) {
+      const sx = minx + rng() * (maxx - minx), sz = minz + rng() * (maxz - minz);
+      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 0.8)) continue;
+      parkScatter.push([sx, sz]);
     }
     // bancas perimetrales mirando hacia adentro del parque
     for (let i = 0; i < ring.length; i++) {
@@ -462,5 +504,5 @@ export function buildParks(city) {
       }
     }
   }
-  return { lawn, parkTrees, parkBenches };
+  return { lawn, parkTrees, parkBenches, parkScatter };
 }

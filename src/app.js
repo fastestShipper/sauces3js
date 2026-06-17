@@ -4,12 +4,14 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260614a';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260614a';
-import { Player } from './player.js?v=20260614a';
-import { MiniMap } from './minimap.js?v=20260614a';
-import { StreetLife } from './npcs.js?v=20260614a';
-import { sanitizeImported } from './glbutil.js?v=20260614a';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260616b';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260616b';
+import { Player } from './player.js?v=20260616b';
+import { MiniMap } from './minimap.js?v=20260616b';
+import { StreetLife } from './npcs.js?v=20260616b';
+import { sanitizeImported } from './glbutil.js?v=20260616b';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260616b';
+import { Net } from './net.js?v=20260616b';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -45,6 +47,64 @@ function tex(file, srgb = true) {
   // anisotropia: sin ella las texturas de piso chisporrotean en angulo rasante
   t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   return t;
+}
+
+// textura toon sutil (grano) generada en canvas: rompe el plano sin usar foto
+function grain(hex, alpha = 0.09) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const c = cv.getContext('2d');
+  c.fillStyle = hex; c.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 700; i++) {
+    const x = Math.random() * 256, y = Math.random() * 256, r = 1 + Math.random() * 3;
+    c.fillStyle = (Math.random() < 0.5 ? 'rgba(0,0,0,' : 'rgba(255,255,255,') + (alpha * Math.random()).toFixed(3) + ')';
+    c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+// catalogo de personajes para el onboarding (archivos KayKit)
+const CHARS = [
+  { f: 'char_knight.glb', n: 'Caballero', e: '🛡️' },
+  { f: 'char_barbarian.glb', n: 'Bárbaro', e: '🪓' },
+  { f: 'char_mage.glb', n: 'Mago', e: '🔮' },
+  { f: 'char_ranger.glb', n: 'Arquero', e: '🏹' },
+  { f: 'char_rogue.glb', n: 'Pícaro', e: '🗡️' },
+  { f: 'char_rogue_hooded.glb', n: 'Encapuchado', e: '🥷' },
+];
+
+// muestra la pantalla de onboarding; resuelve con {char, name} al pulsar Entrar
+function showOnboarding() {
+  return new Promise(resolve => {
+    const ob = document.getElementById('onboard');
+    const grid = document.getElementById('ob-grid');
+    const go = document.getElementById('ob-go');
+    const nameI = document.getElementById('ob-name');
+    let sel = null;
+    CHARS.forEach(c => {
+      const card = document.createElement('button');
+      card.className = 'ob-char';
+      const eSpan = document.createElement('span'); eSpan.className = 'e'; eSpan.textContent = c.e;
+      const nSpan = document.createElement('span'); nSpan.className = 'n'; nSpan.textContent = c.n;
+      card.append(eSpan, nSpan);
+      card.onclick = () => {
+        sel = c;
+        [...grid.children].forEach(x => x.classList.remove('on'));
+        card.classList.add('on');
+        go.disabled = false;
+      };
+      grid.appendChild(card);
+    });
+    ob.style.display = 'flex';
+    go.onclick = () => {
+      if (!sel) return;
+      ob.style.display = 'none';
+      resolve({ char: sel.f, name: (nameI.value.trim() || sel.n).slice(0, 16) });
+    };
+  });
 }
 
 async function boot() {
@@ -87,8 +147,6 @@ async function boot() {
 
   // edificios
   const W = buildBuildings(city);
-  const plaster = tex('plaster.jpg'); plaster.repeat.set(1, 1);
-  const plasterN = tex('plaster_n.jpg', false);
   const addBucket = (bucket, mat, shadows = true) => {
     const g = bucket.geometry();
     const m = new THREE.Mesh(g, mat);
@@ -97,44 +155,48 @@ async function boot() {
     scene.add(m);
     return m;
   };
-  addBucket(W.wall, new THREE.MeshStandardMaterial({ map: plaster, normalMap: plasterN, vertexColors: true, roughness: 0.93, side: THREE.DoubleSide }));
+  // TOON: pared plana (vertexColors por edificio, sin textura plaster)
+  addBucket(W.wall, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }));
   {
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x7e9db5, metalness: 0.9, roughness: 0.16, vertexColors: true, side: THREE.DoubleSide });
-    glassMat.envMapIntensity = 1.6;
+    // vidrio toon: celeste plano, sin el metalness/reflejo realista
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc4d8, metalness: 0.1, roughness: 0.4, vertexColors: true, side: THREE.DoubleSide });
+    glassMat.envMapIntensity = 0.5;
     addBucket(W.glass, glassMat);
   }
   addBucket(W.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
   addBucket(W.door, new THREE.MeshStandardMaterial({ color: 0x4d3826, vertexColors: true, roughness: 0.65, side: THREE.DoubleSide }));
-  addBucket(W.roof, new THREE.MeshStandardMaterial({ map: tex('concrete.jpg'), vertexColors: true, roughness: 1 }));
+  addBucket(W.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
   setProgress(0.7);
 
   // calles
   const R = buildRoads(city);
-  // asfalto limeño desgastado: gris medio, no carbon recien asfaltado
-  addBucket(R.road, new THREE.MeshStandardMaterial({ map: tex('asphalt_real.jpg'), color: 0xb2b2b8, roughness: 0.96 }), false);
-  addBucket(R.walk, new THREE.MeshStandardMaterial({ map: tex('sidewalk.jpg'), normalMap: tex('sidewalk_n.jpg', false), color: 0xc9c2b4, roughness: 0.95 }), false);
-  addBucket(R.berma, new THREE.MeshStandardMaterial({ map: tex('grass2.jpg'), color: 0x7fb05c, roughness: 1 }), false);
-  addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xf2efe2, roughness: 0.6 }), false);
-  addBucket(R.median, new THREE.MeshStandardMaterial({ map: tex('grass2.jpg'), color: 0x7fb05c, roughness: 1 }), false);
-  addBucket(R.curb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, side: THREE.DoubleSide }), false);
-  addBucket(R.path, new THREE.MeshStandardMaterial({ map: tex('sidewalk.jpg'), color: 0xd8d1c1, roughness: 0.95 }), false);
+  // paleta TOON plana, cohesiva con KayKit (sin texturas foto; iterable por color)
+  addBucket(R.road, new THREE.MeshStandardMaterial({ map: grain('#70747a'), roughness: 1 }), false);
+  addBucket(R.walk, new THREE.MeshStandardMaterial({ map: grain('#cabfa6'), roughness: 1 }), false);
+  addBucket(R.berma, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, roughness: 1 }), false);
+  addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xf4f1e4, roughness: 0.7 }), false);
+  addBucket(R.median, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, roughness: 1 }), false);
+  addBucket(R.curb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), false);
+  addBucket(R.path, new THREE.MeshStandardMaterial({ map: grain('#cdbd92'), roughness: 1 }), false);
+  // tableros/parapetos de puentes elevados (trebol): concreto toon, proyecta sombra
+  addBucket(R.deck, new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 1, side: THREE.DoubleSide }));
   setProgress(0.8);
 
   // parques
   const P = buildParks(city);
-  addBucket(P.lawn, new THREE.MeshStandardMaterial({ map: tex('grass2.jpg'), vertexColors: true, roughness: 1 }), false);
+  addBucket(P.lawn, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, vertexColors: true, roughness: 1 }), false);
 
   // props instanciados
   const loader = new GLTFLoader();
-  const instanced = async (file, spots, opts = {}) => {
+  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  // instancia los meshes de un Object3D ya cargado en cada spot [x, z(, ang)]
+  const instancedRoot = (root, spots, opts = {}) => {
     if (!spots.length) return;
-    const gltf = await loader.loadAsync(MOD + file);
-    sanitizeImported(gltf.scene, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
     const rng = mulberry32(opts.seed ?? 7);
     const meshes = [];
-    gltf.scene.updateMatrixWorld(true);
-    gltf.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
-    const box = new THREE.Box3().setFromObject(gltf.scene);
+    root.updateMatrixWorld(true);
+    root.traverse(o => { if (o.isMesh) meshes.push(o); });
+    const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
     for (const src of meshes) {
       const im = new THREE.InstancedMesh(src.geometry, src.material, spots.length);
@@ -158,17 +220,50 @@ async function boot() {
       scene.add(im);
     }
   };
+  const instanced = async (file, spots, opts = {}) => {
+    if (!spots.length) return;
+    const gltf = await loader.loadAsync(MOD + file);
+    sanitizeImported(gltf.scene, aniso);
+    instancedRoot(gltf.scene, spots, opts);
+  };
   const F = R.furniture;
-  await instanced('tree0.glb', F.trees.filter((_, i) => i % 3 === 0), { fit: true, h: [3.2, 4.4], randRot: true, seed: 11 });
-  await instanced('tree1.glb', F.trees.filter((_, i) => i % 3 === 1), { fit: true, h: [3.0, 4.2], randRot: true, seed: 12 });
-  await instanced('tree2.glb', F.trees.filter((_, i) => i % 3 === 2), { fit: true, h: [3.4, 4.6], randRot: true, seed: 13 });
-  await instanced('tree0.glb', P.parkTrees.filter((_, i) => i % 2 === 0), { fit: true, h: [3.4, 5.2], randRot: true, seed: 14 });
-  await instanced('tree2.glb', P.parkTrees.filter((_, i) => i % 2 === 1), { fit: true, h: [3.2, 5.0], randRot: true, seed: 15 });
-  await instanced('tree1.glb', F.medianTrees, { fit: true, h: [2.6, 3.6], randRot: true, seed: 16 });
-  await instanced('streetlight.gltf', F.lamps, { fit: true, h: [4.6, 4.6], seed: 17 });
-  await instanced('bench.gltf', [...F.benches, ...P.parkBenches], { fit: true, h: [0.85, 0.85], y: WALK_Y, seed: 18 });
-  await instanced('firehydrant.gltf', F.misc.filter((_, i) => i % 2 === 0), { fit: true, h: [0.9, 0.9], y: WALK_Y, seed: 19 });
-  await instanced('trash_A.gltf', F.misc.filter((_, i) => i % 2 === 1), { fit: true, h: [1.0, 1.0], y: WALK_Y, seed: 20 });
+  // bosque KayKit cargado UNA vez: mismos arboles para CALLE, MEDIAN y PARQUE
+  // (cohesion total) + arbustos/rocas/pasto del parque. atlas compartido.
+  const fg = await loader.loadAsync(MOD + 'kaykit_forest.glb');
+  const fnode = {};
+  for (const sc of fg.scenes) { sanitizeImported(sc, aniso); for (const c of sc.children) fnode[c.name] = c; }
+  const TREES = ['Tree_1_A_Color1', 'Tree_2_A_Color1', 'Tree_3_A_Color1', 'Tree_4_A_Color1']
+    .map(n => fnode[n]).filter(Boolean);
+  const plantTrees = (spots, h, seed0) => TREES.forEach((t, k) =>
+    instancedRoot(t, spots.filter((_, i) => i % TREES.length === k),
+      { fit: true, h, lift: true, randRot: true, seed: seed0 + k }));
+  plantTrees(F.trees, [4.0, 5.6], 11);        // berma / calle
+  plantTrees(F.medianTrees, [3.4, 4.6], 16);  // separador central
+  plantTrees(P.parkTrees, [4.6, 7.2], 41);    // parque
+  // arbustos / rocas / pasto dispersos por el cesped del parque
+  const scatter = [
+    ['Bush_1_A_Color1', [0.5, 0.9], 51], ['Bush_2_A_Color1', [0.6, 1.0], 52],
+    ['Rock_1_A_Color1', [0.4, 0.9], 53], ['Rock_2_A_Color1', [0.3, 0.6], 54],
+    ['Grass_2_A_Color1', [0.5, 0.8], 55],
+  ];
+  scatter.forEach(([nm, h, seed], k) => {
+    if (fnode[nm]) instancedRoot(fnode[nm], P.parkScatter.filter((_, i) => i % scatter.length === k),
+      { fit: true, h, lift: true, randRot: true, seed });
+  });
+  // mobiliario urbano TOON procedural (flat-color, calza con la paleta KayKit/Kenney)
+  instancedRoot(buildToonLamp(), F.lamps, { y: WALK_Y, seed: 17 });
+  instancedRoot(buildToonBench(), [...F.benches, ...P.parkBenches], { y: WALK_Y, seed: 18 });
+  instancedRoot(buildToonHydrant(), F.misc.filter((_, i) => i % 2 === 0), { y: WALK_Y, randRot: true, seed: 19 });
+  instancedRoot(buildToonBin(), F.misc.filter((_, i) => i % 2 === 1), { y: WALK_Y, randRot: true, seed: 20 });
+  // pilares de las vias elevadas (cilindro unidad escalado en Y a cada altura)
+  if (F.pillars && F.pillars.length) {
+    const pgeo = new THREE.CylinderGeometry(0.42, 0.5, 1, 8); pgeo.translate(0, 0.5, 0);
+    const pim = new THREE.InstancedMesh(pgeo, new THREE.MeshStandardMaterial({ color: 0x8f8d86, roughness: 1 }), F.pillars.length);
+    pim.castShadow = true; pim.receiveShadow = true;
+    const pm4 = new THREE.Matrix4();
+    F.pillars.forEach(([x, z, topY], i) => { pm4.makeScale(1, topY, 1); pm4.setPosition(x, 0, z); pim.setMatrixAt(i, pm4); });
+    scene.add(pim);
+  }
 
   // postes de luz de concreto + cables con catenaria (firma limeña)
   {
@@ -224,6 +319,7 @@ async function boot() {
     for (const r of city.data.roads) {
       const full = r.w ?? 6;
       if (full < 5 || r.bridge || r.p.length < 2) continue;
+      if (/^(motorway|trunk)/.test(r.t || '')) continue;   // sin setos cruzando autopistas/ramales
       for (const end of [0, r.p.length - 1]) {
         const p = r.p[end], q2 = r.p[end === 0 ? 1 : r.p.length - 2];
         const L = Math.hypot(q2[0] - p[0], q2[1] - p[1]);
@@ -334,7 +430,7 @@ async function boot() {
         const ax = r.p[i][0], az = r.p[i][1], bx = r.p[i + 1][0], bz = r.p[i + 1][1];
         const L = Math.hypot(bx - ax, bz - az);
         acc += L;
-        if (acc < 11 || rng() > 0.72) continue;
+        if (acc < 16 || rng() > 0.55) continue;
         acc = 0;
         const ux = (bx - ax) / L, uz = (bz - az) / L;
         const side = carSpots.length % 2 === 0 ? 1 : -1;
@@ -345,26 +441,30 @@ async function boot() {
         if (city.nearOtherRoad(px, pz, ax, az, bx, bz)) continue;
         const cang = Math.atan2(ux, uz) + (side > 0 ? 0 : Math.PI);
         carSpots.push([px, pz, cang]);
-        city.carColliders.push({ x: px, z: pz, ang: cang, hw: 1.85, hd: 0.8 });
+        city.carColliders.push({ x: px, z: pz, ang: cang, hw: 1.9, hd: 1.05 });
       }
     }
   }
-  const carFiles = ['car_sedan.gltf', 'car_taxi.gltf', 'car_hatchback.gltf', 'car_stationwagon.gltf'];
+  const carFiles = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
   for (let ci = 0; ci < carFiles.length; ci++) {
-    await instanced(carFiles[ci], carSpots.filter((_, i) => i % 4 === ci), { fit: true, h: [1.45, 1.45], y: ROAD_Y, lift: true, seed: 30 + ci });
+    await instanced(carFiles[ci], carSpots.filter((_, i) => i % carFiles.length === ci), { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
   }
   setProgress(0.95);
 
+  // onboarding: nombre + personaje antes de spawnear
+  setProgress(1);
+  document.getElementById('loading').remove();
+  const choice = await showOnboarding();
   // player + minimapa
-  const player = new Player(scene, city, [-4.2, 47.1]);
+  const player = new Player(scene, city, [-4.2, 47.1], choice);
   await player.load();
   const life = new StreetLife(scene, city);
   const seatSpots = [...P.parkBenches, ...F.benches].filter((_, i) => i % 3 === 0).slice(0, 18);
-  await life.load(40, seatSpots);
+  await life.load(40, seatSpots, P.parkTrees);
   window.__game = { player, city, scene };  // hooks de test
   const minimap = new MiniMap(city, document.getElementById('minimap'));
-  setProgress(1);
-  document.getElementById('loading').remove();
+  const net = new Net(scene, player);   // multiplayer
+  window.__game.net = net;
 
   let streetT = 0;
   const clock = new THREE.Clock();
@@ -372,6 +472,7 @@ async function boot() {
     const dt = Math.min(clock.getDelta(), 0.05);
     player.update(dt, camera);
     life.update(dt, player.pos);
+    net.update(dt, player);
     // shadow map anclado a la grilla de texels: si sigue al player continuo,
     // los bordes de sombra nadan/parpadean al caminar (shadow shimmering)
     const texel = 180 / 2048;

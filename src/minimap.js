@@ -121,7 +121,7 @@ export class MiniMap {
     }
     // flecha del jugador
     ctx.translate(half, half);
-    ctx.rotate(Math.atan2(Math.sin(heading), Math.cos(heading)));
+    ctx.rotate(Math.PI - heading);   // norte-arriba: el char (forward +Z) mira (sin h, cos h) en canvas
     ctx.fillStyle = 'rgba(255,255,255,.9)';
     ctx.beginPath(); ctx.arc(0, 0, 14, 0, 7); ctx.fill();
     ctx.fillStyle = '#cc2218';

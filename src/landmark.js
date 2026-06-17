@@ -22,8 +22,8 @@ function projectLatLon(lat, lon, origin) {
 // linear-space colors (the wall bucket multiplies a plaster texture)
 const WHITE = [0.86, 0.84, 0.80];
 const PARAPET = [0.80, 0.78, 0.73];
-const CHARCOAL = [0.085, 0.09, 0.10];
-const CHARDARK = [0.06, 0.065, 0.075];
+const CHARCOAL = [0.45, 0.48, 0.55];   // toon slate (era casi negro, cantaba entre pasteles)
+const CHARDARK = [0.38, 0.41, 0.48];
 const WOOD = [0.40, 0.28, 0.15];
 const GREY = [0.48, 0.49, 0.52];
 const REJA = [0.09, 0.10, 0.09];
@@ -32,7 +32,7 @@ const GLASS_SLOT = [0.65, 0.72, 0.85];
 
 const N = 6, FH = 2.84, H = N * FH;   // 17.04
 const WX = 11.4, DZ = 12.4, FRONT = DZ / 2;
-const CORE_W = 4.0, CORE_CX = WX / 2 - CORE_W / 2;
+const CORE_W = 4.0, CORE_CX = WX / 2 - CORE_W / 2 + 0.2;   // +0.2: monolito PROUD en el lateral (mata z-fight con la masa blanca)
 const SETBACK = 12.5;    // building center, meters from the Los Sauces centerline
 const WEST_SHIFT = 14.0; // slide off the Poussin corner, west along Los Sauces
 
@@ -120,9 +120,9 @@ export function buildLosSauces202(W, cx, cz, AX, FZ) {
   at(0, H / 2, 0, WX / 2, H / 2, DZ / 2, W.wall, WHITE);
 
   // B. dark corner monolith (stair core), proud + a touch taller, with slot windows
-  at(CORE_CX, (H + 0.6) / 2, 0.12, CORE_W / 2, (H + 0.6) / 2, DZ / 2 + 0.12, W.wall, CHARDARK);
+  at(CORE_CX, (H + 0.6) / 2, 0.45, CORE_W / 2, (H + 0.6) / 2, DZ / 2 - 0.15, W.wall, CHARDARK);
   for (let f = 0; f < N; f++) {
-    at(CORE_CX, f * FH + 1.95, FRONT + 0.16, (CORE_W - 1.2) / 2, 0.27, 0.04, W.glass, GLASS_SLOT);
+    at(CORE_CX, f * FH + 1.95, FRONT + 0.34, (CORE_W - 1.2) / 2, 0.27, 0.04, W.glass, GLASS_SLOT);
   }
 
   // C. roof parapet around the white volume

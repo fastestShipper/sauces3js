@@ -16,7 +16,7 @@
   }
   #hud .title { font-size: 17px; font-weight: 800; }
   #minimap {
-    position: fixed; top: 14px; right: 14px; width: 280px; height: 280px;
+    position: fixed; top: 14px; right: 14px; width: 196px; height: 196px;
     border-radius: 14px; border: 2px solid rgba(35,32,28,.95);
     box-shadow: 0 6px 18px rgba(0,0,0,.4);
   }
@@ -28,6 +28,41 @@
   }
   #loading .bar { width: 280px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
   #loading .bar i { display: block; height: 100%; width: 0%; background: #ffd166; transition: width .2s; }
+  #onboard {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 28%, rgba(22,50,79,.55), rgba(14,17,22,.93));
+    backdrop-filter: blur(6px); font: 500 15px system-ui, sans-serif;
+  }
+  .ob-card {
+    width: min(560px, 92vw); padding: 30px 28px 22px; box-sizing: border-box;
+    background: rgba(248,246,240,.98); border-radius: 22px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5); text-align: center; color: #20242c;
+  }
+  .ob-title { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+  .ob-sub { color: #5a6068; margin: 6px 0 18px; }
+  #ob-name {
+    width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 16px;
+    border: 2px solid #d8d3c8; border-radius: 12px; outline: none; margin-bottom: 18px;
+  }
+  #ob-name:focus { border-color: #6f9a3f; }
+  .ob-pick-label { font-weight: 700; text-align: left; margin-bottom: 10px; }
+  #ob-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .ob-char {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 14px 6px; border: 2px solid #e2ddd2; border-radius: 14px;
+    background: #fff; cursor: pointer; font: inherit; color: #20242c; transition: all .12s;
+  }
+  .ob-char:hover { border-color: #b9b2a2; transform: translateY(-2px); }
+  .ob-char.on { border-color: #6f9a3f; background: #eef6e3; box-shadow: 0 0 0 3px rgba(111,154,63,.25); }
+  .ob-char .e { font-size: 30px; }
+  .ob-char .n { font-size: 13px; font-weight: 600; }
+  #ob-go {
+    width: 100%; padding: 14px; font-size: 17px; font-weight: 800; color: #fff;
+    background: #6f9a3f; border: none; border-radius: 14px; cursor: pointer;
+  }
+  #ob-go:disabled { background: #c4c0b6; cursor: not-allowed; }
+  .ob-hint { color: #8a8f97; font-size: 12px; margin-top: 14px; }
 </style>
 </head>
 <body>
@@ -38,6 +73,17 @@
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
 <div id="loading"><div>Construyendo Los Sauces…</div><div class="bar"><i id="lbar"></i></div></div>
+<div id="onboard">
+  <div class="ob-card">
+    <div class="ob-title">Los Sauces · San Borja</div>
+    <div class="ob-sub">Un barrio real de Lima en miniatura. Camina, explora, encuentra a otros.</div>
+    <input id="ob-name" maxlength="16" placeholder="Tu nombre" autocomplete="off">
+    <div class="ob-pick-label">Elige tu personaje</div>
+    <div id="ob-grid"></div>
+    <button id="ob-go" disabled>Entrar</button>
+    <div class="ob-hint">WASD moverse · ESPACIO saltar · clic derecho girar · rueda zoom</div>
+  </div>
+</div>
 <script type="importmap">
 {
   "imports": {
@@ -46,6 +92,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260614a"></script>
+<script type="module" src="./src/app.js?v=20260616b"></script>
 </body>
 </html>

@@ -1,12 +1,16 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260614a';
+import { sanitizeImported } from './glbutil.js?v=20260616b';
+import { makeNametag } from './nametag.js?v=20260616b';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260616b';
 
 export class Player {
-  constructor(scene, city, spawn) {
+  constructor(scene, city, spawn, opts = {}) {
     this.scene = scene;
     this.city = city;
+    this.charFile = opts.char || 'char_knight.glb';
+    this.name = opts.name || '';
     this.pos = new THREE.Vector3(spawn[0], 0, spawn[1]);
     this.heading = 0;
     this.yaw = 0.6;
@@ -22,7 +26,11 @@ export class Player {
     addEventListener('keydown', e => { this.keys[e.code] = true; });
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     this.dragging = false;
-    addEventListener('mousedown', e => { if (e.button === 2) this.dragging = true; });
+    this.attackT = 0;
+    addEventListener('mousedown', e => {
+      if (e.button === 2) this.dragging = true;
+      else if (e.button === 0) this.attack();   // clic izq = ataque
+    });
     addEventListener('mouseup', e => { if (e.button === 2) this.dragging = false; });
     addEventListener('contextmenu', e => e.preventDefault());
     addEventListener('mousemove', e => {
@@ -36,33 +44,53 @@ export class Player {
   }
 
   async load() {
-    const gltf = await new GLTFLoader().loadAsync('./assets/models/casual2.glb');
+    const loader = new GLTFLoader();
+    const gltf = await loader.loadAsync('./assets/models/' + this.charFile);
     const ch = gltf.scene;
-    // GOTCHA: Box3 sobre SkinnedMesh mide bind-space (char salia 2.5x
-    // gigante). El rig Quaternius mide 3.3 unidades: escala fija.
-    const sc = 1.8 / 3.3;
+    // GOTCHA: Box3 sobre SkinnedMesh mide bind-space. El rig KayKit (Rig_Medium)
+    // mide ~2.54 unidades: escala fija para ~1.9m (heroe, leve sobre los vecinos).
+    const sc = 1.9 / 2.54;
     ch.scale.setScalar(sc);
     ch.position.y = 0;
     ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
     sanitizeImported(ch);
     this.char = ch;
     this.root.add(ch);
+    if (this.name) this.root.add(makeNametag(this.name));
+    await equipWeapon(loader, ch, this.charFile);
     this.mixer = new THREE.AnimationMixer(ch);
-    this.actions = {};
-    for (const clip of gltf.animations) {
-      this.actions[clip.name] = this.mixer.clipAction(clip);
+    // las animaciones del rig KayKit viven en archivos aparte (mismo Rig_Medium,
+    // se enlazan por nombre de hueso). General trae los Idle; Movement el resto.
+    const clips = [];
+    for (const af of ['char_anims_general.glb', 'char_anims.glb']) {
+      try { clips.push(...(await loader.loadAsync('./assets/models/' + af)).animations); }
+      catch { /* opcional */ }
     }
-    // zapatos sobre los huesos del pie
-    ch.traverse(o => {
-      if (o.isBone && (o.name === 'FootL' || o.name === 'FootR' || o.name === 'Foot_L' || o.name === 'Foot_R' || o.name.startsWith('Foot'))) {
-        const shoe = new THREE.Mesh(
-          new THREE.BoxGeometry(0.34, 0.22, 0.66),
-          new THREE.MeshStandardMaterial({ color: 0x2b2624, roughness: 0.7 }));
-        shoe.position.set(0, 0.05, 0.14);
-        o.add(shoe);
-      }
-    });
+    const findClip = (re) => clips.find(c => re.test(c.name));
+    const stateMap = { Idle: /^Idle/i, Walk: /^Walking/i, Run: /^Running/i, Jump: /^Jump_Full_Short/i };
+    this.actions = {};
+    for (const [state, re] of Object.entries(stateMap)) {
+      const clip = findClip(re);
+      if (clip) this.actions[state] = this.mixer.clipAction(clip);
+    }
+    // ataque: clip de accion real (one-shot), acelerado para que sea snappy
+    const aClip = clips.find(c => c.name === attackClipName(this.charFile));
+    if (aClip) this.actions['Attack'] = this.mixer.clipAction(aClip);
     this.play('Idle');
+  }
+
+  // ataque one-shot con un clip real; bloquea reintento y locomocion mientras dura
+  attack() {
+    const a = this.actions['Attack'];
+    if (this.attackT > 0 || !a) return;
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    a.timeScale = ATTACK_SPEED;
+    this.attackT = a.getClip().duration / ATTACK_SPEED;
+    if (this.cur && this.actions[this.cur]) a.crossFadeFrom(this.actions[this.cur], 0.12, false);
+    a.play();
+    this.cur = 'Attack';
   }
 
   play(name) {
@@ -115,7 +143,8 @@ export class Player {
     }
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.heading;
-    if (!this.grounded) this.play('Jump');
+    if (this.attackT > 0) this.attackT -= dt;   // ataque manda; no pisar con locomocion
+    else if (!this.grounded) this.play('Jump');
     else if (moving) this.play(spd > 9 ? 'Run' : 'Walk');
     else this.play('Idle');
     if (this.mixer) this.mixer.update(dt);
