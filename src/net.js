@@ -3,11 +3,11 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260617e';
-import { makeNametag } from './nametag.js?v=20260617e';
-import { cloneSkinned } from './npcs.js?v=20260617e';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617e';
-import { showBubble } from './chat.js?v=20260617e';
+import { sanitizeImported } from './glbutil.js?v=20260617f';
+import { makeNametag } from './nametag.js?v=20260617f';
+import { cloneSkinned } from './npcs.js?v=20260617f';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617f';
+import { showBubble } from './chat.js?v=20260617f';
 
 const WS_URL = 'wss://sauces.controla.group/ws';   // server unico (sirve tambien en dev local)
 const SCALE = 1.9 / 2.54;

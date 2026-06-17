@@ -4,15 +4,15 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617e';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617e';
-import { Player } from './player.js?v=20260617e';
-import { MiniMap } from './minimap.js?v=20260617e';
-import { StreetLife } from './npcs.js?v=20260617e';
-import { sanitizeImported } from './glbutil.js?v=20260617e';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617e';
-import { Net } from './net.js?v=20260617e';
-import { ChatUI, showBubble } from './chat.js?v=20260617e';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617f';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617f';
+import { Player } from './player.js?v=20260617f';
+import { MiniMap } from './minimap.js?v=20260617f';
+import { StreetLife } from './npcs.js?v=20260617f';
+import { sanitizeImported } from './glbutil.js?v=20260617f';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617f';
+import { Net } from './net.js?v=20260617f';
+import { ChatUI, showBubble } from './chat.js?v=20260617f';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -486,15 +486,47 @@ async function boot() {
   chat.onClose = () => { player.locked = false; player.keys = {}; };
   net.onChat = (name, text) => chat.add(name, text, false);
 
-  // tecla B: teletransporte a la gruta de la Virgen del Parque Los Sauces
+  // tecla B: teletransporte a la gruta con 2s de CHANNELING + aura magica
+  let teleCh = 0, aura = null;
+  // blending NORMAL (no additive): el aditivo se lava sobre la plaza blanca.
+  const auraMat = (c) => new THREE.MeshBasicMaterial({
+    color: c, transparent: true, opacity: 0.5,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  const teleportTick = (dt) => {
+    if (teleCh <= 0) return;
+    teleCh -= dt;
+    if (aura) {
+      aura.position.set(player.pos.x, 0, player.pos.z);
+      aura.rotation.y += dt * 4.5;
+      const prog = Math.min(1, 1 - teleCh / 2);              // 0 -> 1
+      const pulse = 0.42 + 0.4 * Math.abs(Math.sin(teleCh * 6));
+      const cyl = aura.children[0], ring = aura.children[1];
+      cyl.material.opacity = pulse;
+      ring.material.opacity = Math.min(1, pulse * 1.3);
+      cyl.scale.set(1 + prog * 0.5, 1, 1 + prog * 0.5);
+      cyl.position.y = 1.6 + prog * 0.7;                     // la energia sube
+      ring.scale.setScalar(1 + prog * 1.3);                 // el anillo se expande
+    }
+    if (teleCh <= 0) {                                       // fin del channel: tepea
+      if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; player.heading = Math.PI; }
+      if (aura) { scene.remove(aura); aura.traverse(o => { o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); }); aura = null; }
+      player.locked = false;
+    }
+  };
   if (P.landmark) {
-    const [lx, lz] = P.landmark;
     addEventListener('keydown', (e) => {
-      if (e.code === 'KeyB' && !player.locked) {
-        player.pos.set(lx, 0, lz + 8);    // en la plaza, frente a la gruta
-        player.velY = 0; player.grounded = true;
-        player.heading = Math.PI;         // mirando hacia la gruta
-      }
+      if (e.code !== 'KeyB' || teleCh > 0 || player.locked) return;
+      teleCh = 2.0;
+      player.locked = true;                                  // channeling: no te mueves
+      aura = new THREE.Group();
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.25, 3.2, 28, 1, true), auraMat(0x2fb8f5));
+      cyl.position.y = 1.6;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.7, 40), auraMat(0x9a52ff));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06;
+      aura.add(cyl, ring);
+      aura.position.set(player.pos.x, 0, player.pos.z);
+      scene.add(aura);
     });
   }
 
@@ -505,6 +537,7 @@ async function boot() {
     player.update(dt, camera);
     life.update(dt, player.pos);
     net.update(dt, player);
+    teleportTick(dt);
     // shadow map anclado a la grilla de texels: si sigue al player continuo,
     // los bordes de sombra nadan/parpadean al caminar (shadow shimmering)
     const texel = 180 / 2048;
