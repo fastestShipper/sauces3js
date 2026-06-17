@@ -4,14 +4,14 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260616b';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260616b';
-import { Player } from './player.js?v=20260616b';
-import { MiniMap } from './minimap.js?v=20260616b';
-import { StreetLife } from './npcs.js?v=20260616b';
-import { sanitizeImported } from './glbutil.js?v=20260616b';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260616b';
-import { Net } from './net.js?v=20260616b';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617a';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617a';
+import { Player } from './player.js?v=20260617a';
+import { MiniMap } from './minimap.js?v=20260617a';
+import { StreetLife } from './npcs.js?v=20260617a';
+import { sanitizeImported } from './glbutil.js?v=20260617a';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617a';
+import { Net } from './net.js?v=20260617a';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
