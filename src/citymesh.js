@@ -451,13 +451,55 @@ export function buildRoads(city) {
   return { road, walk, paint, median, berma, curb, path, deck, furniture };
 }
 
+// Plaza radial empedrada + gruta de la Virgen al centro del parque grande.
+// Replica el corazon real del Parque Los Sauces (plaza circular + gruta),
+// rasgo caracteristico de los parques de San Borja.
+function buildParkLandmark(plaza, feat, cx, cz) {
+  const STONE = [0.75, 0.72, 0.67], STONE2 = [0.66, 0.62, 0.57];
+  roofCyl(plaza, cx, 0.02, cz, 9.2, 0.05, STONE);   // pad de la plaza
+  roofCyl(plaza, cx, 0.07, cz, 3.3, 0.05, STONE2);  // anillo interior (lee radial)
+  // gruta: base + monticulo rocoso escalonado
+  const ROCK = [0.55, 0.54, 0.52], ROCKD = [0.47, 0.46, 0.45], BASE = [0.67, 0.65, 0.61];
+  roofCyl(feat, cx, 0.07, cz, 2.1, 0.4, BASE);
+  roofCyl(feat, cx, 0.47, cz, 1.7, 1.05, ROCK);
+  roofCyl(feat, cx, 1.5, cz, 1.15, 0.82, ROCKD);
+  roofCyl(feat, cx, 2.28, cz, 0.6, 0.5, ROCK);
+  // hornacina oscura en el frente (+z) con la Virgen (manto azul, tunica blanca)
+  const fz = cz + 1.5;
+  roofBox(feat, cx, 0.5, fz, 0.5, 1.35, 0.22, [0.16, 0.15, 0.18]);
+  roofCyl(feat, cx, 0.55, fz + 0.1, 0.26, 1.0, [0.42, 0.52, 0.78]);
+  roofCyl(feat, cx, 0.6, fz + 0.12, 0.17, 0.85, [0.93, 0.93, 0.96]);
+  roofCyl(feat, cx, 1.45, fz + 0.12, 0.12, 0.18, [0.86, 0.73, 0.61]);
+  // cruz sobre la gruta
+  roofBox(feat, cx, 2.78, cz, 0.06, 0.72, 0.06, [0.27, 0.21, 0.16]);
+  roofBox(feat, cx, 3.12, cz, 0.28, 0.12, 0.06, [0.27, 0.21, 0.16]);
+}
+
 export function buildParks(city) {
   const lawn = new Bucket();
+  const plaza = new Bucket();
+  const feature = new Bucket();
   const rng = mulberry32(444);
   const parkTrees = [];
   const parkBenches = [];
   const parkScatter = [];
-  for (const g of city.data.green) {
+  // Parque Los Sauces REAL (centro del barrio, proyectado a coords de juego ~
+  // [-90,-25]): la plaza radial + gruta van AQUI, no en el green mas grande
+  // (que es otro parque al este). Elige el parque mas cercano al ancla real.
+  const PLS_ANCHOR = [-90, -25];
+  let bigIdx = -1, bestD = 1e18, bigC = null;
+  for (let gi = 0; gi < city.data.green.length; gi++) {
+    const gp = city.data.green[gi].p;
+    if (gp.length < 3 || Math.abs(ringArea(gp)) < 1500) continue;  // solo parques de verdad
+    let mx = 0, mz = 0; for (const p of gp) { mx += p[0]; mz += p[1]; }
+    const c = [mx / gp.length, mz / gp.length];
+    const d = Math.hypot(c[0] - PLS_ANCHOR[0], c[1] - PLS_ANCHOR[1]);
+    if (d < bestD) { bestD = d; bigIdx = gi; bigC = c; }
+  }
+  const PLAZA_R = 9.6;
+  const inPlaza = (x, z, gi) => gi === bigIdx && bigC && Math.hypot(x - bigC[0], z - bigC[1]) < PLAZA_R;
+  for (let gi = 0; gi < city.data.green.length; gi++) {
+    const g = city.data.green[gi];
     const ring = g.p;
     if (ring.length < 3) continue;
     let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
@@ -466,7 +508,7 @@ export function buildParks(city) {
     for (let gx = minx; gx < maxx; gx += LCELL) {
       for (let gz = minz; gz < maxz; gz += LCELL) {
         const cx = gx + LCELL * 0.5, cz = gz + LCELL * 0.5;
-        if (!city.pointInRing(cx, cz, ring) || city.onAnyRoad(cx, cz, 0.3)) continue;
+        if (!city.pointInRing(cx, cz, ring) || city.onAnyRoad(cx, cz, 0.3) || inPlaza(cx, cz, gi)) continue;
         // variacion sutil de tono, sin parches de color (leian como tierra)
         const shade = 0.90 + rng() * 0.10;
         const col = [shade * 0.92, shade, shade * 0.88];
@@ -477,14 +519,14 @@ export function buildParks(city) {
     const want = Math.max(2, Math.min(60, Math.floor((maxx - minx) * (maxz - minz) / 170)));
     for (let k = 0; k < want; k++) {
       const tx = minx + rng() * (maxx - minx), tz = minz + rng() * (maxz - minz);
-      if (!city.pointInRing(tx, tz, ring) || city.onAnyRoad(tx, tz, 1.0)) continue;
+      if (!city.pointInRing(tx, tz, ring) || city.onAnyRoad(tx, tz, 1.0) || inPlaza(tx, tz, gi)) continue;
       parkTrees.push([tx, tz]);
     }
     // puntos chicos (mas densos que los arboles) para arbustos / rocas / pasto
     const wantS = Math.max(4, Math.min(260, Math.floor((maxx - minx) * (maxz - minz) / 38)));
     for (let k = 0; k < wantS; k++) {
       const sx = minx + rng() * (maxx - minx), sz = minz + rng() * (maxz - minz);
-      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 0.8)) continue;
+      if (!city.pointInRing(sx, sz, ring) || city.onAnyRoad(sx, sz, 0.8) || inPlaza(sx, sz, gi)) continue;
       parkScatter.push([sx, sz]);
     }
     // bancas perimetrales mirando hacia adentro del parque
@@ -504,5 +546,6 @@ export function buildParks(city) {
       }
     }
   }
-  return { lawn, parkTrees, parkBenches, parkScatter };
+  if (bigC) buildParkLandmark(plaza, feature, bigC[0], bigC[1]);
+  return { lawn, plaza, feature, parkTrees, parkBenches, parkScatter };
 }

@@ -190,6 +190,8 @@ async function boot() {
   // parques
   const P = buildParks(city);
   addBucket(P.lawn, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, vertexColors: true, roughness: 1 }), false);
+  addBucket(P.plaza, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }), false);
+  addBucket(P.feature, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), true);
 
   // props instanciados
   const loader = new GLTFLoader();
