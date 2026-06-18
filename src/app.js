@@ -4,15 +4,24 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260617f';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260617f';
-import { Player } from './player.js?v=20260617f';
-import { MiniMap } from './minimap.js?v=20260617f';
-import { StreetLife } from './npcs.js?v=20260617f';
-import { sanitizeImported } from './glbutil.js?v=20260617f';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260617f';
-import { Net } from './net.js?v=20260617f';
-import { ChatUI, showBubble } from './chat.js?v=20260617f';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260618p';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260618p';
+import { Player } from './player.js?v=20260618p';
+import { MiniMap } from './minimap.js?v=20260618p';
+import { StreetLife } from './npcs.js?v=20260618p';
+import { sanitizeImported } from './glbutil.js?v=20260618p';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260618p';
+import { Net } from './net.js?v=20260618p';
+import { ChatUI, showBubble } from './chat.js?v=20260618p';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260618p';
+import { authRequest } from './rpg/account.js?v=20260618p';
+import { MobField } from './rpg/mobs.js?v=20260618p';
+import { Inventory } from './rpg/loot.js?v=20260618p';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260618p';
+import { Combat } from './rpg/combat.js?v=20260618p';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260618p';
+import { Effects } from './rpg/effects.js?v=20260618p';
+import { attachWeaponByName } from './weapons.js?v=20260618p';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -67,29 +76,74 @@ function grain(hex, alpha = 0.09) {
   return t;
 }
 
-// catalogo de personajes para el onboarding (archivos KayKit)
-const CHARS = [
-  { f: 'char_knight.glb', n: 'Caballero', e: '🛡️' },
-  { f: 'char_barbarian.glb', n: 'Bárbaro', e: '🪓' },
-  { f: 'char_mage.glb', n: 'Mago', e: '🔮' },
-  { f: 'char_ranger.glb', n: 'Arquero', e: '🏹' },
-  { f: 'char_rogue.glb', n: 'Pícaro', e: '🗡️' },
-  { f: 'char_rogue_hooded.glb', n: 'Encapuchado', e: '🥷' },
-];
+// pantalla de cuenta: Entrar o Crear cuenta (contra el server). Resuelve con el
+// objeto de auth { ok, god, char, token, user }. La cuenta zpw = GOD la valida el server.
+function showAuth() {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.id = 'login';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:62;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#1b2433,#0b0f16);font-family:system-ui,sans-serif';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(18,24,36,.94);border:1px solid #2b3850;border-radius:16px;padding:28px 32px;width:320px;color:#e8edf6;box-shadow:0 24px 64px rgba(0,0,0,.55);text-align:center';
+    const h = document.createElement('div'); h.textContent = 'Los Sauces RPG'; h.style.cssText = 'font-size:23px;font-weight:800;letter-spacing:-.4px';
+    const sub = document.createElement('div'); sub.textContent = 'Crea tu cuenta y guarda tu progreso'; sub.style.cssText = 'font-size:12px;color:#8a93a3;margin:3px 0 16px';
+    const tabs = document.createElement('div'); tabs.style.cssText = 'display:flex;gap:6px;margin-bottom:14px';
+    const tabLogin = document.createElement('button');
+    const tabReg = document.createElement('button');
+    const err = document.createElement('div'); err.style.cssText = 'min-height:16px;font-size:11.5px;color:#ff7a7a;margin:4px 0 2px';
+    let mode = 'login';
+    const styleTabs = () => {
+      for (const [b, m, label] of [[tabLogin, 'login', 'Entrar'], [tabReg, 'register', 'Crear cuenta']]) {
+        b.textContent = label;
+        b.style.cssText = 'flex:1;padding:9px;border:0;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;' +
+          (mode === m ? 'background:#3f7fd4;color:#fff' : 'background:#1a2436;color:#8a93a3');
+      }
+    };
+    tabLogin.onclick = () => { mode = 'login'; styleTabs(); err.textContent = ''; };
+    tabReg.onclick = () => { mode = 'register'; styleTabs(); err.textContent = ''; };
+    tabs.append(tabLogin, tabReg);
+    const u = document.createElement('input'); u.placeholder = 'Usuario'; u.autocomplete = 'off'; u.maxLength = 16;
+    const p = document.createElement('input'); p.placeholder = 'Contraseña'; p.type = 'password'; p.maxLength = 64;
+    for (const i of [u, p]) i.style.cssText = 'width:100%;box-sizing:border-box;margin:6px 0;padding:11px 12px;border-radius:9px;border:1px solid #34425e;background:#0f1622;color:#e8edf6;font-size:14px;outline:none';
+    const btn = document.createElement('button'); btn.textContent = 'Continuar'; btn.style.cssText = 'margin-top:10px;width:100%;padding:11px;border:0;border-radius:9px;background:#3f7fd4;color:#fff;font-weight:700;font-size:15px;cursor:pointer';
+    const hint = document.createElement('div'); hint.textContent = 'Tu progreso (clase, nivel, inventario) se guarda en tu cuenta.'; hint.style.cssText = 'font-size:10px;color:#6b7280;margin-top:11px;line-height:1.4';
+    card.append(h, sub, tabs, u, p, err, btn, hint);
+    ov.appendChild(card); document.body.appendChild(ov);
+    styleTabs(); u.focus();
+    let busy = false;
+    const go = async () => {
+      if (busy) return;
+      const user = u.value.trim(), pass = p.value;
+      if (user.length < 3) { err.textContent = 'El usuario necesita al menos 3 caracteres'; return; }
+      if (pass.length < 4) { err.textContent = 'La contraseña necesita al menos 4 caracteres'; return; }
+      busy = true; btn.textContent = 'Conectando...'; err.textContent = '';
+      const r = await authRequest(mode, user, pass);
+      busy = false; btn.textContent = 'Continuar';
+      if (!r.ok) { err.textContent = r.error || 'No se pudo, intenta de nuevo'; return; }
+      ov.remove();
+      resolve(r);
+    };
+    btn.onclick = go;
+    u.addEventListener('keydown', e => { if (e.key === 'Enter') p.focus(); });
+    p.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  });
+}
 
-// muestra la pantalla de onboarding; resuelve con {char, name} al pulsar Entrar
-function showOnboarding() {
+// seleccion de clase (solo las 4) para jugadores normales; reusa el modal #onboard
+function showClassPick(prefillName) {
   return new Promise(resolve => {
     const ob = document.getElementById('onboard');
     const grid = document.getElementById('ob-grid');
     const go = document.getElementById('ob-go');
     const nameI = document.getElementById('ob-name');
+    if (prefillName) nameI.value = prefillName;
+    grid.replaceChildren();
     let sel = null;
-    CHARS.forEach(c => {
+    CLASS_LIST.forEach(c => {
       const card = document.createElement('button');
       card.className = 'ob-char';
-      const eSpan = document.createElement('span'); eSpan.className = 'e'; eSpan.textContent = c.e;
-      const nSpan = document.createElement('span'); nSpan.className = 'n'; nSpan.textContent = c.n;
+      const eSpan = document.createElement('span'); eSpan.className = 'e'; eSpan.textContent = c.emoji;
+      const nSpan = document.createElement('span'); nSpan.className = 'n'; nSpan.textContent = c.name;
       card.append(eSpan, nSpan);
       card.onclick = () => {
         sel = c;
@@ -100,10 +154,11 @@ function showOnboarding() {
       grid.appendChild(card);
     });
     ob.style.display = 'flex';
+    go.disabled = true;
     go.onclick = () => {
       if (!sel) return;
       ob.style.display = 'none';
-      resolve({ char: sel.f, name: (nameI.value.trim() || sel.n).slice(0, 16) });
+      resolve({ char: sel.char, name: (nameI.value.trim() || sel.name).slice(0, 16), className: sel.id });
     };
   });
 }
@@ -462,7 +517,17 @@ async function boot() {
   // onboarding: nombre + personaje antes de spawnear
   setProgress(1);
   document.getElementById('loading').remove();
-  const choice = await showOnboarding();
+  const auth = await showAuth();   // { ok, god, char, token, user }
+  let choice;
+  if (auth.god) {
+    choice = { char: CERNUNNOS.char, name: CERNUNNOS.name, className: 'cernunnos', god: true };
+  } else if (auth.char && auth.char.charFile) {
+    // cuenta con personaje guardado: restaurar la clase y saltar la seleccion
+    choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className };
+  } else {
+    // cuenta nueva: elegir clase
+    choice = await showClassPick(auth.user);
+  }
   // player + minimapa
   const player = new Player(scene, city, [-4.2, 47.1], choice);
   await player.load();
@@ -472,8 +537,113 @@ async function boot() {
   window.__game = { player, city, scene };  // hooks de test
   const minimap = new MiniMap(city, document.getElementById('minimap'));
   const coordsEl = document.getElementById('coords');   // ubicacion para compartir con otros
-  const net = new Net(scene, player);   // multiplayer
+  const net = new Net(scene, player, auth.token);   // multiplayer + cuenta (token)
   window.__game.net = net;
+
+  // ===== MODO RPG (local) =====
+  // Cernunnos GOD: aura verde pastel en el piso bajo el personaje
+  let godAura = null;
+  if (choice.god) {
+    godAura = makeCharAura(CERNUNNOS.auraColor);
+    player.root.add(godAura);
+  }
+  // mobs COMPARTIDOS: el server es dueno de los esqueletos (todos ven los mismos,
+  // en el jardin del Boulevard). El MobField solo los DIBUJA y anima desde net.mobs.
+  const mobField = new MobField(scene, () => camera, net);
+  await mobField.load();
+  const effects = new Effects(scene, () => camera);   // sangre + numeros de daño
+  // HUD + progresion + quest + inventario
+  const hud = new HUD(document.body);
+  const qPanel = document.querySelector('.rpg-hud-quest');   // quest quitado: ocultar el tracker
+  if (qPanel) qPanel.style.display = 'none';
+  const progress = new Progress(() => { saveChar(); });   // al subir de nivel, guardar
+  const questLog = null;   // quest quitado a pedido
+  let inventory;
+  let lastEquipId = null;
+  const applyEquip = async () => {
+    const it = inventory.equippedWeapon;
+    if (!it || it.id === lastEquipId) return;
+    lastEquipId = it.id;
+    const w = await attachWeaponByName(loader, player.char, it.weaponName);
+    if (w) applyWeaponTier(w, it.tier);
+  };
+  inventory = new Inventory(() => { applyEquip(); saveChar(); });
+  inventory.buildUI(document.body);
+  // tecla I: abrir/cerrar inventario (no mientras el chat esta abierto -> player.locked)
+  addEventListener('keydown', (e) => {
+    if (e.code === 'KeyI' && !player.locked) inventory.setOpen(!inventory.isOpen());
+  });
+  // combate tab-target
+  const combat = new Combat({
+    scene, camera, player, mobField, net,
+    inventory, progress, hud, effects,
+    onRespawn: () => {
+      if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; }
+    },
+  });
+  window.__game.rpg = { mobField, combat, inventory, progress, hud };
+
+  // ===== PARTY: invitar con G al jugador mas cercano; aceptar con Y =====
+  const partyPanel = document.createElement('div');
+  partyPanel.style.cssText = 'position:fixed;left:18px;top:120px;z-index:35;font-family:system-ui,sans-serif;color:#e8edf6;font-size:12px;text-shadow:0 1px 2px #000;display:none';
+  document.body.appendChild(partyPanel);
+  net.onParty = (members) => {
+    if (!members || members.length < 2) { partyPanel.style.display = 'none'; return; }
+    partyPanel.style.display = 'block';
+    partyPanel.replaceChildren();
+    const h = document.createElement('div'); h.textContent = 'PARTY';
+    h.style.cssText = 'font-weight:800;font-size:10px;letter-spacing:.6px;color:#7be0a8;margin-bottom:3px';
+    partyPanel.appendChild(h);
+    for (const mem of members) {
+      const row = document.createElement('div'); row.textContent = '• ' + (mem.name || 'Vecino');
+      partyPanel.appendChild(row);
+    }
+  };
+  let pendingInvite = null, inviteTO = null;
+  net.onPartyInvited = (fromId, name) => {
+    hud.toast((name || 'Alguien') + ' te invito a party. Pulsa Y para aceptar.');
+    pendingInvite = fromId;
+    clearTimeout(inviteTO); inviteTO = setTimeout(() => { pendingInvite = null; }, 15000);
+  };
+  addEventListener('keydown', (e) => {
+    if (player.locked) return;
+    if (e.code === 'KeyY' && pendingInvite != null) { net.accept(pendingInvite); pendingInvite = null; }
+    else if (e.code === 'KeyG') {
+      let best = null, bd = 1e9;
+      for (const [pid, r] of net.remotes) { const dd = Math.hypot(r.x - player.pos.x, r.z - player.pos.z); if (dd < bd) { bd = dd; best = pid; } }
+      if (best != null && bd < 40) { net.invite(best); hud.toast('Invitacion de party enviada.'); }
+      else hud.toast('No hay nadie cerca para invitar.');
+    }
+  });
+
+  // ===== PERSISTENCIA: guardar/cargar el personaje en la cuenta =====
+  const charSnapshot = () => ({
+    className: choice.className, charFile: choice.char,
+    level: progress.level, xp: progress.xp, hpMax: progress.hpMax,
+    inv: inventory.items, equipId: inventory.equippedWeapon ? inventory.equippedWeapon.id : null,
+  });
+  let saveT = null;
+  function saveChar() {
+    if (saveT) clearTimeout(saveT);
+    saveT = setTimeout(() => net.save(charSnapshot()), 1200);   // debounce
+  }
+  addEventListener('beforeunload', () => net.save(charSnapshot()));
+  // restaurar el progreso guardado (nivel/xp/inventario) si la cuenta lo tiene
+  const saved = auth.char;
+  if (saved && saved.level) {
+    progress.level = saved.level;
+    progress.xp = saved.xp || 0;
+    progress.xpNext = 20 * progress.level;
+    progress.hpMax = saved.hpMax || (80 + 20 * progress.level);
+    if (Array.isArray(saved.inv)) {
+      for (const it of saved.inv) inventory.add(it);
+      if (saved.equipId) { const eq = inventory.items.find(i => i.id === saved.equipId); if (eq) inventory.equip(eq); }
+    }
+    combat.hpMax = progress.hpMax; combat.hp = progress.hpMax;
+    hud.setHP(combat.hp, combat.hpMax);
+    hud.setXP(progress.xp, progress.xpNext, progress.level);
+  }
+  saveChar();   // persistir el estado inicial (clase elegida) en cuentas nuevas
 
   // chat de mundo (Enter): mientras escribes, el player queda bloqueado
   const localBubble = {};
@@ -538,6 +708,10 @@ async function boot() {
     life.update(dt, player.pos);
     net.update(dt, player);
     teleportTick(dt);
+    mobField.update(dt);
+    combat.update(dt);
+    effects.update(dt);
+    if (godAura) updateAura(godAura, dt);
     // shadow map anclado a la grilla de texels: si sigue al player continuo,
     // los bordes de sombra nadan/parpadean al caminar (shadow shimmering)
     const texel = 180 / 2048;

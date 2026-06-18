@@ -1,7 +1,7 @@
 // Cosmetic weapons: attach each class's weapon to the KayKit hand slot bones
 // (handslot.r / handslot.l). Shared by player, NPCs and remote players. The
 // attack uses a REAL animator-made clip (not a hand-rolled bone rotation).
-import { sanitizeImported } from './glbutil.js?v=20260617f';
+import { sanitizeImported } from './glbutil.js?v=20260618p';
 
 const WEAPON_BY_CHAR = {
   'char_knight.glb': { r: 'sword_1handed', l: 'shield_round' },
@@ -10,6 +10,7 @@ const WEAPON_BY_CHAR = {
   'char_ranger.glb': { r: 'bow' },
   'char_rogue.glb': { r: 'dagger' },
   'char_rogue_hooded.glb': { r: 'dagger' },
+  'char_cernunnos.glb': { r: 'staff' },
 };
 
 let _wg = null, _loading = null;
@@ -57,11 +58,39 @@ export async function equipWeapon(loader, charScene, charFile) {
   if (spec.l) attach('handslot.l', spec.l);
 }
 
-// KayKit Adventurers 2.0 FREE no trae clips de combate. De los gestos del set
-// gratuito, "Throw" es el unico con un movimiento de cuerpo completo que lee como
-// ataque (lunge + brazo); "Use_Item" es demasiado sutil. Lo usamos para todas las
-// clases (sirve de tajo/estocada/cast en un mundo casual). Verificado en vivo.
-const ATTACK_BY_CHAR = {};
+// Adjunta un arma ARBITRARIA por nombre a la mano derecha (handslot.r), limpiando
+// la que hubiera. Devuelve el Object3D del arma (para aplicarle tier/glow) o null.
+// Lo usan el loot (equipar lo dropeado) y Cernunnos (cualquier arma).
+export async function attachWeaponByName(loader, charScene, weaponName) {
+  const wg = await loadWeapons(loader);
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const target = norm('handslot.r');
+  let slot = null;
+  charScene.traverse(o => { if (!slot && o.isBone && norm(o.name) === target) slot = o; });
+  if (!slot) return null;
+  for (let i = slot.children.length - 1; i >= 0; i--) slot.remove(slot.children[i]);
+  const proto = findInScenes(wg, weaponName);
+  if (!proto) return null;
+  const w = proto.clone(true);
+  w.position.set(0, 0, 0);
+  w.quaternion.identity();
+  w.scale.setScalar(1);
+  w.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  slot.add(w);
+  return w;
+}
+
+// Con el pack KayKit Character Animations cada clase tiene su ataque REAL
+// (tajo / estocada / cast / disparo). Fallback a "Throw" si faltara el clip.
+const ATTACK_BY_CHAR = {
+  'char_knight.glb': 'Melee_1H_Attack_Chop',
+  'char_barbarian.glb': 'Melee_2H_Attack_Chop',
+  'char_mage.glb': 'Ranged_Magic_Shoot',
+  'char_ranger.glb': 'Ranged_Bow_Release',
+  'char_rogue.glb': 'Melee_1H_Attack_Stab',
+  'char_rogue_hooded.glb': 'Melee_1H_Attack_Stab',
+  'char_cernunnos.glb': 'Ranged_Magic_Shoot',
+};
 export function attackClipName(charFile) {
   return ATTACK_BY_CHAR[charFile] || 'Throw';
 }

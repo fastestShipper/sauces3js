@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260617f';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260617f';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260618p';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260618p';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -510,10 +510,143 @@ function buildParkLandmark(plaza, feat, benchOut, cx, cz) {
   roofBox(feat, cx, 1.26, fz + 0.03, 0.12, 0.3, 0.02, [0.96, 0.96, 0.98]); // figura clara
   roofBox(feat, cx, 0.62, fz + 0.01, 0.34, 0.12, 0.02, GOLD); // placa dorada
 
-  for (let i = 0; i < 6; i++) {                             // banquitas mirando al santuario
-    const a = (i / 6) * Math.PI * 2 + 0.4;
-    const bx = cx + Math.cos(a) * (R - 1.7), bz = cz + Math.sin(a) * (R - 1.7);
+  // MEDIA LUNA de plantas: seto bajo verde oscuro abrazando ATRAS de la Virgen
+  // (lado norte/+Z) y envolviendo a los costados, con la abertura mirando al
+  // frente (sur/-Z), tal como el manchon verde de la referencia.
+  const HEDGE = [0.18, 0.36, 0.16];                         // verde oscuro 0x2f5d2a aprox
+  const hr = 3.1;                                           // radio del seto alrededor del santuario
+  // arco de ~250 grados: deja un hueco al sur (-Z) por donde se accede
+  const a0 = Math.PI * 0.18, a1 = Math.PI * 1.82;           // de ~32deg a ~328deg (gap al sur)
+  ringArc(feat, cx, cz, a0, a1, hr, hr - 1.05, 0.10, 0.62, HEDGE); // banda curva con cuerpo
+  // tapa superior redondeada del seto (un poco mas claro) para que lea como follaje
+  ringArc(feat, cx, cz, a0, a1, (hr - 0.5), (hr - 1.05) + 0.55, 0.72, 0.0, [0.22, 0.44, 0.20]);
+
+  // BANCAS en ANILLO alrededor del perimetro de la plaza, mirando hacia adentro
+  // (8 puntos), tal como los puntos rojos pegados al circulo en la referencia.
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.39;
+    const bx = cx + Math.cos(a) * (R - 1.6), bz = cz + Math.sin(a) * (R - 1.6);
     benchOut.push([bx, bz, Math.atan2(cx - bx, cz - bz)]);
+  }
+
+  // === JUEGOS PARA NINOS (al OESTE, -X) ===
+  const px = cx - 20, pz = cz + 1;                          // centro del area de juegos
+  buildPath(plaza, cx, cz, px, pz, 2.6);                    // sendero plaza -> juegos
+  buildPlayground(feat, plaza, px, pz);
+
+  // === CASETA DE VIGILANCIA (al SUR-ESTE, +X / -Z) ===
+  const kx = cx + 16, kz = cz - 16;
+  buildPath(plaza, cx, cz, kx, kz, 2.6);                    // sendero plaza -> caseta
+  buildBooth(feat, kx, kz);
+}
+
+// banda curva (arco anular) entre dos angulos: pared exterior + interior + tapa.
+// Sirve para setos en media luna. height = alto del seto.
+function ringArc(B, cx, cz, a0, a1, rOut, rIn, height, baseY, c) {
+  const N = 18;
+  const top = c.map(v => Math.min(1, v + 0.06));
+  for (let i = 0; i < N; i++) {
+    const t0 = a0 + (a1 - a0) * (i / N), t1 = a0 + (a1 - a0) * ((i + 1) / N);
+    const co0 = Math.cos(t0), si0 = Math.sin(t0), co1 = Math.cos(t1), si1 = Math.sin(t1);
+    const oA = [cx + co0 * rOut, cz + si0 * rOut], oB = [cx + co1 * rOut, cz + si1 * rOut];
+    const iA = [cx + co0 * rIn, cz + si0 * rIn], iB = [cx + co1 * rIn, cz + si1 * rIn];
+    const y0 = baseY, y1 = baseY + height;
+    // cara exterior (normal radial hacia afuera)
+    B.quad([oA[0], y0, oA[1]], [oB[0], y0, oB[1]], [oB[0], y1, oB[1]], [oA[0], y1, oA[1]],
+      [(co0 + co1) * 0.5, 0, (si0 + si1) * 0.5], c);
+    // cara interior (normal hacia adentro)
+    B.quad([iB[0], y0, iB[1]], [iA[0], y0, iA[1]], [iA[0], y1, iA[1]], [iB[0], y1, iB[1]],
+      [-(co0 + co1) * 0.5, 0, -(si0 + si1) * 0.5], c);
+    // tapa superior (CCW vista desde arriba)
+    B.quad([iA[0], y1, iA[1]], [oA[0], y1, oA[1]], [oB[0], y1, oB[1]], [iB[0], y1, iB[1]], [0, 1, 0], top);
+  }
+}
+
+// tira de concreto recta entre dos puntos (sendero radial de la plaza).
+function buildPath(B, x0, z0, x1, z1, width) {
+  const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz);
+  if (L < 0.01) return;
+  const ux = dx / L, uz = dz / L, nx = -uz, nz = ux, hw = width * 0.5;
+  const PATHC = [0.72, 0.69, 0.62];
+  B.quad(
+    [x0 - nx * hw, 0.035, z0 - nz * hw], [x1 - nx * hw, 0.035, z1 - nz * hw],
+    [x1 + nx * hw, 0.035, z1 + nz * hw], [x0 + nx * hw, 0.035, z0 + nz * hw],
+    [0, 1, 0], PATHC, (p) => [p[0] * 0.18, p[2] * 0.18]);
+}
+
+// caseta de vigilancia toon: caja 2x2x2.4 + techo a dos aguas + puerta + ventana.
+function buildBooth(feat, kx, kz) {
+  const TEAL = [0.17, 0.71, 0.69], WALL = [0.90, 0.90, 0.88], DARK = [0.13, 0.13, 0.16];
+  const GLASS = [0.55, 0.74, 0.80], ROOF = [0.30, 0.30, 0.33];
+  roofBox(feat, kx, 0.0, kz, 1.05, 0.12, 1.05, DARK);      // losa base
+  roofBox(feat, kx, 0.12, kz, 1.0, 1.1, 1.0, WALL);        // cuerpo (hasta y=2.32)
+  roofBox(feat, kx, 1.22, kz, 1.0, 0.12, 1.0, TEAL);       // friso turquesa
+  gableRoof(feat, kx, 2.34, kz, 1.2, 1.2, 0.7, ROOF, TEAL); // techo a dos aguas
+  // ventana al frente (-Z): vidrio + marco turquesa
+  roofBox(feat, kx, 0.65, kz - 1.0, 0.55, 0.4, 0.03, GLASS);
+  roofBox(feat, kx, 0.60, kz - 1.01, 0.62, 0.06, 0.02, TEAL); // alfeizar
+  // puerta a un costado (+X)
+  roofBox(feat, kx + 1.0, 0.0, kz + 0.25, 0.02, 0.95, 0.34, DARK);
+}
+
+// juegos para ninos: parche de arena + tobogan + columpio + balancin.
+function buildPlayground(feat, plaza, px, pz) {
+  const SAND = [0.85, 0.76, 0.35], RED = [0.82, 0.22, 0.20];
+  const BLUE = [0.20, 0.42, 0.78], YEL = [0.92, 0.78, 0.18], POST = [0.40, 0.42, 0.46];
+  // parche de arena/caucho (disco bajo, tono calido) en el bucket plaza
+  roofCyl(plaza, px, 0.03, pz, 6.5, 0.025, SAND);
+
+  // TOBOGAN: torre + rampa azul + escalera roja (al lado -X del area)
+  const tx = px - 2.6, tz = pz - 1.5;
+  roofBox(feat, tx, 0.05, tz, 0.7, 1.4, 0.7, RED);                 // torre
+  roofBox(feat, tx, 1.45, tz, 0.8, 0.1, 0.8, YEL);                 // plataforma
+  // rampa azul inclinada (caja girada a mano por vertices)
+  slide(feat, tx, tz, BLUE);
+  // escalones rojos
+  for (let s = 0; s < 3; s++) roofBox(feat, tx + 0.0, 0.25 + s * 0.4, tz + 0.75 + s * 0.22, 0.55, 0.06, 0.12, RED);
+
+  // COLUMPIO: 2 postes en A + barra + 2 asientos (al lado +X)
+  const sx = px + 2.2, sz = pz + 0.5;
+  roofBox(feat, sx, 0.05, sz - 1.0, 0.1, 1.6, 0.1, POST);          // poste izq
+  roofBox(feat, sx, 0.05, sz + 1.0, 0.1, 1.6, 0.1, POST);          // poste der
+  roofBox(feat, sx, 1.6, sz, 0.1, 0.1, 1.15, POST);               // barra superior
+  for (const so of [-0.45, 0.45]) {                               // 2 asientos colgando
+    roofBox(feat, sx, 0.55, sz + so, 0.06, 0.55, 0.04, POST);     // cuerda
+    roofBox(feat, sx, 0.45, sz + so, 0.26, 0.05, 0.16, YEL);      // tablita
+  }
+
+  // BALANCIN (sube y baja) al frente del area (-Z)
+  const bx = px, bz = pz + 3.0;
+  roofBox(feat, bx, 0.05, bz, 0.18, 0.45, 0.18, POST);            // pivote
+  // viga inclinada: roja un extremo, azul el otro
+  seesaw(feat, bx, bz, RED, BLUE);
+}
+
+// rampa de tobogan: prisma azul inclinado desde la plataforma al suelo (+Z).
+function slide(B, tx, tz, c) {
+  const x0 = tx - 0.28, x1 = tx + 0.28;   // ancho
+  const hiZ = tz + 0.4, loZ = tz + 2.6;   // recorre hacia +Z
+  const hiY = 1.5, loY = 0.12;            // baja de plataforma al suelo
+  const v = (x, y, z) => [x, y, z];
+  // superficie deslizante (arriba)
+  B.quad(v(x0, hiY, hiZ), v(x0, loY, loZ), v(x1, loY, loZ), v(x1, hiY, hiZ), [0, 0.8, -0.6], c);
+  // costados
+  B.quad(v(x0, hiY, hiZ), v(x0, hiY - 0.18, hiZ), v(x0, loY - 0.04, loZ), v(x0, loY, loZ), [-1, 0, 0], c);
+  B.quad(v(x1, loY, loZ), v(x1, loY - 0.04, loZ), v(x1, hiY - 0.18, hiZ), v(x1, hiY, hiZ), [1, 0, 0], c);
+}
+
+// viga de balancin inclinada sobre el pivote, dos colores en los extremos.
+function seesaw(B, bx, bz, cA, cB) {
+  const y0 = 0.7, dz = 1.7, tilt = 0.35;  // inclinacion
+  const hw = 0.12, hh = 0.08;
+  const v = (x, y, z) => [x, y, z];
+  // mitad A (extremo -Z, abajo) y mitad B (extremo +Z, arriba)
+  const segs = [[bz - dz, y0 - tilt, bz, y0, cA], [bz, y0, bz + dz, y0 + tilt, cB]];
+  for (const [zA, yA, zB, yB, c] of segs) {
+    // caja alargada inclinada (4 caras laterales + topes simplificados)
+    B.quad(v(bx - hw, yA + hh, zA), v(bx + hw, yA + hh, zA), v(bx + hw, yB + hh, zB), v(bx - hw, yB + hh, zB), [0, 1, 0.1], c);
+    B.quad(v(bx - hw, yA - hh, zA), v(bx - hw, yA + hh, zA), v(bx - hw, yB + hh, zB), v(bx - hw, yB - hh, zB), [-1, 0, 0], c);
+    B.quad(v(bx + hw, yB - hh, zB), v(bx + hw, yB + hh, zB), v(bx + hw, yA + hh, zA), v(bx + hw, yA - hh, zA), [1, 0, 0], c);
   }
 }
 

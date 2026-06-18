@@ -1,9 +1,19 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260617f';
-import { makeNametag } from './nametag.js?v=20260617f';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617f';
+import { sanitizeImported } from './glbutil.js?v=20260618p';
+import { makeNametag } from './nametag.js?v=20260618p';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260618p';
+
+// Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
+// dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
+// (se ve mal). Quitamos esas pistas de POSICION del root/hips para que el ataque
+// quede PLANTADO; las rotaciones (el swing) se conservan intactas.
+function plantClip(clip) {
+  const c = clip.clone();
+  c.tracks = c.tracks.filter(t => t.name !== 'root.position' && t.name !== 'hips.position');
+  return c;
+}
 
 export class Player {
   constructor(scene, city, spawn, opts = {}) {
@@ -27,6 +37,8 @@ export class Player {
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     this.dragging = false;
     this.attackT = 0;
+    this.dead = false;
+    this.hitT = 0;
     this.locked = false;   // true mientras el chat esta abierto: ignora WASD/salto/ataque
     addEventListener('mousedown', e => {
       if (e.button === 2) this.dragging = true;
@@ -63,7 +75,7 @@ export class Player {
     // las animaciones del rig KayKit viven en archivos aparte (mismo Rig_Medium,
     // se enlazan por nombre de hueso). General trae los Idle; Movement el resto.
     const clips = [];
-    for (const af of ['char_anims_general.glb', 'char_anims.glb']) {
+    for (const af of ['char_anims_general.glb', 'char_anims.glb', 'char_anims_melee.glb', 'char_anims_ranged.glb']) {
       try { clips.push(...(await loader.loadAsync('./assets/models/' + af)).animations); }
       catch { /* opcional */ }
     }
@@ -76,7 +88,12 @@ export class Player {
     }
     // ataque: clip de accion real (one-shot), acelerado para que sea snappy
     const aClip = clips.find(c => c.name === attackClipName(this.charFile));
-    if (aClip) this.actions['Attack'] = this.mixer.clipAction(aClip);
+    if (aClip) this.actions['Attack'] = this.mixer.clipAction(plantClip(aClip));
+    // reaccion al daño (Hit) + muerte (Death): clips reales del pack
+    const hitClip = clips.find(c => c.name === 'Hit_A' || c.name === 'Hit_B');
+    if (hitClip) this.actions['Hit'] = this.mixer.clipAction(plantClip(hitClip));
+    const deathClip = clips.find(c => c.name === 'Death_A' || c.name === 'Death_B');
+    if (deathClip) this.actions['Death'] = this.mixer.clipAction(deathClip);
     this.play('Idle');
   }
 
@@ -92,6 +109,45 @@ export class Player {
     if (this.cur && this.actions[this.cur]) a.crossFadeFrom(this.actions[this.cur], 0.12, false);
     a.play();
     this.cur = 'Attack';
+  }
+
+  // tambaleo corto al recibir daño (no interrumpe ataque ni muerte)
+  playHit() {
+    if (this.dead || this.attackT > 0) return;
+    // caminar NO se traba por el flinch: si hay tecla de movimiento, no reacciona
+    if (this.keys['KeyW'] || this.keys['KeyS'] || this.keys['KeyA'] || this.keys['KeyD']) return;
+    const a = this.actions['Hit'];
+    if (!a) return;
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    a.timeScale = 1.4;
+    this.hitT = a.getClip().duration / 1.4;
+    if (this.cur && this.actions[this.cur]) a.crossFadeFrom(this.actions[this.cur], 0.08, false);
+    a.play();
+    this.cur = 'Hit';
+  }
+
+  // entra/sale del estado muerto (mantiene la pose de Death mientras dura)
+  setDead(v) {
+    this.dead = v;
+    if (v) {
+      const a = this.actions['Death'];
+      if (a) {
+        a.reset();
+        a.setLoop(THREE.LoopOnce, 1);
+        a.clampWhenFinished = true;
+        a.timeScale = 1;
+        if (this.cur && this.actions[this.cur]) a.crossFadeFrom(this.actions[this.cur], 0.15, false);
+        a.play();
+        this.cur = 'Death';
+      }
+    } else {
+      this.attackT = 0;
+      this.hitT = 0;
+      this.cur = '';
+      this.play('Idle');
+    }
   }
 
   play(name) {
@@ -146,10 +202,21 @@ export class Player {
     }
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.heading;
-    if (this.attackT > 0) this.attackT -= dt;   // ataque manda; no pisar con locomocion
-    else if (!this.grounded) this.play('Jump');
-    else if (moving) this.play(spd > 9 ? 'Run' : 'Walk');
-    else this.play('Idle');
+    // prioridad de animacion: muerte > ataque > tambaleo > salto > locomocion
+    if (this.dead) {
+      // mantener la pose de Death; no pisar con nada
+    } else if (this.attackT > 0) {
+      this.attackT -= dt;   // ataque manda; no pisar con locomocion
+    } else if (!this.grounded) {
+      this.play('Jump');
+    } else if (moving) {
+      this.hitT = 0;        // caminar cancela el flinch: el movimiento siempre responde
+      this.play(spd > 9 ? 'Run' : 'Walk');
+    } else if (this.hitT > 0) {
+      this.hitT -= dt;      // el tambaleo de Hit solo se ve quieto
+    } else {
+      this.play('Idle');
+    }
     if (this.mixer) this.mixer.update(dt);
     // camara con clamp por oclusion: nunca dentro de un edificio
     let dist = this.distance;

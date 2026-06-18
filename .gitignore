@@ -25,3 +25,9 @@ Thumbs.db
 # Backups
 *.bak
 *.bak-*
+
+# Runtime account store (cuentas + hashes de password, es estado no codigo)
+server/accounts.json
+
+# Archivos fuente de Blender (~136MB; el runtime usa los GLB de assets/models/)
+assets/source/

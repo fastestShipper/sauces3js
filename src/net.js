@@ -3,25 +3,37 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260617f';
-import { makeNametag } from './nametag.js?v=20260617f';
-import { cloneSkinned } from './npcs.js?v=20260617f';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260617f';
-import { showBubble } from './chat.js?v=20260617f';
+import { sanitizeImported } from './glbutil.js?v=20260618p';
+import { makeNametag } from './nametag.js?v=20260618p';
+import { cloneSkinned } from './npcs.js?v=20260618p';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260618p';
+import { showBubble } from './chat.js?v=20260618p';
+import { WS_URL } from './rpg/account.js?v=20260618p';
 
-const WS_URL = 'wss://sauces.controla.group/ws';   // server unico (sirve tambien en dev local)
 const SCALE = 1.9 / 2.54;
 
 export class Net {
-  constructor(scene, player) {
+  constructor(scene, player, token) {
     this.scene = scene;
     this.player = player;
+    this.token = token || null;   // ata la conexion de juego a la cuenta (para guardar)
     this.remotes = new Map();   // id -> {root, mixer, walkA, idleA, x,z,rot, tx,tz,th, anim, walking, ready}
     this.protos = {};           // charFile -> gltf
     this.loader = new GLTFLoader();
     this.clips = [];
     this.acc = 0;
     this.onChat = null;   // (name, text) -> pintar en el log (lo setea app.js)
+    // ===== mobs compartidos (el server es dueno) + party =====
+    this.myId = null;        // id de conexion de este jugador (del mensaje {t:'id'})
+    this.mobs = new Map();   // mobId -> { id, x, z, lvl, hp, hpMax, kind }
+    this.party = [];         // [{id, name}] miembros de mi party
+    this.onMobsSnapshot = null;  // (list) -> el MobField crea los visuales
+    this.onMobHp = null;         // (id, hp)
+    this.onMobDead = null;       // (id, by, party)
+    this.onMobSpawn = null;      // (mob)
+    this.onMobKilled = null;     // (id, by, party) -> el combate da XP (canal aparte del render visual)
+    this.onParty = null;         // (members)
+    this.onPartyInvited = null;  // (fromId, name)
     addEventListener('mousedown', (e) => {
       if (e.button === 0 && this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'atk' }));
     });
@@ -29,7 +41,7 @@ export class Net {
   }
 
   async _init() {
-    for (const af of ['char_anims_general.glb', 'char_anims.glb']) {
+    for (const af of ['char_anims_general.glb', 'char_anims.glb', 'char_anims_melee.glb', 'char_anims_ranged.glb']) {
       try { this.clips.push(...(await this.loader.loadAsync('./assets/models/' + af)).animations); } catch { /* opcional */ }
     }
     this.walkClip = this.clips.find(c => c.name === 'Walking_A') || this.clips.find(c => /walk/i.test(c.name));
@@ -41,7 +53,7 @@ export class Net {
     let ws;
     try { ws = new WebSocket(WS_URL); } catch { return; }
     this.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'hi', name: this.player.name || 'Anon', char: this.player.charFile }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'hi', name: this.player.name || 'Anon', char: this.player.charFile, token: this.token }));
     ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } this._onMsg(m); };
     ws.onclose = () => { this.ws = null; setTimeout(() => this._connect(), 3000); };  // reconexion
     ws.onerror = () => {};
@@ -58,12 +70,47 @@ export class Net {
       const r = this.remotes.get(m.id);
       if (r && r.ready) showBubble(r.root, m.text, r);   // burbuja sobre el remoto
     }
+    else if (m.t === 'id') { this.myId = m.id; }
+    else if (m.t === 'mobs') {
+      this.mobs.clear();
+      for (const mob of (m.list || [])) this.mobs.set(mob.id, mob);
+      if (this.onMobsSnapshot) this.onMobsSnapshot(m.list || []);
+    }
+    else if (m.t === 'mhp') {
+      const mob = this.mobs.get(m.id); if (mob) mob.hp = m.hp;
+      if (this.onMobHp) this.onMobHp(m.id, m.hp);
+    }
+    else if (m.t === 'mdead') {
+      if (this.onMobDead) this.onMobDead(m.id, m.by, m.party || []);
+      if (this.onMobKilled) this.onMobKilled(m.id, m.by, m.party || []);
+      this.mobs.delete(m.id);
+    }
+    else if (m.t === 'mspawn') {
+      if (m.mob) { this.mobs.set(m.mob.id, m.mob); if (this.onMobSpawn) this.onMobSpawn(m.mob); }
+    }
+    else if (m.t === 'pinvited') { if (this.onPartyInvited) this.onPartyInvited(m.from, m.name); }
+    else if (m.t === 'party') {
+      this.party = m.members || [];
+      if (this.onParty) this.onParty(this.party);
+    }
   }
 
   // envia un mensaje de chat al relay (el server lo reenvia con el nombre)
   sendChat(text) {
     if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text }));
   }
+
+  // guarda el progreso del personaje en la cuenta (el server valida y persiste)
+  save(char) {
+    if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'save', char }));
+  }
+
+  // ===== acciones de mobs / party hacia el server =====
+  _send(obj) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(obj)); }
+  attackMob(id, dmg) { this._send({ t: 'mhit', id, dmg }); }
+  invite(to) { this._send({ t: 'pinvite', to }); }
+  accept(from) { this._send({ t: 'paccept', from }); }
+  leaveParty() { this._send({ t: 'pleave' }); }
 
   // dispara el ataque one-shot de un remoto (clip real, corta walk/idle)
   _remoteAttack(r) {
@@ -109,7 +156,12 @@ export class Net {
     if (this.walkClip) r.walkA = r.mixer.clipAction(this.walkClip);
     r.idleA = this.idleClip ? r.mixer.clipAction(this.idleClip) : r.walkA;
     const aClip = this.clips.find(c => c.name === attackClipName(p.char || 'char_knight.glb'));
-    if (aClip) r.attackA = r.mixer.clipAction(aClip);
+    if (aClip) {
+      // plantar el ataque: quitar root motion (root/hips.position) como en el jugador
+      const planted = aClip.clone();
+      planted.tracks = planted.tracks.filter(t => t.name !== 'root.position' && t.name !== 'hips.position');
+      r.attackA = r.mixer.clipAction(planted);
+    }
     r.attackT = 0; r.attacking = false;
     if (r.idleA) r.idleA.play();
     r.ready = true;
