@@ -21,7 +21,11 @@ import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260618p';
 import { Combat } from './rpg/combat.js?v=20260618p';
 import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260618p';
 import { Effects } from './rpg/effects.js?v=20260618p';
-import { attachWeaponByName } from './weapons.js?v=20260618p';
+import { attachWeaponByName } from './weapons.js?v=20260620w';
+import { createTextureKit, scheduleWorldNormals, grain } from './worldmat.js?v=20260620w';
+
+const APP_VERSION = '20260620w';
+window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'photo-textures-v1' };
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -103,32 +107,7 @@ addEventListener('resize', () => {
 
 const TEX = './assets/textures/';
 const MOD = './assets/models/';
-const tl = new THREE.TextureLoader();
-function tex(file, srgb = true) {
-  const t = tl.load(TEX + file);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  // anisotropia: sin ella las texturas de piso chisporrotean en angulo rasante
-  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  return t;
-}
-
-// textura toon sutil (grano) generada en canvas: rompe el plano sin usar foto
-function grain(hex, alpha = 0.09) {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
-  const c = cv.getContext('2d');
-  c.fillStyle = hex; c.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 700; i++) {
-    const x = Math.random() * 256, y = Math.random() * 256, r = 1 + Math.random() * 3;
-    c.fillStyle = (Math.random() < 0.5 ? 'rgba(0,0,0,' : 'rgba(255,255,255,') + (alpha * Math.random()).toFixed(3) + ')';
-    c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
-  }
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
+const worldTex = createTextureKit(renderer);
 
 // pantalla de cuenta: Entrar o Crear cuenta (contra el server). Resuelve con el
 // objeto de auth { ok, god, char, token, user }. La cuenta zpw = GOD la valida el server.
@@ -255,12 +234,12 @@ async function boot() {
   // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
   scene.add(new THREE.HemisphereLight(0xbcd2f2, 0x9c8568, 0.55));
   // niebla aerea sutil: profundidad de tarde + suaviza el borde lejano del mapa
-  scene.fog = new THREE.Fog(0xc7d3e3, 170, 860);
+  scene.fog = new THREE.Fog(0xc4d0e0, 185, 920);
 
   // suelo base
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(3000, 3000),
-    new THREE.MeshStandardMaterial({ map: tex('concrete.jpg'), color: 0x999384, roughness: 1 }));
+    new THREE.MeshStandardMaterial({ map: worldTex.concrete, color: 0x999384, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(-100, -0.01, 100);
   ground.material.map.repeat.set(300, 300);
@@ -282,8 +261,14 @@ async function boot() {
     scene.add(m);
     return m;
   };
-  // TOON: pared plana (vertexColors por edificio, sin textura plaster)
-  addBucket(W.wall, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }));
+  // facades: vertex tint x plaster photo (reads as real Lima stucco/concrete)
+  worldTex.surface('wall', {
+    map: worldTex.plaster,
+    vertexColors: true,
+    roughness: 0.92,
+    side: THREE.DoubleSide,
+  });
+  addBucket(W.wall, worldTex._mats.wall);
   {
     // vidrio toon: celeste plano, sin el metalness/reflejo realista
     const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc4d8, metalness: 0.1, roughness: 0.4, vertexColors: true, side: THREE.DoubleSide });
@@ -295,24 +280,27 @@ async function boot() {
   addBucket(W.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
   setProgress(0.7);
 
-  // calles
   const R = buildRoads(city);
-  // paleta TOON plana, cohesiva con KayKit (sin texturas foto; iterable por color)
-  addBucket(R.road, new THREE.MeshStandardMaterial({ map: grain('#70747a'), roughness: 1 }), false);
-  addBucket(R.walk, new THREE.MeshStandardMaterial({ map: grain('#cabfa6'), roughness: 1 }), false);
-  addBucket(R.berma, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, roughness: 1 }), false);
+  // calles: foto asfalto / vereda / loseta (fallback grain si falla la red)
+  worldTex.surface('road', { map: worldTex.asphalt, color: 0xd8d8d8, roughness: 0.98 });
+  worldTex.surface('walk', { map: worldTex.sidewalk, color: 0xe8e2d6, roughness: 0.95 });
+  worldTex.surface('path', { map: worldTex.paving, color: 0xddd4c4, roughness: 0.96 });
+  addBucket(R.road, worldTex._mats.road, false);
+  addBucket(R.walk, worldTex._mats.walk, false);
+  addBucket(R.berma, new THREE.MeshStandardMaterial({ map: worldTex.grass, color: 0x8fbf5a, roughness: 1 }), false);
   addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xf4f1e4, roughness: 0.7 }), false);
-  addBucket(R.median, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, roughness: 1 }), false);
+  addBucket(R.median, new THREE.MeshStandardMaterial({ map: worldTex.grass, color: 0x7aad48, roughness: 1 }), false);
   addBucket(R.curb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), false);
-  addBucket(R.path, new THREE.MeshStandardMaterial({ map: grain('#cdbd92'), roughness: 1 }), false);
+  addBucket(R.path, worldTex._mats.path, false);
   // tableros/parapetos de puentes elevados (trebol): concreto toon, proyecta sombra
   addBucket(R.deck, new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 1, side: THREE.DoubleSide }));
   setProgress(0.8);
 
   // parques
   const P = buildParks(city);
-  addBucket(P.lawn, new THREE.MeshStandardMaterial({ color: 0x6f9a3f, vertexColors: true, roughness: 1 }), false);
-  addBucket(P.plaza, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }), false);
+  worldTex.surface('lawn', { map: worldTex.grass, vertexColors: true, roughness: 0.98 });
+  addBucket(P.lawn, worldTex._mats.lawn, false);
+  addBucket(P.plaza, new THREE.MeshStandardMaterial({ map: worldTex.paving, color: 0xddd0b8, vertexColors: true, roughness: 0.9 }), false);
   addBucket(P.feature, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), true);
 
   // props instanciados
@@ -387,13 +375,36 @@ async function boot() {
       });
     } catch (e) { console.warn('Forest GLB deferred load failed', e); }
     for (const poi of (data.pois || [])) {
-      const col = poi.c === 'food' ? 0xf2a654 : 0x6ba3d6;
-      const m = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.35, 0.45, 1.2, 6),
-        new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 }));
-      m.position.set(poi.x, 0.6, poi.z);
-      m.castShadow = true;
-      scene.add(m);
+      const col = poi.c === 'food' ? '#c45a12' : '#1a6b9c';
+      const cv = document.createElement('canvas');
+      cv.width = 128;
+      cv.height = 128;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = col;
+      c2.beginPath();
+      c2.roundRect(8, 8, 112, 112, 18);
+      c2.fill();
+      c2.fillStyle = '#f5f3ea';
+      c2.font = 'bold 52px Arial';
+      c2.textAlign = 'center';
+      c2.textBaseline = 'middle';
+      c2.fillText(poi.c === 'food' ? '☕' : '●', 64, 64);
+      const t = new THREE.CanvasTexture(cv);
+      t.colorSpace = THREE.SRGBColorSpace;
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.05, 1.6, 6),
+        new THREE.MeshStandardMaterial({ color: 0x4a4e54, roughness: 0.7, metalness: 0.25 }),
+      );
+      pole.position.set(poi.x, 0.8, poi.z);
+      pole.castShadow = true;
+      scene.add(pole);
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.55, 0.55),
+        new THREE.MeshStandardMaterial({ map: t, roughness: 0.55 }),
+      );
+      sign.position.set(poi.x, 1.55, poi.z);
+      sign.rotation.y = Math.random() * Math.PI * 2;
+      scene.add(sign);
     }
     const carSpots = [];
     {
@@ -785,6 +796,7 @@ async function boot() {
     if (firstPlayable) {
       firstPlayable = false;
       hideBootOverlay();
+      scheduleWorldNormals(worldTex);
       loadHeavyDecor().catch((e) => console.warn('Deferred decor failed', e));
       mobField.load().catch((e) => console.warn('MobField deferred load failed', e));
       life.load(40, seatSpots, P.parkTrees).catch((e) => console.warn('StreetLife deferred load failed', e));
