@@ -23,3 +23,9 @@
 - Parks: richer lawn vertex variation.
 - Props: street signs and sidewalk planters (procedural instancing).
 - Atmosphere: warmer sun, softer fog, slightly higher exposure; HDR still deferred.
+
+### Foundation / QA (20260620v2, docs only)
+- Roadmap: `docs/roadmap-neighborhood-mmo.md`, plan `docs/plans/2026-06-20-neighborhood-notes-parcels.md`.
+- Audits: `audit_zone_integrity.mjs`, `audit_server_store.mjs`; smoke `scripts/smoke_foundation.mjs`.
+- Relay store `schemaVersion: 1`, preserves unknown JSON keys; flush timing + local `/health` on port 8457.
+- Quality gates: `docs/quality-gates.md`, backend notes: `docs/backend-hardening.md`.

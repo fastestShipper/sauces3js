@@ -23,6 +23,9 @@ const clients = new Map();   // id -> { ws, name, char, x, z, h, a, account }
 
 const STORE_PATH = path.join(__dirname, 'accounts.json');
 const STORE_TMP = STORE_PATH + '.tmp';
+const STORE_SCHEMA_VERSION = 1;
+const HEALTH_PORT = Number(process.env.SAUCES_HEALTH_PORT) || 8457;
+const FLUSH_WARN_MS = Number(process.env.STORE_FLUSH_WARN_MS) || 50;
 
 // charFiles permitidos. char_cernunnos.glb es SOLO de Diosito (cuenta zpw).
 const CHAR_ALLOWLIST = [
@@ -43,22 +46,32 @@ const GOD_PASS_HASH = process.env.GOD_PASS_HASH || '';
 const GOD_ENABLED = !!(GOD_USER && GOD_PASS_SALT && GOD_PASS_HASH);
 if (!GOD_ENABLED) console.warn('[auth] camino dios DESHABILITADO: faltan GOD_USER/GOD_PASS_SALT/GOD_PASS_HASH');
 
-// store en memoria. tokens NO se persiste.
-let store = { accounts: {}, tokens: {} };
+// store en memoria. tokens NO se persiste. Unknown top-level keys are preserved for future phases.
+let store = { schemaVersion: STORE_SCHEMA_VERSION, accounts: {} };
+let storeExtra = {};
 const tokens = new Map();     // token -> username (solo en memoria)
 let dirty = false;
+let lastFlushMs = 0;
 
 // carga inicial. Si el archivo no existe o esta corrupto, arrancamos vacios.
 function loadStore() {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf8');
     const parsed = JSON.parse(raw);
+    const known = new Set(['schemaVersion', 'accounts', 'tokens']);
+    storeExtra = {};
+    if (parsed && typeof parsed === 'object') {
+      for (const k of Object.keys(parsed)) {
+        if (!known.has(k)) storeExtra[k] = parsed[k];
+      }
+    }
     store = {
+      schemaVersion: Number(parsed && parsed.schemaVersion) || STORE_SCHEMA_VERSION,
       accounts: (parsed && typeof parsed.accounts === 'object' && parsed.accounts) || {},
-      tokens: {},
     };
   } catch {
-    store = { accounts: {}, tokens: {} };
+    store = { schemaVersion: STORE_SCHEMA_VERSION, accounts: {} };
+    storeExtra = {};
   }
 }
 
@@ -68,11 +81,24 @@ function markDirty() { dirty = true; }
 // escritura ATOMICA: escribe a .tmp y renombra. Nunca crashea el server.
 function flushStore() {
   if (!dirty) return;
+  const t0 = process.hrtime.bigint();
   try {
-    const data = JSON.stringify({ accounts: store.accounts, tokens: {} });
+    const payload = {
+      schemaVersion: STORE_SCHEMA_VERSION,
+      ...storeExtra,
+      accounts: store.accounts,
+      tokens: {},
+    };
+    const data = JSON.stringify(payload);
     fs.writeFileSync(STORE_TMP, data);
     fs.renameSync(STORE_TMP, STORE_PATH);
     dirty = false;
+    lastFlushMs = Number(process.hrtime.bigint() - t0) / 1e6;
+    if (lastFlushMs >= FLUSH_WARN_MS) {
+      console.warn('[store] slow flush', lastFlushMs.toFixed(1), 'ms', 'bytes', Buffer.byteLength(data, 'utf8'));
+    } else if (process.env.STORE_LOG_FLUSH === '1') {
+      console.log('[store] flush', lastFlushMs.toFixed(2), 'ms');
+    }
   } catch (e) {
     // no tiramos el server por un fallo de disco; reintentamos en el proximo tick.
     console.error('flushStore error', e && e.message);
@@ -483,5 +509,28 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('error', () => {});
 });
+
+const http = require('http');
+const healthServer = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/health/') {
+    const body = JSON.stringify({
+      ok: true,
+      service: 'sauces-mp',
+      schemaVersion: STORE_SCHEMA_VERSION,
+      clients: clients.size,
+      mobs: mobs.size,
+      lastFlushMs,
+      dirty,
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(body);
+    return;
+  }
+  res.writeHead(404).end();
+});
+healthServer.listen(HEALTH_PORT, '127.0.0.1', () => {
+  console.log('sauces-mp health on 127.0.0.1:' + HEALTH_PORT + '/health');
+});
+if (healthServer.unref) healthServer.unref();
 
 console.log('sauces-mp relay listening on 127.0.0.1:' + PORT);
