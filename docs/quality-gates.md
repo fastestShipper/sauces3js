@@ -58,17 +58,22 @@ curl -s http://127.0.0.1:8457/health
 
 Slow store flush warning threshold: `STORE_FLUSH_WARN_MS` (default 50). Verbose flush log: `STORE_LOG_FLUSH=1`.
 
-## Phase 3: Parcels (future)
+## Phase 3: Parcels
 
 | Gate | Command |
 |------|---------|
-| Parcel index vs buildings | `node scripts/audit_parcels.mjs` (not shipped yet) |
+| Generate parcel index | `python tools/build_parcels.py` |
+| Parcel index vs buildings | `node scripts/audit_parcels.mjs` |
+| Optional OSM refresh (ids, street) | `python tools/fetch_zone.py` then rebuild parcels |
 
-Blockers before Phase 3:
+Pre-deploy with parcels:
 
-- All Phase 0–2 commands pass on CI or pre-deploy checklist.
-- `tools/fetch_zone.py` enriches OSM metadata (ids, addresses) without changing default 312-building rule.
-- `assets/parcels.json` generator + `src/parcels.js` (planned).
+1. `node scripts/audit_building_count.mjs`
+2. `node scripts/audit_zone_integrity.mjs`
+3. `node scripts/audit_parcels.mjs`
+4. `node scripts/smoke_foundation.mjs` (local or prod)
+
+See `docs/parcels.md` for data shape and no-claims boundary.
 
 ## Pre-deploy checklist
 

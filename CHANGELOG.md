@@ -29,3 +29,10 @@
 - Audits: `audit_zone_integrity.mjs`, `audit_server_store.mjs`; smoke `scripts/smoke_foundation.mjs`.
 - Relay store `schemaVersion: 1`, preserves unknown JSON keys; flush timing + local `/health` on port 8457.
 - Quality gates: `docs/quality-gates.md`, backend notes: `docs/backend-hardening.md`.
+
+### Parcels foundation (Phase 3, 20260620v2)
+- `tools/fetch_zone.py` preserves `osmId` and `addr:street` on buildings; zone regenerated with 312 OSM buildings.
+- `tools/build_parcels.py` writes `assets/parcels.json` (centroid, displayAddress, claimable hint, confidence).
+- Client module `src/parcels.js`: `ParcelIndex`, `loadParcels(version)`.
+- Audit `scripts/audit_parcels.mjs`; docs `docs/parcels.md`.
+- No claims, disputes, notes, or UGC in parcel data.

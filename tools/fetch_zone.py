@@ -129,6 +129,8 @@ for el in elements:
         if h is None:
             h = 2.9 + (el["id"] * 2654435761 % 100) / 100 * 4.5
         b = {"p": pts[:-1], "h": round(min(h, 60.0), 1)}
+        if el.get("id") is not None:
+            b["osmId"] = int(el["id"])
         bt = tags.get("building")
         if bt and bt != "yes":
             b["bt"] = bt[:16]            # tipo real: apartments/house/commercial/retail/school...
@@ -138,6 +140,8 @@ for el in elements:
             b["n"] = tags["name"][:30]
         if tags.get("addr:housenumber"):
             b["addr"] = tags["addr:housenumber"][:6]
+        if tags.get("addr:street"):
+            b["street"] = tags["addr:street"][:48].strip()
         if tags.get("building:colour"):
             b["bc"] = tags["building:colour"][:18]
         if tags.get("roof:colour"):
