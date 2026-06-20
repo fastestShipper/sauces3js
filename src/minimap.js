@@ -19,7 +19,9 @@ export class MiniMap {
       for (const p of r.p) { a[0] = Math.min(a[0], p[0]); a[1] = Math.min(a[1], p[1]); a[2] = Math.max(a[2], p[0]); a[3] = Math.max(a[3], p[1]); }
       return a;
     });
-    this.blds = city.data.buildings.map(b => {
+    // Only OSM footprints on the minimap (procedural filler is not real map structure).
+    const mapBlds = city.data.buildings.filter(b => b.osm !== false && !b.plain);
+    this.blds = mapBlds.map(b => {
       let cx = 0, cz = 0;
       for (const p of b.p) { cx += p[0]; cz += p[1]; }
       return { p: b.p, c: [cx / b.p.length, cz / b.p.length] };

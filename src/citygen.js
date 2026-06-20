@@ -32,14 +32,25 @@ export const hashF = (i) => {
   return (v - Math.floor(v)) * 0.5 + 0.5;
 };
 
+// Generation opts (default = OSM footprints only, faithful minimap):
+//   frontageStrips — party-wall strips along roads (opt-in, dense filler)
+//   interiorCarpet — grid of plain blocks in open lots (opt-in)
 export class City {
-  constructor(data) {
+  constructor(data, options = {}) {
+    this.genOpts = {
+      frontageStrips: options.frontageStrips === true,
+      interiorCarpet: options.interiorCarpet === true,
+    };
     this.data = data;
+    this.osmBuildingCount = (data.buildings || []).length;
+    for (const b of this.data.buildings) b.osm = true;
     this.carColliders = [];
     this.buildSegGrid();
     this.cachePolys();
-    this.fillGaps();
-    this.cachePolys();
+    if (this.genOpts.frontageStrips || this.genOpts.interiorCarpet) {
+      this.fillGaps(this.genOpts);
+      this.cachePolys();
+    }
   }
 
   buildSegGrid() {
@@ -239,7 +250,12 @@ export class City {
     return 5.2 + bh * 2.6 + rng() * 0.5;
   }
 
-  fillGaps() {
+  fillGaps(opts) {
+    if (opts.frontageStrips) this.fillFrontageStrips();
+    if (opts.interiorCarpet) this.fillInteriorCarpet();
+  }
+
+  fillFrontageStrips() {
     const rng = mulberry32(99);
     const fillers = [];
     // SAN BORJA FABRIC: tiras continuas pared-con-pared en ambos frentes
@@ -275,15 +291,17 @@ export class City {
               if (ok && (this.inRealBuilding(mcx, mcz, 0.6) || this.inAnyGreen(mcx, mcz))) ok = false;
               if (ok) break;
             }
-            if (ok) fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz) });
+            if (ok) fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz), osm: false, generated: 'frontage' });
             d += frontage;
           }
         }
       }
     }
     for (const fb of fillers) this.data.buildings.push(fb);
-    this.cachePolys();
-    // interior carpet: alfombra contigua de patios
+  }
+
+  fillInteriorCarpet() {
+    // interior carpet: alfombra contigua de patios (opt-in; not map truth)
     let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
     for (const r of this.data.roads) for (const p of r.p) {
       minx = Math.min(minx, p[0]); minz = Math.min(minz, p[1]);
@@ -308,7 +326,11 @@ export class City {
         }
         // jitter de altura por celda: la alfombra se solapa 2cm con la vecina
         // y a igual h los techos coplanares parpadean (z-fight)
-        if (ok) inner.push({ p: ic, h: 5.2 + hashF(Math.floor(gx / 34) * 131 + Math.floor(gz / 34) * 17) * 4.0 + hashF(gx * 7.1 + gz * 13.3) * 0.07, plain: true });
+        if (ok) inner.push({
+          p: ic,
+          h: 5.2 + hashF(Math.floor(gx / 34) * 131 + Math.floor(gz / 34) * 17) * 4.0 + hashF(gx * 7.1 + gz * 13.3) * 0.07,
+          plain: true, osm: false, generated: 'carpet',
+        });
       }
     }
     for (const fb of inner) this.data.buildings.push(fb);

@@ -25,7 +25,61 @@ import { attachWeaponByName } from './weapons.js?v=20260618p';
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
-const setProgress = (v) => { lbar.style.width = Math.round(v * 100) + '%'; };
+const loadingMsg = document.querySelector('#loading div');
+const setProgress = (v, msg) => {
+  lbar.style.width = Math.round(v * 100) + '%';
+  if (msg && loadingMsg) loadingMsg.textContent = msg;
+};
+
+const LS_USER = 'sauces_last_user';
+const LS_TOKEN = 'sauces_session_token';
+
+function saveAuthSession(r) {
+  if (r.guest) {
+    localStorage.removeItem(LS_TOKEN);
+    localStorage.setItem('sauces_guest', '1');
+    return;
+  }
+  localStorage.removeItem('sauces_guest');
+  if (r.user) localStorage.setItem(LS_USER, r.user);
+  if (r.token) localStorage.setItem(LS_TOKEN, r.token);
+}
+
+function cityGenOptions() {
+  const on = new URLSearchParams(location.search).get('procedural') === '1';
+  return { frontageStrips: on, interiorCarpet: on };
+}
+
+function ensureBootOverlay() {
+  let ov = document.getElementById('boot-overlay');
+  if (ov) return ov;
+  ov = document.createElement('div');
+  ov.id = 'boot-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(14,17,22,.94);color:#fff;font:600 15px system-ui,sans-serif;';
+  const msg = document.createElement('div');
+  msg.id = 'boot-overlay-msg';
+  msg.textContent = 'Preparando…';
+  const bar = document.createElement('div');
+  bar.style.cssText = 'width:280px;height:8px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden';
+  const fi = document.createElement('i');
+  fi.id = 'boot-overlay-bar';
+  fi.style.cssText = 'display:block;height:100%;width:8%;background:#ffd166;transition:width .2s';
+  bar.appendChild(fi);
+  ov.append(msg, bar);
+  document.body.appendChild(ov);
+  return ov;
+}
+
+function setBootOverlay(p, text) {
+  ensureBootOverlay();
+  if (text) document.getElementById('boot-overlay-msg').textContent = text;
+  const fi = document.getElementById('boot-overlay-bar');
+  if (fi) fi.style.width = Math.max(4, Math.round(p * 100)) + '%';
+}
+
+function hideBootOverlay() {
+  document.getElementById('boot-overlay')?.remove();
+}
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
@@ -107,9 +161,15 @@ function showAuth() {
     for (const i of [u, p]) i.style.cssText = 'width:100%;box-sizing:border-box;margin:6px 0;padding:11px 12px;border-radius:9px;border:1px solid #34425e;background:#0f1622;color:#e8edf6;font-size:14px;outline:none';
     const btn = document.createElement('button'); btn.textContent = 'Continuar'; btn.style.cssText = 'margin-top:10px;width:100%;padding:11px;border:0;border-radius:9px;background:#3f7fd4;color:#fff;font-weight:700;font-size:15px;cursor:pointer';
     const hint = document.createElement('div'); hint.textContent = 'Tu progreso (clase, nivel, inventario) se guarda en tu cuenta.'; hint.style.cssText = 'font-size:10px;color:#6b7280;margin-top:11px;line-height:1.4';
-    card.append(h, sub, tabs, u, p, err, btn, hint);
+    const guestBtn = document.createElement('button');
+    guestBtn.textContent = 'Explorar sin guardar';
+    guestBtn.style.cssText = 'margin-top:12px;width:100%;padding:10px;border:1px solid #3a4a62;border-radius:9px;background:transparent;color:#a8b4c8;font-weight:600;font-size:13px;cursor:pointer';
+    card.append(h, sub, tabs, u, p, err, btn, guestBtn, hint);
     ov.appendChild(card); document.body.appendChild(ov);
-    styleTabs(); u.focus();
+    styleTabs();
+    const savedUser = localStorage.getItem(LS_USER);
+    if (savedUser) u.value = savedUser;
+    u.focus();
     let busy = false;
     const go = async () => {
       if (busy) return;
@@ -120,10 +180,16 @@ function showAuth() {
       const r = await authRequest(mode, user, pass);
       busy = false; btn.textContent = 'Continuar';
       if (!r.ok) { err.textContent = r.error || 'No se pudo, intenta de nuevo'; return; }
+      saveAuthSession(r);
       ov.remove();
       resolve(r);
     };
     btn.onclick = go;
+    guestBtn.onclick = () => {
+      saveAuthSession({ guest: true });
+      ov.remove();
+      resolve({ ok: true, guest: true, god: false, char: null, token: null, user: '' });
+    };
     u.addEventListener('keydown', e => { if (e.key === 'Enter') p.focus(); });
     p.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
   });
@@ -164,17 +230,17 @@ function showClassPick(prefillName) {
 }
 
 async function boot() {
-  setProgress(0.05);
-  // cielo HDRI: fondo + reflejos + ambiente IBL (lo que godot-web no podia)
-  const hdr = await new RGBELoader().loadAsync(TEX + 'sky.hdr');
-  hdr.mapping = THREE.EquirectangularReflectionMapping;
-  scene.background = hdr;
-  scene.environment = hdr;
-  // bajo el IBL plano del HDR de mediodia para que el sol direccional mande:
-  // mas contraste y direccion = menos look "render plano"
+  setProgress(0.05, 'Construyendo Los Sauces…');
+  // HDRI: do not block first frame; gradient sky until load completes
+  scene.background = new THREE.Color(0xb8c9dc);
   scene.environmentIntensity = 0.22;
   scene.backgroundIntensity = 0.92;
-  setProgress(0.15);
+  new RGBELoader().loadAsync(TEX + 'sky.hdr').then((hdr) => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = hdr;
+    scene.environment = hdr;
+  }).catch((e) => console.warn('HDR load failed (non-fatal)', e));
+  setProgress(0.12, 'Iluminación…');
 
   const sun = new THREE.DirectionalLight(0xffd79a, 3.1);
   sun.position.set(80, 70, -58);
@@ -202,9 +268,9 @@ async function boot() {
   scene.add(ground);
 
   const data = await (await fetch('./assets/zone.json')).json();
-  setProgress(0.3);
-  const city = new City(data);
-  setProgress(0.5);
+  setProgress(0.28, 'Mapa OSM…');
+  const city = new City(data, cityGenOptions());
+  setProgress(0.48, 'Edificios y calles…');
 
   // edificios
   const W = buildBuildings(city);
@@ -290,34 +356,76 @@ async function boot() {
     instancedRoot(gltf.scene, spots, opts);
   };
   const F = R.furniture;
-  // bosque KayKit cargado UNA vez: mismos arboles para CALLE, MEDIAN y PARQUE
-  // (cohesion total) + arbustos/rocas/pasto del parque. atlas compartido.
-  const fg = await loader.loadAsync(MOD + 'kaykit_forest.glb');
-  const fnode = {};
-  for (const sc of fg.scenes) { sanitizeImported(sc, aniso); for (const c of sc.children) fnode[c.name] = c; }
-  const TREES = ['Tree_1_A_Color1', 'Tree_2_A_Color1', 'Tree_3_A_Color1', 'Tree_4_A_Color1']
-    .map(n => fnode[n]).filter(Boolean);
-  const plantTrees = (spots, h, seed0) => TREES.forEach((t, k) =>
-    instancedRoot(t, spots.filter((_, i) => i % TREES.length === k),
-      { fit: true, h, lift: true, randRot: true, seed: seed0 + k }));
-  plantTrees(F.trees, [4.0, 5.6], 11);        // berma / calle
-  plantTrees(F.medianTrees, [3.4, 4.6], 16);  // separador central
-  plantTrees(P.parkTrees, [4.6, 7.2], 41);    // parque
-  // arbustos / rocas / pasto dispersos por el cesped del parque
-  const scatter = [
-    ['Bush_1_A_Color1', [0.5, 0.9], 51], ['Bush_2_A_Color1', [0.6, 1.0], 52],
-    ['Rock_1_A_Color1', [0.4, 0.9], 53], ['Rock_2_A_Color1', [0.3, 0.6], 54],
-    ['Grass_2_A_Color1', [0.5, 0.8], 55],
-  ];
-  scatter.forEach(([nm, h, seed], k) => {
-    if (fnode[nm]) instancedRoot(fnode[nm], P.parkScatter.filter((_, i) => i % scatter.length === k),
-      { fit: true, h, lift: true, randRot: true, seed });
-  });
-  // mobiliario urbano TOON procedural (flat-color, calza con la paleta KayKit/Kenney)
+  // mobiliario urbano TOON procedural (sync; no large GLBs)
   instancedRoot(buildToonLamp(), F.lamps, { y: WALK_Y, seed: 17 });
   instancedRoot(buildToonBench(), [...F.benches, ...P.parkBenches], { y: WALK_Y, seed: 18 });
   instancedRoot(buildToonHydrant(), F.misc.filter((_, i) => i % 2 === 0), { y: WALK_Y, randRot: true, seed: 19 });
   instancedRoot(buildToonBin(), F.misc.filter((_, i) => i % 2 === 1), { y: WALK_Y, randRot: true, seed: 20 });
+
+  const loadHeavyDecor = async () => {
+    try {
+      const fg = await loader.loadAsync(MOD + 'kaykit_forest.glb');
+      const fnode = {};
+      for (const sc of fg.scenes) { sanitizeImported(sc, aniso); for (const c of sc.children) fnode[c.name] = c; }
+      const TREES = ['Tree_1_A_Color1', 'Tree_2_A_Color1', 'Tree_3_A_Color1', 'Tree_4_A_Color1']
+        .map(n => fnode[n]).filter(Boolean);
+      const plantTrees = (spots, h, seed0) => TREES.forEach((t, k) =>
+        instancedRoot(t, spots.filter((_, i) => i % TREES.length === k),
+          { fit: true, h, lift: true, randRot: true, seed: seed0 + k }));
+      plantTrees(F.trees, [4.0, 5.6], 11);
+      plantTrees(F.medianTrees, [3.4, 4.6], 16);
+      plantTrees(P.parkTrees, [4.6, 7.2], 41);
+      if (data.trees?.length) plantTrees(data.trees, [4.0, 5.6], 77);
+      const scatter = [
+        ['Bush_1_A_Color1', [0.5, 0.9], 51], ['Bush_2_A_Color1', [0.6, 1.0], 52],
+        ['Rock_1_A_Color1', [0.4, 0.9], 53], ['Rock_2_A_Color1', [0.3, 0.6], 54],
+        ['Grass_2_A_Color1', [0.5, 0.8], 55],
+      ];
+      scatter.forEach(([nm, h, seed], k) => {
+        if (fnode[nm]) instancedRoot(fnode[nm], P.parkScatter.filter((_, i) => i % scatter.length === k),
+          { fit: true, h, lift: true, randRot: true, seed });
+      });
+    } catch (e) { console.warn('Forest GLB deferred load failed', e); }
+    for (const poi of (data.pois || [])) {
+      const col = poi.c === 'food' ? 0xf2a654 : 0x6ba3d6;
+      const m = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.45, 1.2, 6),
+        new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 }));
+      m.position.set(poi.x, 0.6, poi.z);
+      m.castShadow = true;
+      scene.add(m);
+    }
+    const carSpots = [];
+    {
+      const rng = mulberry32(777);
+      for (const r of city.data.roads) {
+        const full = r.w ?? 6;
+        if (full < 6 || r.bridge) continue;
+        let acc = 9;
+        for (let i = 0; i < r.p.length - 1; i++) {
+          const ax = r.p[i][0], az = r.p[i][1], bx = r.p[i + 1][0], bz = r.p[i + 1][1];
+          const L = Math.hypot(bx - ax, bz - az);
+          acc += L;
+          if (acc < 16 || rng() > 0.55) continue;
+          acc = 0;
+          const ux = (bx - ax) / L, uz = (bz - az) / L;
+          const side = carSpots.length % 2 === 0 ? 1 : -1;
+          const off = full * 0.5 - 1.2;
+          const t = 0.18 + rng() * 0.64;
+          const px = ax + ux * L * t + (-uz) * off * side;
+          const pz = az + uz * L * t + ux * off * side;
+          if (city.nearOtherRoad(px, pz, ax, az, bx, bz)) continue;
+          const cang = Math.atan2(ux, uz) + (side > 0 ? 0 : Math.PI);
+          carSpots.push([px, pz, cang]);
+          city.carColliders.push({ x: px, z: pz, ang: cang, hw: 1.9, hd: 1.05 });
+        }
+      }
+    }
+    const carFiles = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
+    for (let ci = 0; ci < carFiles.length; ci++) {
+      await instanced(carFiles[ci], carSpots.filter((_, i) => i % carFiles.length === ci), { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
+    }
+  };
   // pilares de las vias elevadas (cilindro unidad escalado en Y a cada altura)
   if (F.pillars && F.pillars.length) {
     const pgeo = new THREE.CylinderGeometry(0.42, 0.5, 1, 8); pgeo.translate(0, 0.5, 0);
@@ -479,65 +587,33 @@ async function boot() {
       scene.add(im);
     }
   }
-  setProgress(0.9);
+  setProgress(0.92, 'Listo para entrar…');
 
-  // autos estacionados
-  const carSpots = [];
-  {
-    const rng = mulberry32(777);
-    for (const r of city.data.roads) {
-      const full = r.w ?? 6;
-      if (full < 6 || r.bridge) continue;
-      let acc = 9;
-      for (let i = 0; i < r.p.length - 1; i++) {
-        const ax = r.p[i][0], az = r.p[i][1], bx = r.p[i + 1][0], bz = r.p[i + 1][1];
-        const L = Math.hypot(bx - ax, bz - az);
-        acc += L;
-        if (acc < 16 || rng() > 0.55) continue;
-        acc = 0;
-        const ux = (bx - ax) / L, uz = (bz - az) / L;
-        const side = carSpots.length % 2 === 0 ? 1 : -1;
-        const off = full * 0.5 - 1.2;
-        const t = 0.18 + rng() * 0.64;
-        const px = ax + ux * L * t + (-uz) * off * side;
-        const pz = az + uz * L * t + ux * off * side;
-        if (city.nearOtherRoad(px, pz, ax, az, bx, bz)) continue;
-        const cang = Math.atan2(ux, uz) + (side > 0 ? 0 : Math.PI);
-        carSpots.push([px, pz, cang]);
-        city.carColliders.push({ x: px, z: pz, ang: cang, hw: 1.9, hd: 1.05 });
-      }
-    }
-  }
-  const carFiles = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
-  for (let ci = 0; ci < carFiles.length; ci++) {
-    await instanced(carFiles[ci], carSpots.filter((_, i) => i % carFiles.length === ci), { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
-  }
-  setProgress(0.95);
-
-  // onboarding: nombre + personaje antes de spawnear
-  setProgress(1);
+  // onboarding: cuenta o invitado antes de spawnear
+  setProgress(1, 'Cuenta…');
   document.getElementById('loading').remove();
-  const auth = await showAuth();   // { ok, god, char, token, user }
+  const auth = await showAuth();   // { ok, god, char, token, user, guest? }
   let choice;
   if (auth.god) {
     choice = { char: CERNUNNOS.char, name: CERNUNNOS.name, className: 'cernunnos', god: true };
   } else if (auth.char && auth.char.charFile) {
-    // cuenta con personaje guardado: restaurar la clase y saltar la seleccion
     choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className };
+  } else if (auth.guest) {
+    choice = await showClassPick('Explorador');
   } else {
-    // cuenta nueva: elegir clase
     choice = await showClassPick(auth.user);
   }
-  // player + minimapa
+
+  setBootOverlay(0.08, 'Cargando personaje…');
   const player = new Player(scene, city, [-4.2, 47.1], choice);
   await player.load();
+  setBootOverlay(0.42, 'Conectando al barrio…');
   const life = new StreetLife(scene, city);
   const seatSpots = [...P.parkBenches, ...F.benches].filter((_, i) => i % 3 === 0).slice(0, 18);
-  await life.load(40, seatSpots, P.parkTrees);
-  window.__game = { player, city, scene };  // hooks de test
+  window.__game = { player, city, scene };
   const minimap = new MiniMap(city, document.getElementById('minimap'));
-  const coordsEl = document.getElementById('coords');   // ubicacion para compartir con otros
-  const net = new Net(scene, player, auth.token);   // multiplayer + cuenta (token)
+  const coordsEl = document.getElementById('coords');
+  const net = new Net(scene, player, auth.token);
   window.__game.net = net;
 
   // ===== MODO RPG (local) =====
@@ -550,8 +626,8 @@ async function boot() {
   // mobs COMPARTIDOS: el server es dueno de los esqueletos (todos ven los mismos,
   // en el jardin del Boulevard). El MobField solo los DIBUJA y anima desde net.mobs.
   const mobField = new MobField(scene, () => camera, net);
-  await mobField.load();
-  const effects = new Effects(scene, () => camera);   // sangre + numeros de daño
+  setBootOverlay(0.55, 'Iniciando mundo…');
+  const effects = new Effects(scene, () => camera);
   // HUD + progresion + quest + inventario
   const hud = new HUD(document.body);
   const qPanel = document.querySelector('.rpg-hud-quest');   // quest quitado: ocultar el tracker
@@ -624,10 +700,11 @@ async function boot() {
   });
   let saveT = null;
   function saveChar() {
+    if (auth.guest || !auth.token) return;
     if (saveT) clearTimeout(saveT);
     saveT = setTimeout(() => net.save(charSnapshot()), 1200);   // debounce
   }
-  addEventListener('beforeunload', () => net.save(charSnapshot()));
+  addEventListener('beforeunload', () => { if (!auth.guest && auth.token) net.save(charSnapshot()); });
   // restaurar el progreso guardado (nivel/xp/inventario) si la cuenta lo tiene
   const saved = auth.char;
   if (saved && saved.level) {
@@ -702,8 +779,16 @@ async function boot() {
 
   let streetT = 0;
   const clock = new THREE.Clock();
+  let firstPlayable = true;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
+    if (firstPlayable) {
+      firstPlayable = false;
+      hideBootOverlay();
+      loadHeavyDecor().catch((e) => console.warn('Deferred decor failed', e));
+      mobField.load().catch((e) => console.warn('MobField deferred load failed', e));
+      life.load(40, seatSpots, P.parkTrees).catch((e) => console.warn('StreetLife deferred load failed', e));
+    }
     player.update(dt, camera);
     life.update(dt, player.pos);
     net.update(dt, player);
