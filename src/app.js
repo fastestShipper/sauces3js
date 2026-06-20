@@ -5,12 +5,12 @@ import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260618p';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260618p';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260620v2';
 import { Player } from './player.js?v=20260618p';
 import { MiniMap } from './minimap.js?v=20260618p';
 import { StreetLife } from './npcs.js?v=20260618p';
 import { sanitizeImported } from './glbutil.js?v=20260618p';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin } from './props.js?v=20260618p';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260620v2';
 import { Net } from './net.js?v=20260618p';
 import { ChatUI, showBubble } from './chat.js?v=20260618p';
 import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260618p';
@@ -22,10 +22,10 @@ import { Combat } from './rpg/combat.js?v=20260618p';
 import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260618p';
 import { Effects } from './rpg/effects.js?v=20260618p';
 import { attachWeaponByName } from './weapons.js?v=20260620w';
-import { createTextureKit, scheduleWorldNormals, grain } from './worldmat.js?v=20260620w';
+import { createTextureKit, scheduleWorldNormals, grain, createGroundVariationTexture } from './worldmat.js?v=20260620v2';
 
-const APP_VERSION = '20260620w';
-window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'photo-textures-v1' };
+const APP_VERSION = '20260620v2';
+window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'photo-textures-v2' };
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -91,7 +91,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.78;
+renderer.toneMappingExposure = 0.84;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
 
@@ -211,9 +211,9 @@ function showClassPick(prefillName) {
 async function boot() {
   setProgress(0.05, 'Construyendo Los Sauces…');
   // HDRI: do not block first frame; gradient sky until load completes
-  scene.background = new THREE.Color(0xb8c9dc);
-  scene.environmentIntensity = 0.22;
-  scene.backgroundIntensity = 0.92;
+  scene.background = new THREE.Color(0xc5d4e8);
+  scene.environmentIntensity = 0.26;
+  scene.backgroundIntensity = 0.95;
   new RGBELoader().loadAsync(TEX + 'sky.hdr').then((hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     scene.background = hdr;
@@ -221,8 +221,8 @@ async function boot() {
   }).catch((e) => console.warn('HDR load failed (non-fatal)', e));
   setProgress(0.12, 'Iluminación…');
 
-  const sun = new THREE.DirectionalLight(0xffd79a, 3.1);
-  sun.position.set(80, 70, -58);
+  const sun = new THREE.DirectionalLight(0xffe4b5, 3.35);
+  sun.position.set(72, 78, -52);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
@@ -232,14 +232,20 @@ async function boot() {
   scene.add(sun);
   // hemisferio (cielo frio arriba, tierra calida abajo) en vez de ambient plano:
   // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
-  scene.add(new THREE.HemisphereLight(0xbcd2f2, 0x9c8568, 0.55));
-  // niebla aerea sutil: profundidad de tarde + suaviza el borde lejano del mapa
-  scene.fog = new THREE.Fog(0xc4d0e0, 185, 920);
+  scene.add(new THREE.HemisphereLight(0xc8daf5, 0xa89070, 0.58));
+  scene.fog = new THREE.Fog(0xd0dae8, 165, 880);
 
   // suelo base
+  const groundVar = createGroundVariationTexture();
+  groundVar.repeat.set(120, 120);
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(3000, 3000),
-    new THREE.MeshStandardMaterial({ map: worldTex.concrete, color: 0x999384, roughness: 1 }));
+    new THREE.MeshStandardMaterial({
+      map: worldTex.concrete,
+      color: 0x9a9488,
+      roughness: 1,
+      roughnessMap: groundVar,
+    }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(-100, -0.01, 100);
   ground.material.map.repeat.set(300, 300);
@@ -288,7 +294,7 @@ async function boot() {
   addBucket(R.road, worldTex._mats.road, false);
   addBucket(R.walk, worldTex._mats.walk, false);
   addBucket(R.berma, new THREE.MeshStandardMaterial({ map: worldTex.grass, color: 0x8fbf5a, roughness: 1 }), false);
-  addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xf4f1e4, roughness: 0.7 }), false);
+  addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.72 }), false);
   addBucket(R.median, new THREE.MeshStandardMaterial({ map: worldTex.grass, color: 0x7aad48, roughness: 1 }), false);
   addBucket(R.curb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), false);
   addBucket(R.path, worldTex._mats.path, false);
@@ -349,6 +355,8 @@ async function boot() {
   instancedRoot(buildToonBench(), [...F.benches, ...P.parkBenches], { y: WALK_Y, seed: 18 });
   instancedRoot(buildToonHydrant(), F.misc.filter((_, i) => i % 2 === 0), { y: WALK_Y, randRot: true, seed: 19 });
   instancedRoot(buildToonBin(), F.misc.filter((_, i) => i % 2 === 1), { y: WALK_Y, randRot: true, seed: 20 });
+  instancedRoot(buildToonStreetSign(), F.signs || [], { y: WALK_Y, seed: 21 });
+  instancedRoot(buildToonPlanter(), F.planters || [], { y: WALK_Y, seed: 22 });
 
   const loadHeavyDecor = async () => {
     try {

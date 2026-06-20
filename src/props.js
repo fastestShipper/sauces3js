@@ -53,6 +53,42 @@ export function buildToonHydrant() {
   return g;
 }
 
+// street sign: post + rectangular board (Los Sauces style, no text mesh).
+export function buildToonStreetSign() {
+  const g = new THREE.Group();
+  const metal = mat(0x3d4248, 0.55);
+  const pole = new THREE.CylinderGeometry(0.05, 0.07, 2.0, 6);
+  pole.translate(0, 1.0, 0);
+  g.add(new THREE.Mesh(pole, metal));
+  const board = mat(0x1a4d6e);
+  const plate = new THREE.BoxGeometry(0.55, 0.32, 0.04);
+  plate.translate(0, 2.05, 0.08);
+  g.add(new THREE.Mesh(plate, board));
+  const stripe = mat(0xf0ebe0, 0.9);
+  const label = new THREE.BoxGeometry(0.48, 0.12, 0.02);
+  label.translate(0, 2.08, 0.11);
+  g.add(new THREE.Mesh(label, stripe));
+  return g;
+}
+
+// planter box with low hedge (sidewalk green).
+export function buildToonPlanter() {
+  const g = new THREE.Group();
+  const box = mat(0x6a5a48);
+  const shell = new THREE.BoxGeometry(0.9, 0.42, 0.5);
+  shell.translate(0, 0.21, 0);
+  g.add(new THREE.Mesh(shell, box));
+  const soil = mat(0x3a2e22);
+  const top = new THREE.BoxGeometry(0.82, 0.08, 0.42);
+  top.translate(0, 0.38, 0);
+  g.add(new THREE.Mesh(top, soil));
+  const leaf = mat(0x2d6b32);
+  const bush = new THREE.BoxGeometry(0.78, 0.35, 0.38);
+  bush.translate(0, 0.58, 0);
+  g.add(new THREE.Mesh(bush, leaf));
+  return g;
+}
+
 // trash bin: ~0.85 m, dark green.
 export function buildToonBin() {
   const g = new THREE.Group();

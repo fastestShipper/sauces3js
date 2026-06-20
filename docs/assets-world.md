@@ -34,8 +34,9 @@ Character GLBs under `assets/models/char_*` and `assets/source/` are **out of sc
 
 | Asset | License | Usage |
 |-------|---------|--------|
-| `src/props.js` | Project code | Lamps, benches, hydrants, bins (instanced) |
+| `src/props.js` | Project code | Lamps, benches, hydrants, bins, street signs, planters (instanced) |
 | `src/worldmat.js` grain fallback | Project code | Canvas noise if JPG load fails |
+| `src/worldmat.js` `createGroundVariationTexture` | Project code | Procedural ground roughness variation (no download) |
 
 ## Code touchpoints
 

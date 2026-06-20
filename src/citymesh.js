@@ -102,7 +102,13 @@ function extrude(W, city, b, bi) {
   const parapet = h > 3.5 ? 0.22 : 0.12;
   const base = WALL_COLORS[bi % WALL_COLORS.length];
   const lite = hashF(bi * 11) * 0.18 - 0.06;
+  const plain = !!b.plain;
   let col = base.map(v => Math.min(1, Math.max(0, v + lite)));
+  const ht = b.h ?? 5;
+  if (ht >= 11) col = col.map((v, i) => v * (i === 2 ? 1.04 : i === 0 ? 0.94 : 0.97));
+  else if (ht >= 8.5) col = col.map((v) => v * 0.98);
+  else if (ht < 4.8) col = col.map((v, i) => v * (i < 2 ? 1.03 : 0.96));
+  if (plain) col = col.map((v) => v * 0.96);
   {
     // saturar: alejar cada canal de la media (el ACES web lava los tintes)
     const avg = (col[0] + col[1] + col[2]) / 3;
@@ -111,7 +117,6 @@ function extrude(W, city, b, bi) {
   const tcol = TRIM_COLORS[Math.floor(hashF(bi * 23) * 4.99)];
   const zoc = hashF(bi * 29) < 0.7 ? col.map(v => v * 0.55) : [0.40, 0.40, 0.42];
   const rnd = hashF(bi);
-  const plain = !!b.plain;
 
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], nb = ring[(i + 1) % ring.length];
@@ -142,8 +147,12 @@ function extrude(W, city, b, bi) {
     // expuesta solo parcialmente: pared si, fachada no
     if (buriedMid) continue;
     // zocalo + cornisa
+    const dirt = zoc.map((v) => v * 0.42);
     W.wall.quad(
       [a[0] + nx * .015, 0, a[1] + nz * .015], [nb[0] + nx * .015, 0, nb[1] + nz * .015],
+      [nb[0] + nx * .015, 0.38, nb[1] + nz * .015], [a[0] + nx * .015, 0.38, a[1] + nz * .015], n, dirt, wallUV);
+    W.wall.quad(
+      [a[0] + nx * .015, 0.38, a[1] + nz * .015], [nb[0] + nx * .015, 0.38, nb[1] + nz * .015],
       [nb[0] + nx * .015, 0.95, nb[1] + nz * .015], [a[0] + nx * .015, 0.95, a[1] + nz * .015], n, zoc, wallUV);
     W.wall.quad(
       [a[0] + nx * .03, h - 0.22, a[1] + nz * .03], [nb[0] + nx * .03, h - 0.22, nb[1] + nz * .03],
@@ -165,6 +174,10 @@ function extrude(W, city, b, bi) {
       }
       for (let y = 4.05; y + 1.8 < h - 0.2; y += 3.0) {
         win(W, bx, bz, y, ux, uz, nx, nz, tcol);
+        const Pw = (du, dy, dn) => [bx + ux * du + nx * dn, y + dy, bz + uz * du + nz * dn];
+        const sill = tcol.map((v) => v * 0.88);
+        W.trim.quad(
+          Pw(-0.92, -1.08, 0.06), Pw(0.92, -1.08, 0.06), Pw(0.92, -1.02, 0.06), Pw(-0.92, -1.02, 0.06), n, sill);
         if (hasBalc && hashF(bi * 7 + i * 3 + c) < 0.55 && cw >= 2.6) balcony(W, bx, bz, y - 1.02, ux, uz, nx, nz, tcol);
       }
     }
@@ -282,7 +295,7 @@ function roofBox(B, cx, y, cz, sx, sy, sz, c) {
 
 export function buildRoads(city) {
   const road = new Bucket(), walk = new Bucket(), paint = new Bucket(), median = new Bucket(), berma = new Bucket(), curb = new Bucket(), path = new Bucket(), deck = new Bucket();
-  const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [], pillars: [] };
+  const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [], pillars: [], signs: [], planters: [] };
   // elevacion por capa OSM: la data trae `layer` pero NO altura -> la sintetizo.
   // layer 1 = puente/overpass, 2 = pasarela peatonal sobre el, -1 = subterraneo.
   const LAYER_H = (lay) => (lay === 1 ? 5.5 : lay === 2 ? 8.5 : lay === -1 ? -4 : 0);
@@ -395,10 +408,18 @@ export function buildRoads(city) {
               else if (phase >= 20 && phase < 23) furniture.lamps.push([mx + (-uz) * (hw + 0.85) * side, mz + ux * (hw + 0.85) * side, fang]);
               else if (phase >= 30 && phase < 33) furniture.benches.push([mx + (-uz) * (hw + 2.55) * side, mz + ux * (hw + 2.55) * side, fang]);
               else if (phase >= 10 && phase < 11.5 && full >= 10) furniture.misc.push([mx + (-uz) * (hw + 0.9) * side, mz + ux * (hw + 0.9) * side, fang]);
+              else if (phase >= 33 && phase < 35 && side === 1) furniture.signs.push([mx + snx * (hw + 2.15), mz + snz * (hw + 2.15), Math.atan2(ux, uz)]);
+              else if (phase >= 35 && phase < 37) furniture.planters.push([mx + snx * (hw + 2.35), mz + snz * (hw + 2.35), fang]);
             }
           }
         }
         d += step;
+      }
+      if (full >= 5.5 && L > 6) {
+        const wornEdge = [0.90, 0.89, 0.84];
+        for (const lo of [hw * 0.86, -hw * 0.86]) {
+          quadUV(paint, ax, az, bx, bz, ux, uz, 0.07, lo, ROAD_Y + yo + 0.013, ROAD_Y + yo + 0.013, wornEdge, 1.0);
+        }
       }
       // lineas de carril + berma central
       if (full >= 6.5) {
@@ -427,7 +448,17 @@ export function buildRoads(city) {
           if (city.nearOtherRoad(dmx, dmz, ax, az, bx, bz)) continue;
           const de = Math.min(dd + 2.2, L - 0.8);
           for (const lo of lanes) {
-            quadUV(paint, ax + ux * dd, az + uz * dd, ax + ux * de, az + uz * de, ux, uz, 0.14, lo, ROAD_Y + yo + 0.014, ROAD_Y + yo + 0.014, white, 1.0);
+            const fade = 0.92 + hashF(ri * 19 + Math.floor(dd)) * 0.06;
+            const laneCol = [fade, fade, fade * 0.97];
+            quadUV(paint, ax + ux * dd, az + uz * dd, ax + ux * de, az + uz * de, ux, uz, 0.14, lo, ROAD_Y + yo + 0.014, ROAD_Y + yo + 0.014, laneCol, 1.0);
+          }
+        }
+        if (full >= 12 && L > 14) {
+          const yel = [0.94, 0.78, 0.18];
+          for (let yd = 3.0; yd < L - 3.0; yd += 5.5) {
+            const ye = Math.min(yd + 1.8, L - 1.2);
+            quadUV(paint, ax + ux * yd, az + uz * yd, ax + ux * ye, az + uz * ye, ux, uz, 0.08, -0.24, ROAD_Y + yo + 0.015, ROAD_Y + yo + 0.015, yel, 1.0);
+            quadUV(paint, ax + ux * yd, az + uz * yd, ax + ux * ye, az + uz * ye, ux, uz, 0.08, 0.24, ROAD_Y + yo + 0.015, ROAD_Y + yo + 0.015, yel, 1.0);
           }
         }
       }
@@ -677,8 +708,9 @@ export function buildParks(city) {
         const cx = gx + LCELL * 0.5, cz = gz + LCELL * 0.5;
         if (!city.pointInRing(cx, cz, ring) || city.onAnyRoad(cx, cz, 0.3) || inPlaza(cx, cz)) continue;
         // variacion sutil de tono, sin parches de color (leian como tierra)
-        const shade = 0.90 + rng() * 0.10;
-        const col = [shade * 0.92, shade, shade * 0.88];
+        const shade = 0.86 + rng() * 0.14;
+        const patch = hashF(Math.floor(gx * 3.1) + Math.floor(gz * 5.7)) * 0.08;
+        const col = [shade * (0.90 + patch), shade * (0.98 + patch * 0.5), shade * (0.82 - patch * 0.3)];
         const x1 = Math.min(gx + LCELL, maxx), z1 = Math.min(gz + LCELL, maxz);
         lawn.quad([gx, 0.015, gz], [gx, 0.015, z1], [x1, 0.015, z1], [x1, 0.015, gz], [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
       }

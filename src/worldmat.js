@@ -112,4 +112,36 @@ export function scheduleWorldNormals(kit) {
   else setTimeout(run, 1200);
 }
 
+/** Large-scale ground variation (no extra downloads). */
+export function createGroundVariationTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 512;
+  const c = cv.getContext('2d');
+  const img = c.createImageData(512, 512);
+  for (let y = 0; y < 512; y++) {
+    for (let x = 0; x < 512; x++) {
+      const u = x / 512;
+      const v = y / 512;
+      const n1 = Math.sin(x * 0.04) * Math.cos(y * 0.035);
+      const n2 = Math.sin((x + y) * 0.018) * 0.5;
+      const n3 = (Math.random() - 0.5) * 0.08;
+      const patch = Math.max(0, Math.sin(u * 11 + v * 7) * 0.15);
+      const g = 148 + (n1 + n2 + n3) * 22 + patch * 18;
+      const r = g - 8 + patch * 12;
+      const b = g - 18;
+      const i = (y * 512 + x) * 4;
+      img.data[i] = Math.min(255, Math.max(0, r));
+      img.data[i + 1] = Math.min(255, Math.max(0, g));
+      img.data[i + 2] = Math.min(255, Math.max(0, b));
+      img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 export { grain };

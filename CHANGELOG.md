@@ -15,3 +15,11 @@
 
 ### Enrichment (P1)
 - OSM `trees` and `pois` from `zone.json` placed as atmosphere markers (not map structure).
+
+### World visual pass 2 (20260620v2)
+- Facades: base dirt band, height-based wall tint, window sills, existing zocalo/cornice/parapet detail retained.
+- Streets: edge fog lines, worn lane dashes, double yellow on wide roads, curbs unchanged (3D sardinel).
+- Ground: procedural roughness variation on base plane (no new assets).
+- Parks: richer lawn vertex variation.
+- Props: street signs and sidewalk planters (procedural instancing).
+- Atmosphere: warmer sun, softer fog, slightly higher exposure; HDR still deferred.
