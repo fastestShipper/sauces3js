@@ -1,9 +1,9 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260701c';
-import { makeNametag } from './nametag.js?v=20260701c';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701c';
+import { sanitizeImported } from './glbutil.js?v=20260701d';
+import { makeNametag } from './nametag.js?v=20260701d';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701d';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -145,6 +145,10 @@ export class Player {
     } else {
       this.attackT = 0;
       this.hitT = 0;
+      // Death quedo clampeada con weight 1 (clampWhenFinished); si no se apaga,
+      // se mezcla 50/50 con Idle para siempre y el char queda inclinado (chueco)
+      const d = this.actions['Death'];
+      if (d) d.stop();
       this.cur = '';
       this.play('Idle');
     }
