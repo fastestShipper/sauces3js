@@ -1,14 +1,12 @@
 // Combate tab-target con mobs COMPARTIDOS (el server es dueno). Clic selecciona un
 // esqueleto; en rango el jugador auto-ataca y el DANO lo aplica el SERVER (mhit),
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
-// y loot. Los mobs cercanos te pegan (dano local a ti; su vida es del server).
+// y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
 
 const ATTACK_CD = 0.9;       // segundos entre auto-ataques
 const ATTACK_RANGE = 3.6;    // rango para pegar
 const RESPAWN_T = 3.0;
-const MOB_HIT_RANGE = 2.3;   // si un mob esta a este rango, te pega
-const MOB_HIT_CD = 1.3;
 
 // clases a distancia disparan un proyectil visible al atacar
 const PROJECTILE_BY_CHAR = {
@@ -38,7 +36,6 @@ export class Combat {
     this.hpMax = this.prog.hpMax;
     this.hp = this.hpMax;
     this.ray = new THREE.Raycaster();
-    this._mobHitCd = 0;
 
     addEventListener('mousedown', (e) => this._onClick(e));
     addEventListener('keydown', (e) => {
@@ -47,6 +44,7 @@ export class Combat {
 
     // el server avisa cuando un mob muere; canal aparte del render (onMobDead lo usa MobField)
     this.net.onMobKilled = (id, by, party) => this._onMobDead(id, by, party);
+    this.net.onPlayerHit = (hit) => this._onPlayerHit(hit);
 
     this.hud.setHP(this.hp, this.hpMax);
     this.hud.setXP(this.prog.xp, this.prog.xpNext, this.prog.level);
@@ -115,29 +113,6 @@ export class Combat {
         this.hud.showTarget('Esqueleto Nv.' + target.lvl, target.hp, target.hpMax);
       }
     }
-
-    // los mobs cercanos te pegan (dano local a TI; su vida es del server)
-    this._mobHitCd -= dt;
-    if (this._mobHitCd <= 0) {
-      let near = false, lvl = 1;
-      for (const m of this.net.mobs.values()) {
-        const dd = Math.hypot(m.x - this.player.pos.x, m.z - this.player.pos.z);
-        if (dd < MOB_HIT_RANGE) { near = true; if (m.lvl > lvl) lvl = m.lvl; }
-      }
-      if (near) {
-        this._mobHitCd = MOB_HIT_CD;
-        const dmg = 4 + lvl * 3;
-        this.hp = Math.max(0, this.hp - dmg);
-        this.hud.setHP(this.hp, this.hpMax);
-        this.player.playHit();
-        if (this.skills) this.skills.gainRageFromDamage(8);
-        if (this.effects) {
-          this.effects.bloodHit({ x: this.player.pos.x, y: 1.1, z: this.player.pos.z });
-          this.effects.damageNumber({ x: this.player.pos.x, y: 2.2, z: this.player.pos.z }, dmg, { toPlayer: true });
-        }
-        if (this.hp <= 0) this._die();
-      }
-    }
   }
 
   // skill activa (tecla Q): aplica el efecto al objetivo / a ti. effect viene del SkillSystem.
@@ -171,6 +146,21 @@ export class Combat {
       this.net.attackMob(this.targetId, base);
       if (c && this.effects) this.effects.damageNumber({ x: c.x, y: 1.5, z: c.z }, base, { crit: true });
     }
+  }
+
+  _onPlayerHit(hit) {
+    if (this.dead || !hit) return;
+    const dmg = Math.max(0, Number(hit.dmg) || 0);
+    if (!dmg) return;
+    this.hp = Math.max(0, this.hp - dmg);
+    this.hud.setHP(this.hp, this.hpMax);
+    this.player.playHit();
+    if (this.skills) this.skills.gainRageFromDamage(8);
+    if (this.effects) {
+      this.effects.bloodHit({ x: this.player.pos.x, y: 1.1, z: this.player.pos.z });
+      this.effects.damageNumber({ x: this.player.pos.x, y: 2.2, z: this.player.pos.z }, dmg, { toPlayer: true });
+    }
+    if (this.hp <= 0) this._die();
   }
 
   _onMobDead(id, by, party) {

@@ -213,17 +213,29 @@ function sanitizeChar(raw, account) {
 
 // ---------------------------------------------------------------------------
 // MOBS server-authoritative: el server es dueno de los mobs, compartidos por
-// todos los clientes. Estaticos (no se mueven). Carga spawns de mob_spawns.json.
+// todos los clientes. Tienen spawn, aggro, chase, leash y golpe server-side.
 // ---------------------------------------------------------------------------
 
 const MOB_SPAWNS_PATH = path.join(__dirname, 'mob_spawns.json');
 const MOB_CAP = 40;
 const MOB_RESPAWN_MS = 12000;
 const MOB_DMG_MAX = 3000;
+const MOB_TICK_MS = 100;
+const MOB_AGGRO_RANGE = 28;
+const MOB_ATTACK_RANGE = 2.8;
+const MOB_LEASH_RANGE = 42;
+const MOB_SPEED = 4.2;
+const MOB_RETURN_SPEED = 3.0;
+const MOB_WANDER_SPEED = 1.35;
+const MOB_WANDER_RADIUS = 4.5;
+const MOB_WANDER_REACH = 0.45;
+const MOB_WANDER_PAUSE_MIN_MS = 600;
+const MOB_WANDER_PAUSE_MAX_MS = 1800;
+const MOB_ATTACK_CD_MS = 1150;
 
-const mobs = new Map();   // mobId -> { id, x, z, lvl, hp, hpMax, kind }
+const mobs = new Map();   // mobId -> { id, x, z, spawnX, spawnZ, h, state, lvl, hp, hpMax, kind }
 let nextMobId = 1;        // contador propio de mobs, separado del de jugadores
-let mobSpawns = [];       // lista de { x, z, lvl } cargada del JSON
+let mobSpawns = [];       // lista de { x, z, lvl, zone } cargada del JSON
 
 // lee los spawns en startup. Si falta o esta corrupto, no hay mobs.
 function loadMobSpawns() {
@@ -235,24 +247,42 @@ function loadMobSpawns() {
     for (const s of list) {
       if (!s || typeof s !== 'object') continue;
       const x = Number(s.x), z = Number(s.z);
-      const lvl = clampInt(s.lvl, 1, 3);
+      const lvl = clampInt(s.lvl, 1, 5);
       if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
-      mobSpawns.push({ x, z, lvl });
+      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28) });
     }
   } catch {
     mobSpawns = [];
   }
 }
 
-// crea un objeto mob desde un spawn. hpMax = 40 + lvl*22; kind = lvl-1 (0..2).
+// crea un objeto mob desde un spawn. hpMax = 40 + lvl*22; kind = lvl-1 (0..4).
 function makeMob(id, spawn) {
   const hpMax = 40 + spawn.lvl * 22;
-  return { id, x: spawn.x, z: spawn.z, lvl: spawn.lvl, hp: hpMax, hpMax, kind: spawn.lvl - 1 };
+  return {
+    id,
+    x: spawn.x,
+    z: spawn.z,
+    spawnX: spawn.x,
+    spawnZ: spawn.z,
+    h: 0,
+    state: 'idle',
+    lvl: spawn.lvl,
+    hp: hpMax,
+    hpMax,
+    kind: spawn.lvl - 1,
+    zone: spawn.zone || '',
+    targetId: null,
+    hitCdMs: 0,
+    wanderX: null,
+    wanderZ: null,
+    nextWanderMs: 0,
+  };
 }
 
 // representacion publica del mob para los clientes.
 function mobView(m) {
-  return { id: m.id, x: m.x, z: m.z, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind };
+  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, zone: m.zone };
 }
 
 // spawnea hasta MOB_CAP mobs en spawns DISTINTOS (toma los primeros N).
@@ -267,7 +297,113 @@ function spawnInitialMobs() {
   }
 }
 
+function nearestMobTarget(mob) {
+  let best = null;
+  let bestD = MOB_AGGRO_RANGE;
+  for (const [id, c] of clients) {
+    if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) continue;
+    const leashD = Math.hypot(c.x - mob.spawnX, c.z - mob.spawnZ);
+    if (leashD > MOB_LEASH_RANGE) continue;
+    const d = Math.hypot(c.x - mob.x, c.z - mob.z);
+    if (d < bestD) { bestD = d; best = [id, c, d]; }
+  }
+  return best;
+}
+
+function stepToward(mob, tx, tz, step) {
+  const dx = tx - mob.x, dz = tz - mob.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.01) return false;
+  const s = Math.min(step, d);
+  mob.x += (dx / d) * s;
+  mob.z += (dz / d) * s;
+  mob.h = Math.atan2(dx, dz);
+  return true;
+}
+
+function clearMobWander(mob) {
+  mob.wanderX = null;
+  mob.wanderZ = null;
+}
+
+function setMobWanderTarget(mob, now) {
+  const a = Math.random() * Math.PI * 2;
+  const r = MOB_WANDER_RADIUS * (0.35 + Math.sqrt(Math.random()) * 0.65);
+  mob.wanderX = mob.spawnX + Math.cos(a) * r;
+  mob.wanderZ = mob.spawnZ + Math.sin(a) * r;
+  mob.nextWanderMs = now + MOB_WANDER_PAUSE_MIN_MS + Math.random() * (MOB_WANDER_PAUSE_MAX_MS - MOB_WANDER_PAUSE_MIN_MS);
+}
+
+function stepMobWander(mob, now, dt) {
+  const distHome = Math.hypot(mob.x - mob.spawnX, mob.z - mob.spawnZ);
+  if (distHome > MOB_WANDER_RADIUS + 1.5) {
+    clearMobWander(mob);
+    return stepToward(mob, mob.spawnX, mob.spawnZ, MOB_RETURN_SPEED * dt);
+  }
+  if (Number.isFinite(mob.wanderX) && Number.isFinite(mob.wanderZ)) {
+    if (Math.hypot(mob.x - mob.wanderX, mob.z - mob.wanderZ) <= MOB_WANDER_REACH) {
+      clearMobWander(mob);
+      mob.nextWanderMs = now + MOB_WANDER_PAUSE_MIN_MS + Math.random() * (MOB_WANDER_PAUSE_MAX_MS - MOB_WANDER_PAUSE_MIN_MS);
+      return false;
+    }
+    return stepToward(mob, mob.wanderX, mob.wanderZ, MOB_WANDER_SPEED * dt);
+  }
+  if (!mob.nextWanderMs || now >= mob.nextWanderMs) {
+    setMobWanderTarget(mob, now);
+    return stepToward(mob, mob.wanderX, mob.wanderZ, MOB_WANDER_SPEED * dt);
+  }
+  return false;
+}
+
+function mobDamage(mob) {
+  return 7 + mob.lvl * 4;
+}
+
+function mobTick() {
+  if (!clients.size || !mobs.size) return;
+  const dt = MOB_TICK_MS / 1000;
+  const now = Date.now();
+  const changed = [];
+  for (const mob of mobs.values()) {
+    if (mob.hp <= 0) continue;
+    mob.hitCdMs = Math.max(0, (mob.hitCdMs || 0) - MOB_TICK_MS);
+    const distHome = Math.hypot(mob.x - mob.spawnX, mob.z - mob.spawnZ);
+    let state = 'idle';
+    if (distHome > MOB_LEASH_RANGE) {
+      mob.targetId = null;
+      if (stepToward(mob, mob.spawnX, mob.spawnZ, MOB_RETURN_SPEED * dt)) state = 'walk';
+    } else {
+      const target = nearestMobTarget(mob);
+      if (target) {
+        const [tid, c, d] = target;
+        mob.targetId = tid;
+        clearMobWander(mob);
+        if (d > MOB_ATTACK_RANGE) {
+          if (stepToward(mob, c.x, c.z, MOB_SPEED * dt)) state = 'walk';
+        } else {
+          mob.h = Math.atan2(c.x - mob.x, c.z - mob.z);
+          state = 'attack';
+          if (mob.hitCdMs <= 0) {
+            mob.hitCdMs = MOB_ATTACK_CD_MS;
+            send(c.ws, { t: 'phit', id: mob.id, dmg: mobDamage(mob), hp: null });
+          }
+        }
+      } else {
+        mob.targetId = null;
+        if (stepMobWander(mob, now, dt)) state = 'walk';
+      }
+    }
+    if (mob.state !== state || state !== 'idle') {
+      mob.state = state;
+      changed.push(mobView(mob));
+    }
+  }
+  if (changed.length) broadcastAll({ t: 'mpos', list: changed });
+}
+
 spawnInitialMobs();
+const mobTimer = setInterval(mobTick, MOB_TICK_MS);
+if (mobTimer.unref) mobTimer.unref();
 
 // ---------------------------------------------------------------------------
 // PARTY: grupos de jugadores. partyId -> Set<connId>, y connId -> partyId.
@@ -434,6 +570,10 @@ wss.on('connection', (ws, req) => {
       if (!Number.isInteger(mid)) return;
       const mob = mobs.get(mid);
       if (!mob || mob.hp <= 0) return;
+      if (Math.hypot(mob.x - me.x, mob.z - me.z) > 5.0) return;
+      const now = Date.now();
+      if (me.lastMobHitMs && now - me.lastMobHitMs < 650) return;
+      me.lastMobHitMs = now;
       const dmg = clampNum(m.dmg, 0, MOB_DMG_MAX);
       mob.hp -= dmg;
       if (mob.hp > 0) {

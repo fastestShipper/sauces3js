@@ -1,4 +1,4 @@
-# Quality gates (Phases 0–3)
+# Quality gates (Phases 0–5)
 
 Run from repo root. No bundler required.
 
@@ -74,6 +74,34 @@ Pre-deploy with parcels:
 4. `node scripts/smoke_foundation.mjs` (local or prod)
 
 See `docs/parcels.md` for data shape and no-claims boundary.
+
+## Phase 4: Public POIs and nostalgia
+
+| Gate | Command |
+|------|---------|
+| Curated public POI data, 10+ safe points | `node scripts/audit_pois_local.mjs` |
+| Client syntax after POI changes | `node --check src/app.js && node --check src/pois.js` |
+
+Manual:
+
+- Enter as guest and walk near a POI marker.
+- Confirm the `E · Ver lugar` prompt appears.
+- Press `E` and confirm the card shows only public, non-sensitive copy.
+- Browser console: 0 errors after walking between several POIs.
+
+## Phase 5: Gameplay cleanup and mob AI
+
+| Gate | Command |
+|------|---------|
+| Park lawn footprint clearance | `node scripts/audit_park_clearance.mjs` |
+| Mob spawn distribution and safe respawn distance | `node scripts/audit_mob_spawns.mjs` |
+| Server-side mob aggro, movement and hit smoke | `node scripts/smoke_mob_ai.mjs` |
+
+Manual:
+
+- Enter as guest and confirm the respawn/gruta zone has no mob aggro.
+- Walk to a mob zone, confirm mobs leave idle, face/chase/attack, and HP drops from server `phit`.
+- Browser console: 0 errors after combat and respawn.
 
 ## Pre-deploy checklist
 

@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260618p';
-import { makeNametag } from './nametag.js?v=20260618p';
-import { cloneSkinned } from './npcs.js?v=20260618p';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260618p';
-import { showBubble } from './chat.js?v=20260618p';
-import { WS_URL } from './rpg/account.js?v=20260618p';
+import { sanitizeImported } from './glbutil.js?v=20260701c';
+import { makeNametag } from './nametag.js?v=20260701c';
+import { cloneSkinned } from './npcs.js?v=20260701c';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701c';
+import { showBubble } from './chat.js?v=20260701c';
+import { WS_URL } from './rpg/account.js?v=20260701c';
 
 const SCALE = 1.9 / 2.54;
 
@@ -25,13 +25,15 @@ export class Net {
     this.onChat = null;   // (name, text) -> pintar en el log (lo setea app.js)
     // ===== mobs compartidos (el server es dueno) + party =====
     this.myId = null;        // id de conexion de este jugador (del mensaje {t:'id'})
-    this.mobs = new Map();   // mobId -> { id, x, z, lvl, hp, hpMax, kind }
+    this.mobs = new Map();   // mobId -> { id, x, z, h, state, lvl, hp, hpMax, kind }
     this.party = [];         // [{id, name}] miembros de mi party
     this.onMobsSnapshot = null;  // (list) -> el MobField crea los visuales
     this.onMobHp = null;         // (id, hp)
+    this.onMobMove = null;       // (mob)
     this.onMobDead = null;       // (id, by, party)
     this.onMobSpawn = null;      // (mob)
     this.onMobKilled = null;     // (id, by, party) -> el combate da XP (canal aparte del render visual)
+    this.onPlayerHit = null;     // ({ id, dmg, hp }) -> dano server-side al jugador
     this.onParty = null;         // (members)
     this.onPartyInvited = null;  // (fromId, name)
     addEventListener('mousedown', (e) => {
@@ -79,6 +81,17 @@ export class Net {
     else if (m.t === 'mhp') {
       const mob = this.mobs.get(m.id); if (mob) mob.hp = m.hp;
       if (this.onMobHp) this.onMobHp(m.id, m.hp);
+    }
+    else if (m.t === 'mpos') {
+      for (const patch of (m.list || [])) {
+        const mob = this.mobs.get(patch.id);
+        if (!mob) continue;
+        Object.assign(mob, patch);
+        if (this.onMobMove) this.onMobMove(mob);
+      }
+    }
+    else if (m.t === 'phit') {
+      if (this.onPlayerHit) this.onPlayerHit({ id: m.id, dmg: m.dmg, hp: m.hp });
     }
     else if (m.t === 'mdead') {
       if (this.onMobDead) this.onMobDead(m.id, m.by, m.party || []);

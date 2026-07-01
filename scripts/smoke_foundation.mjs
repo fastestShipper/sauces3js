@@ -36,6 +36,8 @@ console.log('--- audits ---');
 runAudit('audit_building_count.mjs');
 runAudit('audit_zone_integrity.mjs');
 runAudit('audit_server_store.mjs');
+runAudit('audit_park_clearance.mjs');
+runAudit('audit_mob_spawns.mjs');
 
 console.log('--- app version (local file) ---');
 const appJs = readFileSync(path.join(root, 'src/app.js'), 'utf8');

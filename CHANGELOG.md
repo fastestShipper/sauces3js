@@ -36,3 +36,17 @@
 - Client module `src/parcels.js`: `ParcelIndex`, `loadParcels(version)`.
 - Audit `scripts/audit_parcels.mjs`; docs `docs/parcels.md`.
 - No claims, disputes, notes, or UGC in parcel data.
+
+### Public POI foundation (Phase 4, 20260620p4)
+- Added `assets/pois-local.json` with 12 public POIs from OSM nodes and OSM road anchors.
+- Added `src/pois.js` for non-blocking POI signs and proximity interaction with `E · Ver lugar`.
+- Moved POI signs out of deferred heavy decor so they are available before GLB scenery loads.
+- Added `scripts/audit_pois_local.mjs` and Phase 4 quality gate docs.
+- No claims, disputes, notes, free text, server writes, or UGC.
+
+### Gameplay cleanup and mob AI (Phase 5, 20260620p5)
+- Park lawn generation now validates full cell footprints, not only cell centers, preventing grass quads from spilling onto roads.
+- Replaced line-like mob spawns with named clusters across Boulevard, parks, and side streets; respawn/gruta area remains safe.
+- Server relay now drives mob aggro, chase, leash, heading, movement broadcasts, and server-side player hits.
+- Client renders mob movement/state updates and consumes server `phit` damage instead of local proximity damage.
+- Added `scripts/audit_park_clearance.mjs`, `scripts/audit_mob_spawns.mjs`, and `scripts/smoke_mob_ai.mjs`; foundation smoke now includes the new audits.

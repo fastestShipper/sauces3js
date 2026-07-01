@@ -6,12 +6,13 @@ export const ROAD_Y = 0.02;
 export const WALK_Y = 0.09;
 const SEG_CELL = 24.0;
 
-// paleta TOON: pasteles brillantes y variados (KayKit-style), no tierra apagada
+// paleta TOON: pasteles VIVOS estilo Lima (croma alto; la anterior era tan
+// pálida que con luz de día leía blanco lavado)
 export const WALL_COLORS = [
-  [0.92, 0.84, 0.62], [0.86, 0.55, 0.42], [0.60, 0.74, 0.84],
-  [0.64, 0.80, 0.60], [0.92, 0.74, 0.62], [0.72, 0.66, 0.82],
-  [0.90, 0.82, 0.50], [0.80, 0.78, 0.74], [0.85, 0.66, 0.66],
-  [0.55, 0.76, 0.78], [0.72, 0.78, 0.58], [0.82, 0.62, 0.52],
+  [0.97, 0.82, 0.42], [0.93, 0.51, 0.34], [0.42, 0.67, 0.88],
+  [0.55, 0.80, 0.50], [0.96, 0.66, 0.42], [0.66, 0.57, 0.88],
+  [0.95, 0.76, 0.28], [0.89, 0.84, 0.74], [0.91, 0.53, 0.58],
+  [0.36, 0.74, 0.76], [0.70, 0.79, 0.40], [0.87, 0.47, 0.36],
 ];
 export const TRIM_COLORS = [
   [0.92, 0.91, 0.88], [0.30, 0.24, 0.18], [0.45, 0.46, 0.48],

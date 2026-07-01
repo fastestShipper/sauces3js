@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260618p';
+import { sanitizeImported } from '../glbutil.js?v=20260701c';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -132,6 +132,7 @@ export class MobField {
     // ASIGNAR los callbacks (net los LLAMA), no llamarlos.
     net.onMobsSnapshot = (list) => this._onSnapshot(list);
     net.onMobHp = (id, hp) => this._onHp(id, hp);
+    net.onMobMove = (mob) => this._onMove(mob);
     net.onMobDead = (id, by, party) => this._onDead(id, by, party);
     net.onMobSpawn = (mob) => this._onSpawn(mob);
   }
@@ -187,6 +188,7 @@ export class MobField {
       return clip ? mixer.clipAction(clip) : null;
     };
     actions.Idle = bind('Idle') || bind('Idle_B');
+    actions.Walk = bind('Walking_A') || bind('Walk') || bind('Run');
     actions.Hit = bind('Hit_A') || bind('Hit_B');
     actions.Death = bind('Death_A') || bind('Death_B');
     actions.Spawn_Ground = bind('Spawn_Ground');
@@ -195,6 +197,7 @@ export class MobField {
       id: mob.id, root, ch, mixer, actions, bar, ring,
       hp: mob.hp != null ? mob.hp : (mob.hpMax || 1),
       hpMax: mob.hpMax || mob.hp || 1,
+      tx: mob.x || 0, tz: mob.z || 0, th: mob.h || 0, state: mob.state || 'idle',
       busyT: 0, dead: false,
     };
     this.mobs.set(mob.id, v);
@@ -208,6 +211,16 @@ export class MobField {
     v.hp = hp;
     setHpFill(v.bar, v.hpMax ? hp / v.hpMax : 0);
     if (!v.dead) this._playOnce(v, 'Hit', HIT_SPEED);
+  }
+
+  // movimiento/state server-side: el render interpola hacia tx/tz y rota al heading.
+  _onMove(mob) {
+    const v = this.mobs.get(mob && mob.id);
+    if (!v || v.dead) return;
+    v.tx = Number.isFinite(mob.x) ? mob.x : v.tx;
+    v.tz = Number.isFinite(mob.z) ? mob.z : v.tz;
+    v.th = Number.isFinite(mob.h) ? mob.h : v.th;
+    v.state = mob.state || 'idle';
   }
 
   // muerte: Death_A clampeado y agenda el retiro del visual tras DEATH_HOLD.
@@ -252,9 +265,21 @@ export class MobField {
     const cam = this.getCamera ? this.getCamera() : null;
     // mobs vivos: avanzar mixer, billboardear barra, volver a Idle al terminar one-shots
     for (const v of this.mobs.values()) {
+      v.root.position.x += (v.tx - v.root.position.x) * Math.min(1, dt * 9);
+      v.root.position.z += (v.tz - v.root.position.z) * Math.min(1, dt * 9);
+      if (Number.isFinite(v.th)) v.root.rotation.y = v.th;
       if (v.busyT > 0) {
         v.busyT -= dt;
-        if (v.busyT <= 0 && v.actions.Idle) { try { v.actions.Idle.reset().play(); } catch {} }
+        if (v.busyT <= 0 && v.actions.Idle) { try { v.actions.Idle.reset().play(); v.walking = false; } catch {} }
+      } else if (v.actions.Walk && v.actions.Idle) {
+        const moving = v.state === 'walk';
+        if (moving && !v.walking) {
+          try { v.actions.Idle.stop(); v.actions.Walk.reset().play(); } catch {}
+          v.walking = true;
+        } else if (!moving && v.walking) {
+          try { v.actions.Walk.stop(); v.actions.Idle.reset().play(); } catch {}
+          v.walking = false;
+        }
       }
       if (v.mixer) { try { v.mixer.update(dt); } catch {} }
       if (cam && v.bar && v.bar.group) v.bar.group.quaternion.copy(cam.quaternion);

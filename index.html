@@ -4,111 +4,222 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Los Sauces · San Borja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --ink: #171429;
+    --panel: rgba(23, 20, 41, .82);
+    --panel-line: rgba(255, 255, 255, .14);
+    --gold: #ffcf5c;
+    --sky: #58b6ff;
+    --hp: #ff5a48;
+    --font: 'Fredoka', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --shadow-panel: 0 12px 32px rgba(10, 8, 24, .38), inset 0 1px 0 rgba(255, 255, 255, .09);
+  }
   html, body { margin: 0; padding: 0; overflow: hidden; background: #0e1116; height: 100%; }
   #app { position: fixed; inset: 0; }
   canvas { display: block; }
+
+  /* ===== atmosphere backdrop shared by loading / login / class pick ===== */
+  .sky-scene {
+    background:
+      radial-gradient(ellipse 60% 42% at 70% 24%, rgba(255, 240, 196, .55), rgba(255, 240, 196, 0) 70%),
+      linear-gradient(180deg, #2f7ccc 0%, #57a2e4 34%, #a8d4f2 62%, #e8f4fb 78%, #d3e6d8 100%);
+  }
+  .sky-cloud { position: absolute; background: rgba(255,255,255,.85); border-radius: 999px; filter: blur(18px); pointer-events: none; }
+  .sky-skyline {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 17vh; pointer-events: none; opacity: .93;
+    background:
+      linear-gradient(180deg, rgba(23,52,66,0) 0, rgba(23,52,66,0) 8%, #1d4254 8%, #1d4254 100%);
+    -webkit-mask: linear-gradient(#000 0 0);
+    clip-path: polygon(0 62%, 6% 62%, 6% 38%, 13% 38%, 13% 70%, 19% 70%, 19% 30%, 24% 30%, 24% 24%, 27% 24%, 27% 30%, 32% 30%, 32% 66%, 38% 66%, 38% 47%, 45% 47%, 45% 58%, 52% 58%, 52% 22%, 55% 22%, 55% 15%, 58% 22%, 61% 22%, 61% 52%, 67% 52%, 67% 40%, 74% 40%, 74% 64%, 80% 64%, 80% 34%, 86% 34%, 86% 56%, 92% 56%, 92% 44%, 100% 44%, 100% 100%, 0 100%);
+  }
+
+  /* ===== in-game HUD chrome ===== */
   #hud {
-    position: fixed; top: 14px; left: 18px; color: #fff;
-    font: 600 14px/1.5 system-ui, sans-serif;
-    text-shadow: 0 1px 3px rgba(10,10,30,.9), 0 0 8px rgba(10,10,30,.5);
-    pointer-events: none; user-select: none;
+    position: fixed; top: 14px; left: 18px; z-index: 30;
+    font-family: var(--font); pointer-events: none; user-select: none; color: #fff;
   }
-  #hud .title { font-size: 17px; font-weight: 800; }
+  #hud .title {
+    display: inline-block; font-size: 17px; font-weight: 700; letter-spacing: .2px;
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px;
+    padding: 6px 14px; box-shadow: var(--shadow-panel);
+  }
+  #hud .title b { color: var(--gold); font-weight: 700; }
+  #hint {
+    margin-top: 8px; max-width: 620px; font-size: 12px; font-weight: 500; line-height: 1.5;
+    color: rgba(255,255,255,.94); text-shadow: 0 1px 3px rgba(10,10,30,.9);
+  }
+  #hint .key {
+    display: inline-block; padding: 1px 7px; margin: 0 1px; border-radius: 7px;
+    background: rgba(23,20,41,.72); border: 1px solid rgba(255,255,255,.2);
+    font-weight: 600; font-size: 11px; color: var(--gold);
+  }
   #minimap {
-    position: fixed; top: 14px; right: 14px; width: 196px; height: 196px;
-    border-radius: 14px; border: 2px solid rgba(35,32,28,.95);
-    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+    position: fixed; top: 14px; right: 14px; width: 196px; height: 196px; z-index: 30;
+    border-radius: 18px; border: 3px solid rgba(23, 20, 41, .92);
+    box-shadow: 0 12px 32px rgba(10,8,24,.45), 0 0 0 1px rgba(255,255,255,.18);
   }
-  #loading {
-    position: fixed; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 14px;
-    background: linear-gradient(180deg, #16324f, #0e1116);
-    color: #fff; font: 600 16px system-ui, sans-serif; z-index: 50;
+  #coords {
+    position: fixed; right: 14px; top: 222px; z-index: 30;
+    padding: 5px 12px; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--panel-line);
+    box-shadow: var(--shadow-panel); color: #fff;
+    font-family: var(--font); font-weight: 600; font-size: 12px;
+    letter-spacing: .5px; user-select: text; cursor: text;
   }
-  #loading .bar { width: 280px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
-  #loading .bar i { display: block; height: 100%; width: 0%; background: #ffd166; transition: width .2s; }
-  #onboard {
-    position: fixed; inset: 0; z-index: 60; display: none;
-    align-items: center; justify-content: center;
-    background: radial-gradient(circle at 50% 28%, rgba(22,50,79,.55), rgba(14,17,22,.93));
-    backdrop-filter: blur(6px); font: 500 15px system-ui, sans-serif;
-  }
-  .ob-card {
-    width: min(560px, 92vw); padding: 30px 28px 22px; box-sizing: border-box;
-    background: rgba(248,246,240,.98); border-radius: 22px;
-    box-shadow: 0 20px 60px rgba(0,0,0,.5); text-align: center; color: #20242c;
-  }
-  .ob-title { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
-  .ob-sub { color: #5a6068; margin: 6px 0 18px; }
-  #ob-name {
-    width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 16px;
-    border: 2px solid #d8d3c8; border-radius: 12px; outline: none; margin-bottom: 18px;
-  }
-  #ob-name:focus { border-color: #6f9a3f; }
-  .ob-pick-label { font-weight: 700; text-align: left; margin-bottom: 10px; }
-  #ob-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
-  .ob-char {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    padding: 14px 6px; border: 2px solid #e2ddd2; border-radius: 14px;
-    background: #fff; cursor: pointer; font: inherit; color: #20242c; transition: all .12s;
-  }
-  .ob-char:hover { border-color: #b9b2a2; transform: translateY(-2px); }
-  .ob-char.on { border-color: #6f9a3f; background: #eef6e3; box-shadow: 0 0 0 3px rgba(111,154,63,.25); }
-  .ob-char .e { font-size: 30px; }
-  .ob-char .n { font-size: 13px; font-weight: 600; }
-  #ob-go {
-    width: 100%; padding: 14px; font-size: 17px; font-weight: 800; color: #fff;
-    background: #6f9a3f; border: none; border-radius: 14px; cursor: pointer;
-  }
-  #ob-go:disabled { background: #c4c0b6; cursor: not-allowed; }
-  .ob-hint { color: #8a8f97; font-size: 12px; margin-top: 14px; }
   #chat-log {
-    position: fixed; left: 18px; bottom: 64px; width: min(440px, 62vw);
-    display: flex; flex-direction: column; gap: 4px; pointer-events: none; z-index: 30;
+    position: fixed; left: 18px; bottom: 68px; width: min(440px, 62vw);
+    display: flex; flex-direction: column; gap: 5px; pointer-events: none; z-index: 30;
+    font-family: var(--font);
   }
   #chat-log .chat-line {
     align-self: flex-start; max-width: 100%; color: #fff;
-    font: 600 14px/1.35 system-ui, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.9);
-    background: rgba(10,12,18,.34); padding: 3px 9px; border-radius: 9px;
+    font-size: 13.5px; font-weight: 500; line-height: 1.4;
+    background: rgba(23,20,41,.66); border: 1px solid rgba(255,255,255,.10);
+    padding: 4px 11px; border-radius: 11px;
     transition: opacity .8s; word-break: break-word;
+    box-shadow: 0 4px 14px rgba(10,8,24,.25);
   }
   #chat-input {
     position: fixed; left: 18px; bottom: 26px; width: min(440px, 62vw); display: none;
-    box-sizing: border-box; padding: 10px 14px; z-index: 31;
-    border: 2px solid rgba(255,209,102,.9); border-radius: 11px;
-    background: rgba(12,14,20,.93); color: #fff;
-    font: 600 15px system-ui, sans-serif; outline: none;
+    box-sizing: border-box; padding: 11px 16px; z-index: 31;
+    border: 2px solid rgba(255,207,92,.9); border-radius: 13px;
+    background: rgba(17,14,32,.94); color: #fff;
+    font-family: var(--font); font-weight: 500; font-size: 15px; outline: none;
+    box-shadow: 0 14px 36px rgba(10,8,24,.5);
   }
-  #coords {
-    position: fixed; right: 14px; top: 216px; z-index: 30;
-    padding: 5px 11px; border-radius: 9px;
-    background: rgba(20,22,28,.74); color: #fff;
-    font: 700 13px/1 ui-monospace, 'Cascadia Code', Menlo, monospace;
-    letter-spacing: .4px; user-select: text; cursor: text;
+
+  /* ===== loading ===== */
+  #loading {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px; z-index: 50;
+    font-family: var(--font); color: #fff; overflow: hidden;
+  }
+  #loading .ld-title {
+    font-size: clamp(42px, 7vw, 74px); font-weight: 700; letter-spacing: 1px; line-height: .95;
+    color: #fff; text-shadow: 0 3px 0 rgba(29,66,84,.55), 0 14px 42px rgba(19,46,80,.5);
+  }
+  #loading .ld-sub {
+    font-size: 15px; font-weight: 600; letter-spacing: 4px; text-transform: uppercase;
+    color: #16456b; background: rgba(255,255,255,.66); padding: 5px 16px; border-radius: 999px;
+  }
+  #loading .ld-msg { font-size: 14px; font-weight: 500; color: rgba(255,255,255,.95); text-shadow: 0 1px 4px rgba(19,46,80,.6); }
+  #loading .bar {
+    width: min(340px, 74vw); height: 12px; border-radius: 999px;
+    background: rgba(16,38,60,.45); overflow: hidden;
+    box-shadow: inset 0 2px 5px rgba(10,20,40,.5), 0 1px 0 rgba(255,255,255,.35);
+  }
+  #loading .bar i {
+    display: block; height: 100%; width: 0%; border-radius: 999px;
+    background: linear-gradient(180deg, #ffe08a, #ffb84d);
+    box-shadow: 0 0 12px rgba(255,203,92,.7); transition: width .2s;
+  }
+
+  /* ===== class pick ===== */
+  #onboard {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    align-items: center; justify-content: center; overflow: hidden;
+    font-family: var(--font);
+  }
+  .ob-card {
+    position: relative; width: min(560px, 92vw); padding: 30px 30px 24px; box-sizing: border-box;
+    background: linear-gradient(180deg, rgba(30,26,52,.94), rgba(20,17,38,.96));
+    border: 1px solid rgba(255,255,255,.16); border-radius: 24px;
+    box-shadow: 0 40px 100px rgba(8,10,30,.65), inset 0 1px 0 rgba(255,255,255,.12);
+    text-align: center; color: #f2f0fa;
+  }
+  .ob-title { font-size: 30px; font-weight: 700; letter-spacing: .2px; }
+  .ob-title b { color: var(--gold); font-weight: 700; }
+  .ob-sub { color: #a9a4c4; margin: 6px 0 18px; font-size: 14px; font-weight: 500; }
+  #ob-name {
+    width: 100%; box-sizing: border-box; padding: 13px 16px; font-size: 16px;
+    font-family: var(--font); font-weight: 500;
+    border: 2px solid rgba(255,255,255,.16); border-radius: 13px; outline: none; margin-bottom: 18px;
+    background: rgba(12,10,26,.7); color: #fff; transition: border-color .15s;
+  }
+  #ob-name::placeholder { color: #77729a; }
+  #ob-name:focus { border-color: var(--gold); }
+  .ob-pick-label { font-weight: 600; text-align: left; margin-bottom: 10px; font-size: 14px; color: #cfcbe6; }
+  #ob-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .ob-char {
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    padding: 15px 4px 12px; border: 2px solid rgba(255,255,255,.12); border-radius: 16px;
+    background: rgba(255,255,255,.05); cursor: pointer; font-family: var(--font); color: #f2f0fa;
+    transition: transform .13s, border-color .13s, background .13s, box-shadow .13s;
+  }
+  .ob-char:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.3); background: rgba(255,255,255,.09); }
+  .ob-char.on {
+    border-color: var(--ob-accent, var(--gold));
+    background: rgba(255,255,255,.10);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ob-accent, #ffcf5c) 35%, transparent), 0 10px 24px rgba(8,10,30,.4);
+    transform: translateY(-3px);
+  }
+  .ob-char .e {
+    font-size: 30px; width: 56px; height: 56px; display: grid; place-items: center;
+    border-radius: 999px; background: color-mix(in srgb, var(--ob-accent, #ffcf5c) 22%, rgba(255,255,255,.05));
+    border: 1px solid color-mix(in srgb, var(--ob-accent, #ffcf5c) 45%, transparent);
+  }
+  .ob-char .n { font-size: 13px; font-weight: 600; }
+  .ob-char .r { font-size: 10px; font-weight: 500; color: #a9a4c4; line-height: 1.25; min-height: 24px; }
+  #ob-go {
+    width: 100%; padding: 15px; font-size: 17px; font-weight: 700; letter-spacing: .4px;
+    font-family: var(--font); color: #241a04; cursor: pointer;
+    background: linear-gradient(180deg, #ffe08a, #ffbe4d); border: 0; border-radius: 15px;
+    box-shadow: 0 8px 22px rgba(255,190,77,.35), inset 0 1px 0 rgba(255,255,255,.6);
+    transition: transform .12s, box-shadow .12s, filter .12s;
+  }
+  #ob-go:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
+  #ob-go:disabled { background: #3a3654; color: #8a86a8; cursor: not-allowed; box-shadow: none; }
+  .ob-hint { color: #8b86ac; font-size: 12px; margin-top: 14px; font-weight: 500; }
+  .ob-hint .key { color: var(--gold); font-weight: 600; }
+
+  @media (max-width: 640px) {
+    #minimap { width: 118px; height: 118px; border-radius: 14px; }
+    #coords { top: 144px; font-size: 11px; padding: 4px 9px; }
+    #hint { display: none; }
+    #hud .title { font-size: 14px; padding: 5px 11px; }
+    #ob-grid { grid-template-columns: repeat(2, 1fr); }
+    .rpg-hud-root .rpg-hud-bottom { width: min(316px, calc(100vw - 20px)); }
   }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="hud">
-  <div class="title">Los Sauces · San Borja</div>
-  <div id="hint">WASD moverse · clic enemigo + TAB objetivo · I inventario · ESPACIO saltar · clic der girar · ENTER chat · B gruta</div>
+  <div class="title">Los Sauces <b>·</b> San Borja</div>
+  <div id="hint"><span class="key">WASD</span> moverse · <span class="key">clic</span> enemigo + <span class="key">TAB</span> objetivo · <span class="key">I</span> inventario · <span class="key">ESPACIO</span> saltar · <span class="key">clic der</span> girar · <span class="key">ENTER</span> chat · <span class="key">B</span> gruta</div>
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
 <div id="coords">X 0 · Z 0</div>
 <div id="chat-log"></div>
 <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Escribe y Enter para enviar…">
-<div id="loading"><div>Construyendo Los Sauces…</div><div class="bar"><i id="lbar"></i></div></div>
-<div id="onboard">
+<div id="loading" class="sky-scene">
+  <div class="sky-cloud" style="width:210px;height:56px;left:12%;top:18%"></div>
+  <div class="sky-cloud" style="width:150px;height:44px;left:68%;top:12%;opacity:.8"></div>
+  <div class="sky-cloud" style="width:260px;height:62px;left:78%;top:34%;opacity:.7"></div>
+  <div class="sky-cloud" style="width:180px;height:48px;left:30%;top:40%;opacity:.6"></div>
+  <div class="sky-skyline"></div>
+  <div class="ld-title">LOS SAUCES</div>
+  <div class="ld-sub">San Borja · Lima</div>
+  <div class="bar"><i id="lbar"></i></div>
+  <div class="ld-msg">Construyendo Los Sauces…</div>
+</div>
+<div id="onboard" class="sky-scene">
+  <div class="sky-cloud" style="width:210px;height:56px;left:10%;top:16%"></div>
+  <div class="sky-cloud" style="width:170px;height:46px;left:72%;top:10%;opacity:.8"></div>
+  <div class="sky-cloud" style="width:240px;height:60px;left:80%;top:38%;opacity:.65"></div>
+  <div class="sky-skyline"></div>
   <div class="ob-card">
-    <div class="ob-title">Los Sauces · San Borja</div>
-    <div class="ob-sub">Un barrio real de Lima en miniatura. Camina, explora, encuentra a otros.</div>
+    <div class="ob-title">Los Sauces <b>·</b> San Borja</div>
+    <div class="ob-sub">Un barrio real de Lima en miniatura. Camina, explora, pelea, encuentra a otros.</div>
     <input id="ob-name" maxlength="16" placeholder="Tu nombre" autocomplete="off">
     <div class="ob-pick-label">Elige tu clase</div>
     <div id="ob-grid"></div>
-    <button id="ob-go" disabled>Entrar</button>
-    <div class="ob-hint">WASD moverse · ESPACIO saltar · clic derecho girar · rueda zoom</div>
+    <button id="ob-go" disabled>Entrar al barrio</button>
+    <div class="ob-hint"><span class="key">WASD</span> moverse · <span class="key">ESPACIO</span> saltar · <span class="key">clic derecho</span> girar · <span class="key">rueda</span> zoom</div>
   </div>
 </div>
 <script type="importmap">
@@ -119,6 +230,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260620v2"></script>
+<script type="module" src="./src/app.js?v=20260701c"></script>
 </body>
 </html>

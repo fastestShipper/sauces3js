@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260618p';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260618p';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260701c';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260701c';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -101,7 +101,7 @@ function extrude(W, city, b, bi) {
   const h = Math.max(b.h ?? 5.0, 2.8);
   const parapet = h > 3.5 ? 0.22 : 0.12;
   const base = WALL_COLORS[bi % WALL_COLORS.length];
-  const lite = hashF(bi * 11) * 0.18 - 0.06;
+  const lite = hashF(bi * 11) * 0.10 - 0.05;
   const plain = !!b.plain;
   let col = base.map(v => Math.min(1, Math.max(0, v + lite)));
   const ht = b.h ?? 5;
@@ -112,7 +112,7 @@ function extrude(W, city, b, bi) {
   {
     // saturar: alejar cada canal de la media (el ACES web lava los tintes)
     const avg = (col[0] + col[1] + col[2]) / 3;
-    col = col.map(v => Math.min(1, Math.max(0, avg + (v - avg) * 1.45)));
+    col = col.map(v => Math.min(1, Math.max(0, avg + (v - avg) * 1.7)));
   }
   const tcol = TRIM_COLORS[Math.floor(hashF(bi * 23) * 4.99)];
   const zoc = hashF(bi * 29) < 0.7 ? col.map(v => v * 0.55) : [0.40, 0.40, 0.42];
@@ -681,6 +681,20 @@ function seesaw(B, bx, bz, cA, cB) {
   }
 }
 
+function clearLawnCell(city, ring, x0, z0, x1, z1) {
+  const cx = (x0 + x1) * 0.5;
+  const cz = (z0 + z1) * 0.5;
+  const samples = [
+    [x0, z0], [cx, z0], [x1, z0],
+    [x0, cz], [cx, cz], [x1, cz],
+    [x0, z1], [cx, z1], [x1, z1],
+  ];
+  for (const [x, z] of samples) {
+    if (!city.pointInRing(x, z, ring) || city.onAnyRoad(x, z, 0.2)) return false;
+  }
+  return true;
+}
+
 export function buildParks(city) {
   const lawn = new Bucket();
   const plaza = new Bucket();
@@ -706,12 +720,12 @@ export function buildParks(city) {
     for (let gx = minx; gx < maxx; gx += LCELL) {
       for (let gz = minz; gz < maxz; gz += LCELL) {
         const cx = gx + LCELL * 0.5, cz = gz + LCELL * 0.5;
-        if (!city.pointInRing(cx, cz, ring) || city.onAnyRoad(cx, cz, 0.3) || inPlaza(cx, cz)) continue;
+        const x1 = Math.min(gx + LCELL, maxx), z1 = Math.min(gz + LCELL, maxz);
+        if (!clearLawnCell(city, ring, gx, gz, x1, z1) || inPlaza(cx, cz)) continue;
         // variacion sutil de tono, sin parches de color (leian como tierra)
         const shade = 0.86 + rng() * 0.14;
         const patch = hashF(Math.floor(gx * 3.1) + Math.floor(gz * 5.7)) * 0.08;
         const col = [shade * (0.90 + patch), shade * (0.98 + patch * 0.5), shade * (0.82 - patch * 0.3)];
-        const x1 = Math.min(gx + LCELL, maxx), z1 = Math.min(gz + LCELL, maxz);
         lawn.quad([gx, 0.015, gz], [gx, 0.015, z1], [x1, 0.015, z1], [x1, 0.015, gz], [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
       }
     }

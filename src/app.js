@@ -2,30 +2,32 @@
 // merged meshes → props → player → loop. Same generation logic as the
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260618p';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260620v2';
-import { Player } from './player.js?v=20260618p';
-import { MiniMap } from './minimap.js?v=20260618p';
-import { StreetLife } from './npcs.js?v=20260618p';
-import { sanitizeImported } from './glbutil.js?v=20260618p';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260620v2';
-import { Net } from './net.js?v=20260618p';
-import { ChatUI, showBubble } from './chat.js?v=20260618p';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260618p';
-import { authRequest } from './rpg/account.js?v=20260618p';
-import { MobField } from './rpg/mobs.js?v=20260618p';
-import { Inventory } from './rpg/loot.js?v=20260618p';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260618p';
-import { Combat } from './rpg/combat.js?v=20260618p';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260618p';
-import { Effects } from './rpg/effects.js?v=20260618p';
-import { attachWeaponByName } from './weapons.js?v=20260620w';
-import { createTextureKit, scheduleWorldNormals, grain, createGroundVariationTexture } from './worldmat.js?v=20260620v2';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260701c';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260701c';
+import { Player } from './player.js?v=20260701c';
+import { MiniMap } from './minimap.js?v=20260701c';
+import { StreetLife } from './npcs.js?v=20260701c';
+import { sanitizeImported } from './glbutil.js?v=20260701c';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701c';
+import { Net } from './net.js?v=20260701c';
+import { ChatUI, showBubble } from './chat.js?v=20260701c';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701c';
+import { authRequest } from './rpg/account.js?v=20260701c';
+import { MobField } from './rpg/mobs.js?v=20260701c';
+import { Inventory } from './rpg/loot.js?v=20260701c';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260701c';
+import { Combat } from './rpg/combat.js?v=20260701c';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260701c';
+import { Effects } from './rpg/effects.js?v=20260701c';
+import { attachWeaponByName } from './weapons.js?v=20260701c';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260701c';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260701c';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260701c';
 
-const APP_VERSION = '20260620v2';
-window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'photo-textures-v2' };
+const APP_VERSION = '20260701c';
+const trailerConfig = getTrailerConfig();
+window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -59,7 +61,7 @@ function ensureBootOverlay() {
   if (ov) return ov;
   ov = document.createElement('div');
   ov.id = 'boot-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(14,17,22,.94);color:#fff;font:600 15px system-ui,sans-serif;';
+  ov.style.cssText = "position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(15,13,28,.95);color:#fff;font:500 15px 'Fredoka',system-ui,sans-serif;";
   const msg = document.createElement('div');
   msg.id = 'boot-overlay-msg';
   msg.textContent = 'Preparando…';
@@ -91,7 +93,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.84;
+renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
 
@@ -105,31 +107,45 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-const TEX = './assets/textures/';
 const MOD = './assets/models/';
-const worldTex = createTextureKit(renderer);
+const worldTex = createTextureKit();
 
 // pantalla de cuenta: Entrar o Crear cuenta (contra el server). Resuelve con el
 // objeto de auth { ok, god, char, token, user }. La cuenta zpw = GOD la valida el server.
 function showAuth() {
   return new Promise(resolve => {
+    const FONT = "'Fredoka', system-ui, sans-serif";
     const ov = document.createElement('div');
     ov.id = 'login';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:62;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#1b2433,#0b0f16);font-family:system-ui,sans-serif';
+    ov.className = 'sky-scene';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:62;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;overflow:hidden;font-family:' + FONT;
+    // atmosfera: nubes + skyline (reusa las clases del index)
+    for (const c of [
+      'width:210px;height:56px;left:10%;top:14%',
+      'width:160px;height:44px;left:70%;top:9%;opacity:.8',
+      'width:250px;height:60px;left:80%;top:36%;opacity:.65',
+      'width:170px;height:46px;left:26%;top:38%;opacity:.55',
+    ]) {
+      const cl = document.createElement('div'); cl.className = 'sky-cloud'; cl.style.cssText += c; ov.appendChild(cl);
+    }
+    const skyline = document.createElement('div'); skyline.className = 'sky-skyline'; ov.appendChild(skyline);
+    const logo = document.createElement('div');
+    logo.style.cssText = 'position:relative;text-align:center;line-height:.95';
+    logo.innerHTML = '<div style="font-size:clamp(40px,6.4vw,66px);font-weight:700;letter-spacing:1px;color:#fff;text-shadow:0 3px 0 rgba(29,66,84,.55),0 14px 42px rgba(19,46,80,.5)">LOS SAUCES</div>' +
+      '<div style="display:inline-block;margin-top:10px;font-size:13px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#16456b;background:rgba(255,255,255,.66);padding:5px 16px;border-radius:999px">San Borja · Lima · RPG</div>';
     const card = document.createElement('div');
-    card.style.cssText = 'background:rgba(18,24,36,.94);border:1px solid #2b3850;border-radius:16px;padding:28px 32px;width:320px;color:#e8edf6;box-shadow:0 24px 64px rgba(0,0,0,.55);text-align:center';
-    const h = document.createElement('div'); h.textContent = 'Los Sauces RPG'; h.style.cssText = 'font-size:23px;font-weight:800;letter-spacing:-.4px';
-    const sub = document.createElement('div'); sub.textContent = 'Crea tu cuenta y guarda tu progreso'; sub.style.cssText = 'font-size:12px;color:#8a93a3;margin:3px 0 16px';
+    card.style.cssText = 'position:relative;background:linear-gradient(180deg,rgba(30,26,52,.94),rgba(20,17,38,.96));border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:26px 30px;width:330px;color:#f2f0fa;box-shadow:0 40px 100px rgba(8,10,30,.6),inset 0 1px 0 rgba(255,255,255,.12);text-align:center';
+    const sub = document.createElement('div'); sub.textContent = 'Crea tu cuenta y guarda tu progreso'; sub.style.cssText = 'font-size:13px;font-weight:500;color:#a9a4c4;margin:0 0 14px';
     const tabs = document.createElement('div'); tabs.style.cssText = 'display:flex;gap:6px;margin-bottom:14px';
     const tabLogin = document.createElement('button');
     const tabReg = document.createElement('button');
-    const err = document.createElement('div'); err.style.cssText = 'min-height:16px;font-size:11.5px;color:#ff7a7a;margin:4px 0 2px';
+    const err = document.createElement('div'); err.style.cssText = 'min-height:16px;font-size:11.5px;font-weight:500;color:#ff8a7a;margin:4px 0 2px';
     let mode = 'login';
     const styleTabs = () => {
       for (const [b, m, label] of [[tabLogin, 'login', 'Entrar'], [tabReg, 'register', 'Crear cuenta']]) {
         b.textContent = label;
-        b.style.cssText = 'flex:1;padding:9px;border:0;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;' +
-          (mode === m ? 'background:#3f7fd4;color:#fff' : 'background:#1a2436;color:#8a93a3');
+        b.style.cssText = 'flex:1;padding:10px;border:0;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;font-family:' + FONT + ';transition:all .12s;' +
+          (mode === m ? 'background:linear-gradient(180deg,#ffe08a,#ffbe4d);color:#241a04;box-shadow:0 4px 14px rgba(255,190,77,.3)' : 'background:rgba(255,255,255,.07);color:#a9a4c4');
       }
     };
     tabLogin.onclick = () => { mode = 'login'; styleTabs(); err.textContent = ''; };
@@ -137,14 +153,15 @@ function showAuth() {
     tabs.append(tabLogin, tabReg);
     const u = document.createElement('input'); u.placeholder = 'Usuario'; u.autocomplete = 'off'; u.maxLength = 16;
     const p = document.createElement('input'); p.placeholder = 'Contraseña'; p.type = 'password'; p.maxLength = 64;
-    for (const i of [u, p]) i.style.cssText = 'width:100%;box-sizing:border-box;margin:6px 0;padding:11px 12px;border-radius:9px;border:1px solid #34425e;background:#0f1622;color:#e8edf6;font-size:14px;outline:none';
-    const btn = document.createElement('button'); btn.textContent = 'Continuar'; btn.style.cssText = 'margin-top:10px;width:100%;padding:11px;border:0;border-radius:9px;background:#3f7fd4;color:#fff;font-weight:700;font-size:15px;cursor:pointer';
-    const hint = document.createElement('div'); hint.textContent = 'Tu progreso (clase, nivel, inventario) se guarda en tu cuenta.'; hint.style.cssText = 'font-size:10px;color:#6b7280;margin-top:11px;line-height:1.4';
+    for (const i of [u, p]) i.style.cssText = 'width:100%;box-sizing:border-box;margin:6px 0;padding:12px 14px;border-radius:11px;border:2px solid rgba(255,255,255,.14);background:rgba(12,10,26,.7);color:#fff;font-size:14px;font-weight:500;outline:none;font-family:' + FONT;
+    const btn = document.createElement('button'); btn.textContent = 'Continuar';
+    btn.style.cssText = 'margin-top:10px;width:100%;padding:13px;border:0;border-radius:12px;background:linear-gradient(180deg,#ffe08a,#ffbe4d);color:#241a04;font-weight:700;font-size:15px;letter-spacing:.3px;cursor:pointer;font-family:' + FONT + ';box-shadow:0 8px 22px rgba(255,190,77,.35),inset 0 1px 0 rgba(255,255,255,.6)';
+    const hint = document.createElement('div'); hint.textContent = 'Tu progreso (clase, nivel, inventario) se guarda en tu cuenta.'; hint.style.cssText = 'font-size:10.5px;font-weight:500;color:#77729a;margin-top:11px;line-height:1.4';
     const guestBtn = document.createElement('button');
     guestBtn.textContent = 'Explorar sin guardar';
-    guestBtn.style.cssText = 'margin-top:12px;width:100%;padding:10px;border:1px solid #3a4a62;border-radius:9px;background:transparent;color:#a8b4c8;font-weight:600;font-size:13px;cursor:pointer';
-    card.append(h, sub, tabs, u, p, err, btn, guestBtn, hint);
-    ov.appendChild(card); document.body.appendChild(ov);
+    guestBtn.style.cssText = 'margin-top:12px;width:100%;padding:11px;border:2px solid rgba(255,255,255,.18);border-radius:12px;background:transparent;color:#cfcbe6;font-weight:600;font-size:13px;cursor:pointer;font-family:' + FONT;
+    card.append(sub, tabs, u, p, err, btn, guestBtn, hint);
+    ov.append(logo, card); document.body.appendChild(ov);
     styleTabs();
     const savedUser = localStorage.getItem(LS_USER);
     if (savedUser) u.value = savedUser;
@@ -184,12 +201,15 @@ function showClassPick(prefillName) {
     if (prefillName) nameI.value = prefillName;
     grid.replaceChildren();
     let sel = null;
+    const ACCENTS = { guerrero: '#ff6b5e', mago: '#8f7bff', arquero: '#5fd18a', encapuchado: '#58b6ff' };
     CLASS_LIST.forEach(c => {
       const card = document.createElement('button');
       card.className = 'ob-char';
+      card.style.setProperty('--ob-accent', ACCENTS[c.id] || '#ffcf5c');
       const eSpan = document.createElement('span'); eSpan.className = 'e'; eSpan.textContent = c.emoji;
       const nSpan = document.createElement('span'); nSpan.className = 'n'; nSpan.textContent = c.name;
-      card.append(eSpan, nSpan);
+      const rSpan = document.createElement('span'); rSpan.className = 'r'; rSpan.textContent = c.rol || '';
+      card.append(eSpan, nSpan, rSpan);
       card.onclick = () => {
         sel = c;
         [...grid.children].forEach(x => x.classList.remove('on'));
@@ -210,19 +230,16 @@ function showClassPick(prefillName) {
 
 async function boot() {
   setProgress(0.05, 'Construyendo Los Sauces…');
-  // HDRI: do not block first frame; gradient sky until load completes
-  scene.background = new THREE.Color(0xc5d4e8);
-  scene.environmentIntensity = 0.26;
-  scene.backgroundIntensity = 0.95;
-  new RGBELoader().loadAsync(TEX + 'sky.hdr').then((hdr) => {
-    hdr.mapping = THREE.EquirectangularReflectionMapping;
-    scene.background = hdr;
-    scene.environment = hdr;
-  }).catch((e) => console.warn('HDR load failed (non-fatal)', e));
+  // cielo TOON pintado (gradiente + nubes): background + IBL en uno, cero red
+  const skyTex = createToonSkyTexture();
+  scene.background = skyTex;
+  scene.environment = skyTex;
+  scene.environmentIntensity = 0.45;
+  scene.backgroundIntensity = 1.0;
   setProgress(0.12, 'Iluminación…');
 
-  const sun = new THREE.DirectionalLight(0xffe4b5, 3.35);
-  sun.position.set(72, 78, -52);
+  const sun = new THREE.DirectionalLight(0xfff1d0, 2.5);
+  sun.position.set(80, 96, -58);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
@@ -232,8 +249,8 @@ async function boot() {
   scene.add(sun);
   // hemisferio (cielo frio arriba, tierra calida abajo) en vez de ambient plano:
   // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
-  scene.add(new THREE.HemisphereLight(0xc8daf5, 0xa89070, 0.58));
-  scene.fog = new THREE.Fog(0xd0dae8, 165, 880);
+  scene.add(new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 0.55));
+  scene.fog = new THREE.Fog(0xdceefa, 230, 1050);
 
   // suelo base
   const groundVar = createGroundVariationTexture();
@@ -242,17 +259,17 @@ async function boot() {
     new THREE.PlaneGeometry(3000, 3000),
     new THREE.MeshStandardMaterial({
       map: worldTex.concrete,
-      color: 0x9a9488,
       roughness: 1,
       roughnessMap: groundVar,
     }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(-100, -0.01, 100);
-  ground.material.map.repeat.set(300, 300);
+  ground.material.map.repeat.set(700, 700);
   ground.receiveShadow = true;
   scene.add(ground);
 
   const data = await (await fetch('./assets/zone.json')).json();
+  const publicPoisPromise = loadPublicPois(APP_VERSION, data.pois || []);
   setProgress(0.28, 'Mapa OSM…');
   const city = new City(data, cityGenOptions());
   setProgress(0.48, 'Edificios y calles…');
@@ -267,18 +284,17 @@ async function boot() {
     scene.add(m);
     return m;
   };
-  // facades: vertex tint x plaster photo (reads as real Lima stucco/concrete)
+  // facades: color plano toon x vertex tint (KayKit-style, sin foto)
   worldTex.surface('wall', {
-    map: worldTex.plaster,
     vertexColors: true,
-    roughness: 0.92,
+    roughness: 0.95,
     side: THREE.DoubleSide,
   });
   addBucket(W.wall, worldTex._mats.wall);
   {
-    // vidrio toon: celeste plano, sin el metalness/reflejo realista
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc4d8, metalness: 0.1, roughness: 0.4, vertexColors: true, side: THREE.DoubleSide });
-    glassMat.envMapIntensity = 0.5;
+    // vidrio toon: celeste con un toque de cielo reflejado
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x86c5e8, metalness: 0.1, roughness: 0.35, vertexColors: true, side: THREE.DoubleSide });
+    glassMat.envMapIntensity = 0.8;
     addBucket(W.glass, glassMat);
   }
   addBucket(W.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
@@ -287,15 +303,15 @@ async function boot() {
   setProgress(0.7);
 
   const R = buildRoads(city);
-  // calles: foto asfalto / vereda / loseta (fallback grain si falla la red)
-  worldTex.surface('road', { map: worldTex.asphalt, color: 0xd8d8d8, roughness: 0.98 });
-  worldTex.surface('walk', { map: worldTex.sidewalk, color: 0xe8e2d6, roughness: 0.95 });
-  worldTex.surface('path', { map: worldTex.paving, color: 0xddd4c4, roughness: 0.96 });
+  // calles: superficies toon planas (el color vive en el canvas del kit)
+  worldTex.surface('road', { map: worldTex.asphalt, roughness: 0.98 });
+  worldTex.surface('walk', { map: worldTex.sidewalk, roughness: 0.95 });
+  worldTex.surface('path', { map: worldTex.paving, roughness: 0.96 });
   addBucket(R.road, worldTex._mats.road, false);
   addBucket(R.walk, worldTex._mats.walk, false);
-  addBucket(R.berma, new THREE.MeshStandardMaterial({ map: worldTex.grass, color: 0x8fbf5a, roughness: 1 }), false);
+  addBucket(R.berma, new THREE.MeshStandardMaterial({ map: worldTex.grass, roughness: 1 }), false);
   addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.72 }), false);
-  addBucket(R.median, new THREE.MeshStandardMaterial({ map: worldTex.grass, color: 0x7aad48, roughness: 1 }), false);
+  addBucket(R.median, new THREE.MeshStandardMaterial({ map: worldTex.paving, color: 0xe6ddc8, roughness: 0.96 }), false);
   addBucket(R.curb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), false);
   addBucket(R.path, worldTex._mats.path, false);
   // tableros/parapetos de puentes elevados (trebol): concreto toon, proyecta sombra
@@ -306,7 +322,7 @@ async function boot() {
   const P = buildParks(city);
   worldTex.surface('lawn', { map: worldTex.grass, vertexColors: true, roughness: 0.98 });
   addBucket(P.lawn, worldTex._mats.lawn, false);
-  addBucket(P.plaza, new THREE.MeshStandardMaterial({ map: worldTex.paving, color: 0xddd0b8, vertexColors: true, roughness: 0.9 }), false);
+  addBucket(P.plaza, new THREE.MeshStandardMaterial({ map: worldTex.paving, vertexColors: true, roughness: 0.9 }), false);
   addBucket(P.feature, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), true);
 
   // props instanciados
@@ -372,48 +388,8 @@ async function boot() {
       plantTrees(F.medianTrees, [3.4, 4.6], 16);
       plantTrees(P.parkTrees, [4.6, 7.2], 41);
       if (data.trees?.length) plantTrees(data.trees, [4.0, 5.6], 77);
-      const scatter = [
-        ['Bush_1_A_Color1', [0.5, 0.9], 51], ['Bush_2_A_Color1', [0.6, 1.0], 52],
-        ['Rock_1_A_Color1', [0.4, 0.9], 53], ['Rock_2_A_Color1', [0.3, 0.6], 54],
-        ['Grass_2_A_Color1', [0.5, 0.8], 55],
-      ];
-      scatter.forEach(([nm, h, seed], k) => {
-        if (fnode[nm]) instancedRoot(fnode[nm], P.parkScatter.filter((_, i) => i % scatter.length === k),
-          { fit: true, h, lift: true, randRot: true, seed });
-      });
+
     } catch (e) { console.warn('Forest GLB deferred load failed', e); }
-    for (const poi of (data.pois || [])) {
-      const col = poi.c === 'food' ? '#c45a12' : '#1a6b9c';
-      const cv = document.createElement('canvas');
-      cv.width = 128;
-      cv.height = 128;
-      const c2 = cv.getContext('2d');
-      c2.fillStyle = col;
-      c2.beginPath();
-      c2.roundRect(8, 8, 112, 112, 18);
-      c2.fill();
-      c2.fillStyle = '#f5f3ea';
-      c2.font = 'bold 52px Arial';
-      c2.textAlign = 'center';
-      c2.textBaseline = 'middle';
-      c2.fillText(poi.c === 'food' ? '☕' : '●', 64, 64);
-      const t = new THREE.CanvasTexture(cv);
-      t.colorSpace = THREE.SRGBColorSpace;
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.05, 1.6, 6),
-        new THREE.MeshStandardMaterial({ color: 0x4a4e54, roughness: 0.7, metalness: 0.25 }),
-      );
-      pole.position.set(poi.x, 0.8, poi.z);
-      pole.castShadow = true;
-      scene.add(pole);
-      const sign = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.55, 0.55),
-        new THREE.MeshStandardMaterial({ map: t, roughness: 0.55 }),
-      );
-      sign.position.set(poi.x, 1.55, poi.z);
-      sign.rotation.y = Math.random() * Math.PI * 2;
-      scene.add(sign);
-    }
     const carSpots = [];
     {
       const rng = mulberry32(777);
@@ -502,39 +478,6 @@ async function boot() {
     scene.add(new THREE.LineSegments(cgeo, new THREE.LineBasicMaterial({ color: 0x141310 })));
   }
 
-  // remate en fin de via (borde de zona): seto cruzando la pista para que
-  // las calles truncadas del OSM no mueran contra una pared de edificios
-  {
-    const ends = [];
-    for (const r of city.data.roads) {
-      const full = r.w ?? 6;
-      if (full < 5 || r.bridge || r.p.length < 2) continue;
-      if (/^(motorway|trunk)/.test(r.t || '')) continue;   // sin setos cruzando autopistas/ramales
-      for (const end of [0, r.p.length - 1]) {
-        const p = r.p[end], q2 = r.p[end === 0 ? 1 : r.p.length - 2];
-        const L = Math.hypot(q2[0] - p[0], q2[1] - p[1]);
-        if (L < 2) continue;
-        const ux = (q2[0] - p[0]) / L, uz = (q2[1] - p[1]) / L;
-        if (city.nearOtherRoad(p[0] + ux * 0.3, p[1] + uz * 0.3, p[0], p[1], q2[0], q2[1])) continue;
-        ends.push([p[0] + ux * 1.6, p[1] + uz * 1.6, Math.atan2(ux, uz), full]);
-      }
-    }
-    if (ends.length) {
-      const hedgeGeo = new THREE.BoxGeometry(1, 1.25, 1.0);
-      hedgeGeo.translate(0, 0.62, 0);
-      const im = new THREE.InstancedMesh(hedgeGeo,
-        new THREE.MeshStandardMaterial({ color: 0x375a22, roughness: 1 }), ends.length);
-      im.castShadow = true;
-      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-      ends.forEach((e, i) => {
-        q.setFromAxisAngle(up, e[2]);
-        // yaw mapea +X perpendicular a la via → escalar X cubre el ancho
-        m4.compose(new THREE.Vector3(e[0], 0, e[1]), q, new THREE.Vector3(e[3] * 0.92, 1, 1));
-        im.setMatrixAt(i, m4);
-      });
-      scene.add(im);
-    }
-  }
 
   // señales de calle verdes con los nombres REALES del OSM, en las esquinas
   {
@@ -611,9 +554,11 @@ async function boot() {
   // onboarding: cuenta o invitado antes de spawnear
   setProgress(1, 'Cuenta…');
   document.getElementById('loading').remove();
-  const auth = await showAuth();   // { ok, god, char, token, user, guest? }
+  const auth = trailerConfig.enabled ? getTrailerAuth() : await showAuth();   // { ok, god, char, token, user, guest? }
   let choice;
-  if (auth.god) {
+  if (trailerConfig.enabled) {
+    choice = getTrailerChoice(trailerConfig);
+  } else if (auth.god) {
     choice = { char: CERNUNNOS.char, name: CERNUNNOS.name, className: 'cernunnos', god: true };
   } else if (auth.char && auth.char.charFile) {
     choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className };
@@ -624,15 +569,16 @@ async function boot() {
   }
 
   setBootOverlay(0.08, 'Cargando personaje…');
-  const player = new Player(scene, city, [-4.2, 47.1], choice);
+  const playerSpawn = trailerConfig.enabled && P.landmark ? [P.landmark[0], P.landmark[1] + 8] : [-4.2, 47.1];
+  const player = new Player(scene, city, playerSpawn, choice);
   await player.load();
   setBootOverlay(0.42, 'Conectando al barrio…');
   const life = new StreetLife(scene, city);
   const seatSpots = [...P.parkBenches, ...F.benches].filter((_, i) => i % 3 === 0).slice(0, 18);
-  window.__game = { player, city, scene };
+  window.__game = { player, city, scene, renderer, camera };
   const minimap = new MiniMap(city, document.getElementById('minimap'));
   const coordsEl = document.getElementById('coords');
-  const net = new Net(scene, player, auth.token);
+  const net = trailerConfig.enabled && trailerConfig.offline ? createTrailerNet() : new Net(scene, player, auth.token);
   window.__game.net = net;
 
   // ===== MODO RPG (local) =====
@@ -649,6 +595,11 @@ async function boot() {
   const effects = new Effects(scene, () => camera);
   // HUD + progresion + quest + inventario
   const hud = new HUD(document.body);
+  const publicPois = await publicPoisPromise;
+  buildPoiSigns(scene, publicPois);
+  const poiUi = installPoiInteractions({ pois: publicPois, city, player });
+  window.__game.publicPois = publicPois;
+  window.__game.poiUi = poiUi;
   const qPanel = document.querySelector('.rpg-hud-quest');   // quest quitado: ocultar el tracker
   if (qPanel) qPanel.style.display = 'none';
   const progress = new Progress(() => { saveChar(); });   // al subir de nivel, guardar
@@ -677,6 +628,23 @@ async function boot() {
     },
   });
   window.__game.rpg = { mobField, combat, inventory, progress, hud };
+  const trailer = trailerConfig.enabled ? createTrailerMode({
+    config: trailerConfig,
+    scene,
+    camera,
+    renderer,
+    player,
+    net,
+    mobField,
+    combat,
+    hud,
+    P,
+    publicPois,
+    poiUi,
+    coordsEl,
+    minimap,
+  }) : null;
+  if (trailer) window.__game.trailer = trailer;
 
   // ===== PARTY: invitar con G al jugador mas cercano; aceptar con Y =====
   const partyPanel = document.createElement('div');
@@ -804,11 +772,11 @@ async function boot() {
     if (firstPlayable) {
       firstPlayable = false;
       hideBootOverlay();
-      scheduleWorldNormals(worldTex);
       loadHeavyDecor().catch((e) => console.warn('Deferred decor failed', e));
       mobField.load().catch((e) => console.warn('MobField deferred load failed', e));
       life.load(40, seatSpots, P.parkTrees).catch((e) => console.warn('StreetLife deferred load failed', e));
     }
+    if (trailer) trailer.beforeFrame(dt);
     player.update(dt, camera);
     life.update(dt, player.pos);
     net.update(dt, player);
@@ -822,16 +790,18 @@ async function boot() {
     const texel = 180 / 2048;
     const snapX = Math.round(player.pos.x / texel) * texel;
     const snapZ = Math.round(player.pos.z / texel) * texel;
-    sun.position.set(snapX + 80, 70, snapZ - 58);
+    sun.position.set(snapX + 80, 96, snapZ - 58);
     sun.target.position.set(snapX, 0, snapZ);
     sun.target.updateMatrixWorld();
     streetT -= dt;
     if (streetT <= 0) {
       streetT = 0.2;
       minimap.updateStreet(player.pos.x, player.pos.z);
+      poiUi.update(player.pos.x, player.pos.z);
       coordsEl.textContent = 'X ' + Math.round(player.pos.x) + ' · Z ' + Math.round(player.pos.z);
     }
     minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes);
+    if (trailer) trailer.afterFrame(dt);
     renderer.render(scene, camera);
   });
 }

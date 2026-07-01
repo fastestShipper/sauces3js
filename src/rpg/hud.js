@@ -12,34 +12,47 @@ function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
   const css = `
 .rpg-hud-root { position: fixed; inset: 0; pointer-events: none; z-index: 40;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #f4f4f8; }
+  font-family: 'Fredoka', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #f4f4f8; }
 .rpg-hud-root * { box-sizing: border-box; }
-.rpg-hud-panel { position: fixed; background: rgba(14,16,24,0.62);
-  border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; padding: 8px 10px;
-  backdrop-filter: blur(3px); text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+.rpg-hud-panel { position: fixed; background: rgba(23,20,41,0.82);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 10px 12px;
+  backdrop-filter: blur(4px); text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+  box-shadow: 0 12px 32px rgba(10,8,24,.38), inset 0 1px 0 rgba(255,255,255,.09); }
 .rpg-hud-bottom { left: 50%; bottom: 16px; transform: translateX(-50%);
-  width: 280px; display: flex; flex-direction: column; gap: 6px; }
-.rpg-hud-label { font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
-  display: flex; justify-content: space-between; margin-bottom: 3px; opacity: 0.92; }
-.rpg-hud-bar { position: relative; height: 14px; border-radius: 7px;
-  background: rgba(0,0,0,0.5); overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.6); }
-.rpg-hud-fill { position: absolute; inset: 0; width: 0%; border-radius: 7px;
+  width: 316px; display: flex; flex-direction: column; gap: 7px;
+  padding: 12px 14px 12px 62px; }
+.rpg-hud-lvl-badge { position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center;
+  background: linear-gradient(180deg, #ffe08a, #ffbe4d); color: #241a04;
+  font-size: 19px; font-weight: 700; text-shadow: none;
+  box-shadow: 0 4px 14px rgba(255,190,77,.4), inset 0 1px 0 rgba(255,255,255,.65),
+    0 0 0 3px rgba(23,20,41,.9); }
+.rpg-hud-label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+  display: flex; justify-content: space-between; margin-bottom: 3px; opacity: 0.95; }
+.rpg-hud-bar { position: relative; height: 15px; border-radius: 999px;
+  background: rgba(8,6,18,0.72); overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,.08); }
+.rpg-hud-fill { position: absolute; inset: 0; width: 0%; border-radius: 999px;
   transition: width 280ms cubic-bezier(0.16,1,0.3,1); }
-.rpg-hud-fill-hp { background: linear-gradient(90deg, #c0392b, #e74c3c); }
-.rpg-hud-fill-xp { background: linear-gradient(90deg, #2d8f5a, #51d98a); }
-.rpg-hud-fill-foe { background: linear-gradient(90deg, #b03020, #ff5a3c); }
+.rpg-hud-fill::after { content: ''; position: absolute; left: 0; right: 0; top: 0;
+  height: 48%; border-radius: 999px 999px 0 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.42), rgba(255,255,255,0)); }
+.rpg-hud-fill-hp { background: linear-gradient(180deg, #ff7a5c, #e33d28); }
+.rpg-hud-fill-xp { background: linear-gradient(180deg, #ffe08a, #f5a623); }
+.rpg-hud-fill-foe { background: linear-gradient(180deg, #ff8a5c, #d63420); }
 .rpg-hud-target { top: 14px; left: 50%; transform: translateX(-50%);
-  width: 240px; text-align: center; display: none; }
+  width: 250px; text-align: center; display: none; border-color: rgba(255,120,90,.4); }
 .rpg-hud-target.is-on { display: block; }
-.rpg-hud-target .rpg-hud-name { font-size: 13px; font-weight: 800;
-  margin-bottom: 5px; letter-spacing: 0.3px; }
+.rpg-hud-target .rpg-hud-name { font-size: 14px; font-weight: 700;
+  margin-bottom: 6px; letter-spacing: 0.3px; color: #ffd9c8; }
 .rpg-hud-quest { top: 188px; right: 14px; width: 196px; font-size: 12px; line-height: 1.35; }
-.rpg-hud-quest .rpg-hud-qtitle { font-weight: 800; font-size: 10px; letter-spacing: 0.6px;
+.rpg-hud-quest .rpg-hud-qtitle { font-weight: 700; font-size: 10px; letter-spacing: 0.6px;
   text-transform: uppercase; opacity: 0.7; margin-bottom: 3px; }
-.rpg-hud-quest .rpg-hud-qcount { float: right; font-weight: 800; color: #ffe08a; }
+.rpg-hud-quest .rpg-hud-qcount { float: right; font-weight: 700; color: #ffe08a; }
 .rpg-hud-toast { left: 50%; top: 38%; transform: translate(-50%, -8px);
-  background: rgba(20,16,32,0.78); border-color: rgba(255,224,138,0.45);
-  font-size: 15px; font-weight: 800; letter-spacing: 0.3px; text-align: center;
+  background: rgba(20,16,32,0.85); border-color: rgba(255,224,138,0.5);
+  font-size: 15px; font-weight: 600; letter-spacing: 0.3px; text-align: center;
+  padding: 12px 20px; border-radius: 14px;
   opacity: 0; transition: opacity 320ms ease, transform 320ms ease; pointer-events: none; }
 .rpg-hud-toast.is-on { opacity: 1; transform: translate(-50%, 0); }`;
   const el = document.createElement('style');
@@ -60,6 +73,7 @@ export class HUD {
     root.className = 'rpg-hud-root';
     root.innerHTML = `
       <div class="rpg-hud-panel rpg-hud-bottom">
+        <div class="rpg-hud-lvl-badge">1</div>
         <div>
           <div class="rpg-hud-label"><span>VIDA</span><span class="rpg-hud-hp-num">0/0</span></div>
           <div class="rpg-hud-bar"><div class="rpg-hud-fill rpg-hud-fill-hp"></div></div>
@@ -86,6 +100,7 @@ export class HUD {
     this.elXpFill = root.querySelector('.rpg-hud-fill-xp');
     this.elXpNum = root.querySelector('.rpg-hud-xp-num');
     this.elXpLvl = root.querySelector('.rpg-hud-xp-lvl');
+    this.elLvlBadge = root.querySelector('.rpg-hud-lvl-badge');
     this.elTarget = root.querySelector('.rpg-hud-target');
     this.elTargetName = root.querySelector('.rpg-hud-target .rpg-hud-name');
     this.elTargetFill = root.querySelector('.rpg-hud-fill-foe');
@@ -108,6 +123,7 @@ export class HUD {
     this.elXpFill.style.width = (clamp01(c / m) * 100).toFixed(1) + '%';
     this.elXpNum.textContent = `${c}/${m}`;
     this.elXpLvl.textContent = `Nivel ${level == null ? 1 : level}`;
+    if (this.elLvlBadge) this.elLvlBadge.textContent = String(level == null ? 1 : level);
   }
 
   showTarget(name, hp, hpMax) {
