@@ -464,6 +464,66 @@ function removeFromParty(connId) {
 }
 
 // ---------------------------------------------------------------------------
+// PVP: golpes jugador-a-jugador via relay. El server valida rango, cadencia,
+// party y zona segura; la VIDA sigue siendo del cliente victima (como phit).
+// ---------------------------------------------------------------------------
+
+const PVP_RANGE = 5.0;
+const PVP_DMG_MAX = 300;
+const PVP_CD_MS = 650;
+const SAFE_X = -62, SAFE_Z = -7, SAFE_R = 30;   // gruta / respawn = zona segura
+
+function inSafeZone(c) {
+  if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) return true;
+  return Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R;
+}
+
+function samePartyIds(a, b) {
+  const pa = partyOf.get(a);
+  return !!pa && pa === partyOf.get(b);
+}
+
+// ---------------------------------------------------------------------------
+// FRIENDS: amistades mutuas persistidas en la cuenta (accounts.json). Solo
+// cuentas logueadas; los invitados no tienen friends. Presencia via flist push.
+// ---------------------------------------------------------------------------
+
+const FRIENDS_CAP = 50;
+
+function accountFriends(user) {
+  const acc = store.accounts[user];
+  if (!acc) return [];
+  if (!Array.isArray(acc.friends)) acc.friends = [];
+  return acc.friends;
+}
+
+function friendsPayload(user) {
+  const online = new Map();   // accountUser -> connId
+  for (const [cid, c] of clients) if (c.account) online.set(c.account, cid);
+  return accountFriends(user).map((u) => ({
+    user: u,
+    online: online.has(u),
+    id: online.has(u) ? online.get(u) : null,
+  }));
+}
+
+function pushFriendList(user) {
+  for (const [, c] of clients) {
+    if (c.account === user) send(c.ws, { t: 'flist', friends: friendsPayload(user) });
+  }
+}
+
+// cuando `user` entra o sale, refresca el flist de sus amigos conectados
+function notifyFriendPresence(user) {
+  if (!user) return;
+  for (const [, c] of clients) {
+    if (c.account && c.account !== user && accountFriends(c.account).includes(user)) {
+      send(c.ws, { t: 'flist', friends: friendsPayload(c.account) });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // conexion WS
 // ---------------------------------------------------------------------------
 
@@ -553,6 +613,11 @@ wss.on('connection', (ws, req) => {
       // estado actual de los mobs compartidos (server-authoritative).
       send(ws, { t: 'mobs', list: [...mobs.values()].map(mobView) });
       broadcast(id, { t: 'join', id, name: me.name, char: me.char, x: me.x, z: me.z, h: me.h, a: me.a });
+      // presencia: avisa a mis amigos conectados que entre, y mandame mi lista
+      if (me.account) {
+        notifyFriendPresence(me.account);
+        send(ws, { t: 'flist', friends: friendsPayload(me.account) });
+      }
     } else if (m.t === 's') {
       me.x = m.x; me.z = m.z; me.h = m.h; me.a = m.a;
       broadcast(id, { t: 's', id, x: m.x, z: m.z, h: m.h, a: m.a });
@@ -637,6 +702,57 @@ wss.on('connection', (ws, req) => {
       const stillPid = removeFromParty(id);
       send(ws, { t: 'party', members: [] });
       if (stillPid) sendPartyToMembers(stillPid);
+
+    // --- PVP ---
+    } else if (m.t === 'pvp') {
+      const to = Number(m.to);
+      if (!Number.isInteger(to) || to === id) return;
+      const target = clients.get(to);
+      if (!target) return;
+      if (!Number.isFinite(me.x) || !Number.isFinite(target.x)) return;
+      if (Math.hypot(target.x - me.x, target.z - me.z) > PVP_RANGE) return;
+      if (samePartyIds(id, to)) return;
+      if (inSafeZone(me) || inSafeZone(target)) { send(ws, { t: 'pvpsafe' }); return; }
+      const now = Date.now();
+      if (me.lastPvpMs && now - me.lastPvpMs < PVP_CD_MS) return;
+      me.lastPvpMs = now;
+      const dmg = clampNum(m.dmg, 0, PVP_DMG_MAX);
+      send(target.ws, { t: 'pvph', from: id, name: me.name, dmg });
+
+    } else if (m.t === 'pvpdead') {
+      // la victima anuncia su muerte PvP -> kill feed global
+      const by = Number(m.by);
+      const killer = Number.isInteger(by) ? clients.get(by) : null;
+      broadcastAll({ t: 'pvpkill', killer: killer ? killer.name : 'Alguien', victim: me.name });
+
+    // --- FRIENDS ---
+    } else if (m.t === 'flist') {
+      if (!me.account) { send(ws, { t: 'flist', friends: [], guest: true }); return; }
+      send(ws, { t: 'flist', friends: friendsPayload(me.account) });
+
+    } else if (m.t === 'freq') {
+      if (!me.account) { send(ws, { t: 'ferr', error: 'Necesitas una cuenta para tener amigos' }); return; }
+      const to = Number(m.to);
+      if (!Number.isInteger(to) || to === id) return;
+      const target = clients.get(to);
+      if (!target) return;
+      if (!target.account) { send(ws, { t: 'ferr', error: 'Ese jugador explora sin cuenta' }); return; }
+      if (target.account === me.account) return;
+      if (accountFriends(me.account).includes(target.account)) { send(ws, { t: 'ferr', error: 'Ya son amigos' }); return; }
+      send(target.ws, { t: 'freqin', from: id, name: me.name, user: me.account });
+
+    } else if (m.t === 'facc') {
+      if (!me.account) return;
+      const from = Number(m.from);
+      const requester = Number.isInteger(from) ? clients.get(from) : null;
+      if (!requester || !requester.account || requester.account === me.account) return;
+      const mine = accountFriends(me.account);
+      const theirs = accountFriends(requester.account);
+      if (!mine.includes(requester.account) && mine.length < FRIENDS_CAP) mine.push(requester.account);
+      if (!theirs.includes(me.account) && theirs.length < FRIENDS_CAP) theirs.push(me.account);
+      markDirty();
+      pushFriendList(me.account);
+      pushFriendList(requester.account);
     }
   });
 
@@ -646,6 +762,7 @@ wss.on('connection', (ws, req) => {
     clients.delete(id);
     if (stillPid) sendPartyToMembers(stillPid);
     broadcast(id, { t: 'leave', id });
+    if (me.account) notifyFriendPresence(me.account);   // presencia: quedo offline
   });
   ws.on('error', () => {});
 });

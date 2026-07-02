@@ -3,29 +3,30 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260701d';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260701d';
-import { Player } from './player.js?v=20260701d';
-import { MiniMap } from './minimap.js?v=20260701d';
-import { StreetLife } from './npcs.js?v=20260701d';
-import { sanitizeImported } from './glbutil.js?v=20260701d';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701d';
-import { Net } from './net.js?v=20260701d';
-import { ChatUI, showBubble } from './chat.js?v=20260701d';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701d';
-import { authRequest } from './rpg/account.js?v=20260701d';
-import { MobField } from './rpg/mobs.js?v=20260701d';
-import { Inventory } from './rpg/loot.js?v=20260701d';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260701d';
-import { Combat } from './rpg/combat.js?v=20260701d';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260701d';
-import { Effects } from './rpg/effects.js?v=20260701d';
-import { attachWeaponByName } from './weapons.js?v=20260701d';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260701d';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260701d';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260701d';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260701e';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260701e';
+import { Player } from './player.js?v=20260701e';
+import { MiniMap } from './minimap.js?v=20260701e';
+import { StreetLife } from './npcs.js?v=20260701e';
+import { sanitizeImported } from './glbutil.js?v=20260701e';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701e';
+import { Net } from './net.js?v=20260701e';
+import { ChatUI, showBubble } from './chat.js?v=20260701e';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701e';
+import { authRequest } from './rpg/account.js?v=20260701e';
+import { MobField } from './rpg/mobs.js?v=20260701e';
+import { Inventory } from './rpg/loot.js?v=20260701e';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260701e';
+import { Combat } from './rpg/combat.js?v=20260701e';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260701e';
+import { Effects } from './rpg/effects.js?v=20260701e';
+import { attachWeaponByName } from './weapons.js?v=20260701e';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260701e';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260701e';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260701e';
+import { SocialPanel } from './social.js?v=20260701e';
 
-const APP_VERSION = '20260701d';
+const APP_VERSION = '20260701e';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -678,6 +679,16 @@ async function boot() {
       else hud.toast('No hay nadie cerca para invitar.');
     }
   });
+
+  // ===== SOCIAL (tecla O): amigos + cerca + party. Envuelve net.onParty, por
+  // eso se crea DESPUES del panel de party (si no, la asignacion lo pisa) =====
+  const social = new SocialPanel({ net, hud, player, isGuest: !!auth.guest });
+  window.__game.social = social;
+
+  // ===== PVP: daño entrante, kill feed y zona segura =====
+  net.onPvpHit = (hit) => combat.takePvpHit(hit);
+  net.onPvpKill = (killer, victim) => hud.toast('⚔ ' + killer + ' eliminó a ' + victim);
+  net.onPvpSafe = () => hud.toast('Zona segura: aquí no hay PvP.');
 
   // ===== PERSISTENCIA: guardar/cargar el personaje en la cuenta =====
   const charSnapshot = () => ({

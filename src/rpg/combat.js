@@ -30,6 +30,7 @@ export class Combat {
     this.onKillRewards = opts.onKillRewards || null;   // (info) -> oro/loot (etapa economia)
     this.skills = opts.skills || null;                 // SkillSystem (etapa skills)
     this.targetId = null;
+    this.pvpId = null;       // conn-id del jugador targeteado (excluyente con targetId)
     this.attackCd = 0;
     this.dead = false;
     this.respawnT = 0;
@@ -56,25 +57,65 @@ export class Combat {
     this.ray.setFromCamera(ndc, this.camera);
     const hits = this.ray.intersectObjects(this.mobField.meshes(), true);
     const mob = this.mobField.pickFromIntersections(hits);
-    if (mob) this._setTarget(mob.id);
+    if (mob) { this._setTarget(mob.id); return; }
+    // sin mob bajo el mouse: probar contra los JUGADORES remotos (PvP)
+    const roots = [];
+    const byRoot = new Map();
+    for (const [pid, r] of this.net.remotes) {
+      if (!r.ready || this._inParty(pid)) continue;
+      roots.push(r.root);
+      byRoot.set(r.root, pid);
+    }
+    if (!roots.length) return;
+    for (const h of this.ray.intersectObjects(roots, true)) {
+      let o = h.object;
+      while (o && !byRoot.has(o)) o = o.parent;
+      if (o) { this._setPvpTarget(byRoot.get(o)); return; }
+    }
+  }
+
+  _inParty(pid) {
+    return this.net.party.some((mem) => mem.id === pid);
   }
 
   _cycleTarget() {
+    // TAB: el hostil mas cercano, sea esqueleto o jugador (fuera de mi party)
     const p = this.player.pos;
-    let best = null, bd = 1e9;
+    let best = null, bd = 1e9, kind = null;
     for (const m of this.net.mobs.values()) {
       const d = Math.hypot(m.x - p.x, m.z - p.z);
-      if (d < bd) { bd = d; best = m; }
+      if (d < bd) { bd = d; best = m.id; kind = 'mob'; }
     }
-    if (best && bd < 35) this._setTarget(best.id);
+    for (const [pid, r] of this.net.remotes) {
+      if (!r.ready || this._inParty(pid)) continue;
+      const d = Math.hypot(r.x - p.x, r.z - p.z);
+      if (d < bd) { bd = d; best = pid; kind = 'player'; }
+    }
+    if (best == null || bd >= 35) return;
+    if (kind === 'mob') this._setTarget(best);
+    else this._setPvpTarget(best);
+  }
+
+  _clearMobTarget() {
+    if (this.targetId != null) this.mobField.setTargeted(this.targetId, false);
+    this.targetId = null;
   }
 
   _setTarget(id) {
+    this.pvpId = null;
     if (this.targetId && this.targetId !== id) this.mobField.setTargeted(this.targetId, false);
     this.targetId = id;
     this.mobField.setTargeted(id, true);
     const m = this.net.mobs.get(id);
     if (m) this.hud.showTarget('Esqueleto Nv.' + m.lvl, m.hp, m.hpMax);
+  }
+
+  _setPvpTarget(pid) {
+    this._clearMobTarget();
+    this.pvpId = pid;
+    const r = this.net.remotes.get(pid);
+    // vida del rival es de SU cliente: mostramos frame con barra llena
+    this.hud.showTarget('⚔ ' + ((r && r.name) || 'Jugador'), 1, 1);
   }
 
   _playerAtk() {
@@ -94,6 +135,7 @@ export class Combat {
       return;
     }
     if (this.targetId && !this.net.mobs.has(this.targetId)) { this.targetId = null; this.hud.hideTarget(); }
+    if (this.pvpId != null && !this.net.remotes.has(this.pvpId)) { this.pvpId = null; this.hud.hideTarget(); }
 
     this.attackCd -= dt;
     const target = this.targetId ? this.net.mobs.get(this.targetId) : null;
@@ -112,6 +154,44 @@ export class Combat {
         this.net.attackMob(this.targetId, atk);    // el SERVER aplica el dano (compartido)
         this.hud.showTarget('Esqueleto Nv.' + target.lvl, target.hp, target.hpMax);
       }
+      return;
+    }
+    // PvP: auto-ataque contra el jugador targeteado (el server valida rango/zona)
+    const rival = this.pvpId != null ? this.net.remotes.get(this.pvpId) : null;
+    if (rival && rival.ready) {
+      const d = Math.hypot(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
+      if (d < ATTACK_RANGE && this.attackCd <= 0 && !this.player.locked && !this._isMoving()) {
+        this.attackCd = ATTACK_CD;
+        this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
+        this.player.attack();
+        const atk = this._playerAtk();
+        if (this.effects) {
+          const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
+          if (ptype) this.effects.projectile({ x: this.player.pos.x, y: 1.35, z: this.player.pos.z }, { x: rival.x, y: 0.9, z: rival.z }, ptype);
+          this.effects.bloodHit({ x: rival.x, y: 1.0, z: rival.z });
+        }
+        if (this.skills) this.skills.onHit();
+        this.net.attackPlayer(this.pvpId, atk);   // el SERVER valida y se lo manda a la victima
+      }
+    }
+  }
+
+  // dano PvP entrante (de otro jugador, ya validado por el server)
+  takePvpHit(hit) {
+    if (this.dead || !hit) return;
+    const dmg = Math.max(0, Number(hit.dmg) || 0);
+    if (!dmg) return;
+    this.hp = Math.max(0, this.hp - dmg);
+    this.hud.setHP(this.hp, this.hpMax);
+    this.player.playHit();
+    if (this.skills) this.skills.gainRageFromDamage(8);
+    if (this.effects) {
+      this.effects.bloodHit({ x: this.player.pos.x, y: 1.1, z: this.player.pos.z });
+      this.effects.damageNumber({ x: this.player.pos.x, y: 2.2, z: this.player.pos.z }, dmg, { toPlayer: true });
+    }
+    if (this.hp <= 0) {
+      this.net.pvpDead(hit.from);   // kill feed: el server anuncia quien me mato
+      this._die();
     }
   }
 
@@ -181,6 +261,7 @@ export class Combat {
     this.dead = true;
     this.respawnT = RESPAWN_T;
     this.targetId = null;
+    this.pvpId = null;
     this.hud.hideTarget();
     this.player.locked = true;
     this.player.setDead(true);

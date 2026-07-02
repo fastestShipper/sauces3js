@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260701d';
-import { makeNametag } from './nametag.js?v=20260701d';
-import { cloneSkinned } from './npcs.js?v=20260701d';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701d';
-import { showBubble } from './chat.js?v=20260701d';
-import { WS_URL } from './rpg/account.js?v=20260701d';
+import { sanitizeImported } from './glbutil.js?v=20260701e';
+import { makeNametag } from './nametag.js?v=20260701e';
+import { cloneSkinned } from './npcs.js?v=20260701e';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701e';
+import { showBubble } from './chat.js?v=20260701e';
+import { WS_URL } from './rpg/account.js?v=20260701e';
 
 const SCALE = 1.9 / 2.54;
 
@@ -36,6 +36,15 @@ export class Net {
     this.onPlayerHit = null;     // ({ id, dmg, hp }) -> dano server-side al jugador
     this.onParty = null;         // (members)
     this.onPartyInvited = null;  // (fromId, name)
+    // ===== PvP + friends =====
+    this.onPvpHit = null;        // ({ from, name, dmg }) -> me pego otro jugador
+    this.onPvpKill = null;       // (killerName, victimName) -> kill feed
+    this.onPvpSafe = null;       // () -> intente pegar en zona segura
+    this.friends = [];           // [{user, online, id}]
+    this.friendsGuest = false;   // true si el server dijo "sin cuenta"
+    this.onFriends = null;       // (friends, guest)
+    this.onFriendReq = null;     // (fromId, name, user)
+    this.onFriendErr = null;     // (error)
     addEventListener('mousedown', (e) => {
       if (e.button === 0 && this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'atk' }));
     });
@@ -106,6 +115,16 @@ export class Net {
       this.party = m.members || [];
       if (this.onParty) this.onParty(this.party);
     }
+    else if (m.t === 'pvph') { if (this.onPvpHit) this.onPvpHit({ from: m.from, name: m.name, dmg: m.dmg }); }
+    else if (m.t === 'pvpkill') { if (this.onPvpKill) this.onPvpKill(m.killer, m.victim); }
+    else if (m.t === 'pvpsafe') { if (this.onPvpSafe) this.onPvpSafe(); }
+    else if (m.t === 'flist') {
+      this.friends = m.friends || [];
+      this.friendsGuest = !!m.guest;
+      if (this.onFriends) this.onFriends(this.friends, this.friendsGuest);
+    }
+    else if (m.t === 'freqin') { if (this.onFriendReq) this.onFriendReq(m.from, m.name, m.user); }
+    else if (m.t === 'ferr') { if (this.onFriendErr) this.onFriendErr(m.error); }
   }
 
   // envia un mensaje de chat al relay (el server lo reenvia con el nombre)
@@ -118,12 +137,17 @@ export class Net {
     if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ t: 'save', char }));
   }
 
-  // ===== acciones de mobs / party hacia el server =====
+  // ===== acciones de mobs / party / pvp / friends hacia el server =====
   _send(obj) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(obj)); }
   attackMob(id, dmg) { this._send({ t: 'mhit', id, dmg }); }
   invite(to) { this._send({ t: 'pinvite', to }); }
   accept(from) { this._send({ t: 'paccept', from }); }
   leaveParty() { this._send({ t: 'pleave' }); }
+  attackPlayer(to, dmg) { this._send({ t: 'pvp', to, dmg }); }
+  pvpDead(by) { this._send({ t: 'pvpdead', by }); }
+  friendList() { this._send({ t: 'flist' }); }
+  friendReq(to) { this._send({ t: 'freq', to }); }
+  friendAcc(from) { this._send({ t: 'facc', from }); }
 
   // dispara el ataque one-shot de un remoto (clip real, corta walk/idle)
   _remoteAttack(r) {
@@ -153,6 +177,7 @@ export class Net {
     const r = {
       x: p.x || 0, z: p.z || 0, rot: p.h || 0, tx: p.x || 0, tz: p.z || 0, th: p.h || 0,
       anim: p.a || 'Idle', root: new THREE.Group(), ready: false, walking: false,
+      name: p.name || 'Vecino',
     };
     r.root.position.set(r.x, 0, r.z);
     this.scene.add(r.root);
