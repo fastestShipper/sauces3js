@@ -41,9 +41,13 @@ await wait(400);
 A.send({ t: 'hi', name: A.name, char: 'char_knight.glb' });
 B.send({ t: 'hi', name: B.name, char: 'char_mage.glb' });
 await wait(300);
-A.send({ t: 's', x: -4, z: 47, h: 0, a: 'Idle' });
-B.send({ t: 's', x: -5, z: 47, h: 0, a: 'Idle' });
+A.send({ t: 's', x: -4, z: 47, h: 0, a: 'Idle', hp: 100, hm: 100 });
+B.send({ t: 's', x: -5, z: 47, h: 0, a: 'Idle', hp: 80, hm: 120 });
 await wait(300);
+
+// --- caso 0: HP visible entre jugadores (el estado 's' lleva hp/hm) ---
+const sFromB = A.got('s').find((m) => Number.isFinite(m.hp));
+check('el estado del otro jugador incluye hp/hm', !!sFromB && sFromB.hp === 80 && sFromB.hm === 120);
 
 // --- caso 1: amistad forzada (facc sin freq) ---
 B.send({ t: 'facc', from: A.id });

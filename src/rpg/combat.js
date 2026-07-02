@@ -29,6 +29,9 @@ export class Combat {
     this.onRespawn = opts.onRespawn || (() => {});
     this.onKillRewards = opts.onKillRewards || null;   // (info) -> oro/loot (etapa economia)
     this.skills = opts.skills || null;                 // SkillSystem (etapa skills)
+    this.sfx = opts.sfx || null;                       // sonidos procedurales
+    this.safeCenter = opts.safeCenter || [-62, -7];    // gruta: cura + zona segura
+    this._inGruta = false;
     this.targetId = null;
     this.pvpId = null;       // conn-id del jugador targeteado (excluyente con targetId)
     this.attackCd = 0;
@@ -131,8 +134,24 @@ export class Combat {
   update(dt) {
     if (this.dead) {
       this.respawnT -= dt;
+      this.hud.setDeathCount(this.respawnT);
       if (this.respawnT <= 0) this._respawn();
       return;
+    }
+    // la gruta te CURA: regeneracion fuerte dentro de la zona segura
+    const dg = Math.hypot(this.player.pos.x - this.safeCenter[0], this.player.pos.z - this.safeCenter[1]);
+    if (dg < 26) {
+      if (this.hp < this.hpMax) {
+        this.hp = Math.min(this.hpMax, this.hp + 9 * dt);
+        this.hud.setHP(this.hp, this.hpMax);
+      }
+      if (!this._inGruta) {
+        this._inGruta = true;
+        this.hud.toast('✚ La gruta te cura');
+        if (this.sfx) this.sfx.heal();
+      }
+    } else if (dg > 30) {
+      this._inGruta = false;
     }
     if (this.targetId && !this.net.mobs.has(this.targetId)) { this.targetId = null; this.hud.hideTarget(); }
     if (this.pvpId != null && !this.net.remotes.has(this.pvpId)) { this.pvpId = null; this.hud.hideTarget(); }
@@ -145,6 +164,7 @@ export class Combat {
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
         this.player.attack();
+        if (this.sfx) this.sfx.hit();
         const atk = this._playerAtk();
         if (this.effects) {
           const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
@@ -159,11 +179,14 @@ export class Combat {
     // PvP: auto-ataque contra el jugador targeteado (el server valida rango/zona)
     const rival = this.pvpId != null ? this.net.remotes.get(this.pvpId) : null;
     if (rival && rival.ready) {
+      // frame del rival con su vida REAL (llega en el estado 's' del relay)
+      this.hud.showTarget('⚔ ' + (rival.name || 'Jugador'), rival.hp ?? 1, rival.hpMax ?? 1);
       const d = Math.hypot(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
       if (d < ATTACK_RANGE && this.attackCd <= 0 && !this.player.locked && !this._isMoving()) {
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
         this.player.attack();
+        if (this.sfx) this.sfx.hit();
         const atk = this._playerAtk();
         if (this.effects) {
           const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
@@ -235,6 +258,7 @@ export class Combat {
     this.hp = Math.max(0, this.hp - dmg);
     this.hud.setHP(this.hp, this.hpMax);
     this.player.playHit();
+    if (this.sfx) this.sfx.hurt();
     if (this.skills) this.skills.gainRageFromDamage(8);
     if (this.effects) {
       this.effects.bloodHit({ x: this.player.pos.x, y: 1.1, z: this.player.pos.z });
@@ -249,9 +273,14 @@ export class Combat {
     if (!mine) return;
     const m = this.net.mobs.get(id);   // aun existe: net lo borra DESPUES de avisar
     const lvl = m ? m.lvl : 1;
+    if (this.sfx) this.sfx.kill();
     const leveled = this.prog.gainXp(4 + lvl);   // XP lento, escala con nivel del mob
     this.hpMax = this.prog.hpMax;
-    if (leveled) { this.hp = this.hpMax; this.hud.toast('Subiste a nivel ' + this.prog.level); }
+    if (leveled) {
+      this.hp = this.hpMax;
+      this.hud.toast('Subiste a nivel ' + this.prog.level);
+      if (this.sfx) this.sfx.levelup();
+    }
     this.hud.setXP(this.prog.xp, this.prog.xpNext, this.prog.level);
     this.hud.setHP(this.hp, this.hpMax);
     if (this.onKillRewards) this.onKillRewards({ lvl, x: m ? m.x : 0, z: m ? m.z : 0 });
@@ -265,14 +294,17 @@ export class Combat {
     this.hud.hideTarget();
     this.player.locked = true;
     this.player.setDead(true);
+    if (this.sfx) this.sfx.death();
     if (this.effects) this.effects.bloodDeath({ x: this.player.pos.x, y: 0.6, z: this.player.pos.z });
-    this.hud.toast('Has caido. Respawn en la gruta...');
+    this.hud.showDeath();
+    this.hud.setDeathCount(RESPAWN_T);
   }
 
   _respawn() {
     this.dead = false;
     this.hp = this.hpMax;
     this.hud.setHP(this.hp, this.hpMax);
+    this.hud.hideDeath();
     this.player.locked = false;
     this.player.setDead(false);
     this.onRespawn();

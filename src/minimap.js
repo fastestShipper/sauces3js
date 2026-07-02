@@ -54,14 +54,20 @@ export class MiniMap {
     if (name) this.street = name;
   }
 
-  draw(px, pz, heading, remotes = null) {
-    // redibujar al moverme/zoom; si hay humanos cerca, a lo mas cada 140ms (su
-    // marcador se mueve aunque yo este quieto) — NUNCA cada frame: el minimapa
-    // es vectorial (332 calles + edificios) y redibujarlo 60x/s tira TODO a 1fps.
+  draw(px, pz, heading, remotes = null, extras = null) {
+    // redibujar al moverme/zoom; si hay entidades dinamicas EN VISTA (humanos o
+    // mobs), a lo mas cada 140ms — NUNCA cada frame: el minimapa es vectorial
+    // (332 calles + edificios) y redibujarlo 60x/s tira TODO a 1fps.
     const moved = Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) >= 0.4 || this.radius !== this.lastRadius;
     const hasRemotes = remotes && remotes.size > 0;
+    let hasDyn = hasRemotes;
+    if (!hasDyn && extras && extras.mobs) {
+      for (const m of extras.mobs.values()) {
+        if (m.hp > 0 && Math.abs(m.x - px) < this.radius && Math.abs(m.z - pz) < this.radius) { hasDyn = true; break; }
+      }
+    }
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    if (!moved && !(hasRemotes && now - (this._lastT || 0) > 140)) return;
+    if (!moved && !(hasDyn && now - (this._lastT || 0) > 140)) return;
     this._lastT = now;
     this.lastPos = [px, pz];
     this.lastRadius = this.radius;
@@ -119,16 +125,38 @@ export class MiniMap {
         ctx.stroke();
       }
     }
-    // otros HUMANOS (multiplayer): marcador celeste con halo (distinto de la
-    // flecha roja del jugador) = "hay otra persona real cerca"
+    // POIs (tiendas/lugares reales): rombo dorado
+    if (extras && extras.pois) {
+      ctx.fillStyle = '#d99a1b';
+      for (const poi of extras.pois) {
+        const mx = X(poi.x), mz = Z(poi.z);
+        if (mx < 8 || mx > S - 8 || mz < 8 || mz > S - 8) continue;
+        ctx.beginPath();
+        ctx.moveTo(mx, mz - 6); ctx.lineTo(mx + 6, mz); ctx.lineTo(mx, mz + 6); ctx.lineTo(mx - 6, mz);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // mobs vivos: punto rojo chico
+    if (extras && extras.mobs) {
+      ctx.fillStyle = '#d23b2a';
+      for (const m of extras.mobs.values()) {
+        if (m.hp <= 0) continue;
+        const mx = X(m.x), mz = Z(m.z);
+        if (mx < 6 || mx > S - 6 || mz < 6 || mz > S - 6) continue;
+        ctx.beginPath(); ctx.arc(mx, mz, 4, 0, 7); ctx.fill();
+      }
+    }
+    // otros HUMANOS (multiplayer): celeste; miembros de mi PARTY: verde
     if (remotes) {
-      for (const r of remotes.values()) {
+      const partyIds = (extras && extras.partyIds) || null;
+      for (const [rid, r] of remotes.entries()) {
         if (!r.ready) continue;
         const mx = X(r.x), mz = Z(r.z);
         if (mx < 7 || mx > S - 7 || mz < 7 || mz > S - 7) continue;
+        const inParty = partyIds && partyIds.has(rid);
         ctx.fillStyle = 'rgba(255,255,255,.95)';
         ctx.beginPath(); ctx.arc(mx, mz, 8.5, 0, 7); ctx.fill();
-        ctx.fillStyle = '#2196f3';
+        ctx.fillStyle = inParty ? '#3aa856' : '#2196f3';
         ctx.beginPath(); ctx.arc(mx, mz, 6, 0, 7); ctx.fill();
         // puntito cabeza (sugiere persona)
         ctx.fillStyle = 'rgba(255,255,255,.92)';

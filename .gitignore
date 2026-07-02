@@ -31,3 +31,5 @@ server/accounts.json
 
 # Archivos fuente de Blender (~136MB; el runtime usa los GLB de assets/models/)
 assets/source/
+clips/
+scripts/__pycache__/

@@ -3,30 +3,34 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260701e';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260701e';
-import { Player } from './player.js?v=20260701e';
-import { MiniMap } from './minimap.js?v=20260701e';
-import { StreetLife } from './npcs.js?v=20260701e';
-import { sanitizeImported } from './glbutil.js?v=20260701e';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701e';
-import { Net } from './net.js?v=20260701e';
-import { ChatUI, showBubble } from './chat.js?v=20260701e';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701e';
-import { authRequest } from './rpg/account.js?v=20260701e';
-import { MobField } from './rpg/mobs.js?v=20260701e';
-import { Inventory } from './rpg/loot.js?v=20260701e';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260701e';
-import { Combat } from './rpg/combat.js?v=20260701e';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260701e';
-import { Effects } from './rpg/effects.js?v=20260701e';
-import { attachWeaponByName } from './weapons.js?v=20260701e';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260701e';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260701e';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260701e';
-import { SocialPanel } from './social.js?v=20260701e';
+import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260701f';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260701f';
+import { Player } from './player.js?v=20260701f';
+import { MiniMap } from './minimap.js?v=20260701f';
+import { StreetLife } from './npcs.js?v=20260701f';
+import { sanitizeImported } from './glbutil.js?v=20260701f';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701f';
+import { Net } from './net.js?v=20260701f';
+import { ChatUI, showBubble } from './chat.js?v=20260701f';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701f';
+import { authRequest } from './rpg/account.js?v=20260701f';
+import { MobField } from './rpg/mobs.js?v=20260701f';
+import { Inventory } from './rpg/loot.js?v=20260701f';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260701f';
+import { Combat } from './rpg/combat.js?v=20260701f';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260701f';
+import { Effects } from './rpg/effects.js?v=20260701f';
+import { attachWeaponByName } from './weapons.js?v=20260701f';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260701f';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260701f';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260701f';
+import { SocialPanel } from './social.js?v=20260701f';
+import { SkillSystem } from './rpg/skills.js?v=20260701f';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260701f';
+import { createSfx } from './sfx.js?v=20260701f';
+import { installTouchControls } from './touch.js?v=20260701f';
 
-const APP_VERSION = '20260701e';
+const APP_VERSION = '20260701f';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -620,15 +624,62 @@ async function boot() {
   addEventListener('keydown', (e) => {
     if (e.code === 'KeyI' && !player.locked) inventory.setOpen(!inventory.isOpen());
   });
-  // combate tab-target
+  // ===== sonido procedural (M silencia) + recurso/skill de clase (Q) + monedero =====
+  const sfx = createSfx();
+  player.sfx = sfx;
+  sfx.onMuteChange = (muted) => hud.toast(muted ? '🔇 Sonido apagado (M)' : '🔊 Sonido encendido');
+  const skills = new SkillSystem(choice.className || 'guerrero');
+  const wallet = new Wallet(document.body, 0);
+  hud.setGold(0);
+  // combate tab-target + PvP
   const combat = new Combat({
     scene, camera, player, mobField, net,
-    inventory, progress, hud, effects,
+    inventory, progress, hud, effects, skills, sfx,
     onRespawn: () => {
       if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; }
     },
+    // loot MU-style al matar: oro directo, pociones/armas al inventario
+    onKillRewards: ({ lvl }) => {
+      const gained = [];
+      for (const drop of rollDrops(lvl)) {
+        if (drop.kind === 'gold') {
+          wallet.add(drop.amount);
+          hud.setGold(wallet.gold);
+          gained.push('+' + drop.amount + ' oro');
+          sfx.coin();
+        } else if (drop.kind === 'potion') {
+          if (inventory.add(drop)) gained.push(drop.name);
+        } else if (drop.kind === 'material') {
+          wallet.addMaterial(drop);
+        } else if (drop.kind === 'gear') {
+          if (drop.slot === 'weapon') {
+            if (inventory.add(drop)) { gained.push('⚔ ' + drop.name); sfx.loot(); }
+          } else {
+            // sin sistema de armadura todavia: la pieza se vende sola
+            const sale = 6 + lvl * 3;
+            wallet.add(sale);
+            hud.setGold(wallet.gold);
+            gained.push(drop.name + ' → +' + sale + ' oro');
+          }
+        }
+      }
+      if (gained.length) hud.toast(gained.join(' · '));
+      saveChar();
+    },
   });
-  window.__game.rpg = { mobField, combat, inventory, progress, hud };
+  net.combat = combat;   // la vida local viaja en el estado 's' (visible p/ todos)
+  // Q lanza la skill de la clase via el combate (maná/furia/energia + cooldown)
+  skills._onCast = (effect) => combat.castSkill(effect);
+  // pocion: clic en el inventario la bebe
+  inventory.onUse = (item) => {
+    combat.hp = Math.min(combat.hpMax, combat.hp + (item.heal || 25));
+    hud.setHP(combat.hp, combat.hpMax);
+    hud.toast('🧪 ' + item.name + ' (+' + (item.heal || 25) + ' HP)');
+    sfx.potion();
+    saveChar();
+  };
+  installTouchControls({ player, combat });
+  window.__game.rpg = { mobField, combat, inventory, progress, hud, skills, wallet };
   const trailer = trailerConfig.enabled ? createTrailerMode({
     config: trailerConfig,
     scene,
@@ -649,9 +700,11 @@ async function boot() {
 
   // ===== PARTY: invitar con G al jugador mas cercano; aceptar con Y =====
   const partyPanel = document.createElement('div');
-  partyPanel.style.cssText = 'position:fixed;left:18px;top:120px;z-index:35;font-family:system-ui,sans-serif;color:#e8edf6;font-size:12px;text-shadow:0 1px 2px #000;display:none';
+  partyPanel.style.cssText = "position:fixed;left:18px;top:120px;z-index:35;font-family:'Fredoka',system-ui,sans-serif;color:#e8edf6;font-size:12px;text-shadow:0 1px 2px #000;display:none";
   document.body.appendChild(partyPanel);
+  let partyIdSet = new Set();   // para pintar a mi party en verde en el minimapa
   net.onParty = (members) => {
+    partyIdSet = new Set((members || []).map((mem) => mem.id));
     if (!members || members.length < 2) { partyPanel.style.display = 'none'; return; }
     partyPanel.style.display = 'block';
     partyPanel.replaceChildren();
@@ -687,13 +740,14 @@ async function boot() {
 
   // ===== PVP: daño entrante, kill feed y zona segura =====
   net.onPvpHit = (hit) => combat.takePvpHit(hit);
-  net.onPvpKill = (killer, victim) => hud.toast('⚔ ' + killer + ' eliminó a ' + victim);
+  net.onPvpKill = (killer, victim) => { hud.toast('⚔ ' + killer + ' eliminó a ' + victim); sfx.pvpkill(); };
   net.onPvpSafe = () => hud.toast('Zona segura: aquí no hay PvP.');
 
   // ===== PERSISTENCIA: guardar/cargar el personaje en la cuenta =====
   const charSnapshot = () => ({
     className: choice.className, charFile: choice.char,
     level: progress.level, xp: progress.xp, hpMax: progress.hpMax,
+    gold: wallet.gold,
     inv: inventory.items, equipId: inventory.equippedWeapon ? inventory.equippedWeapon.id : null,
   });
   let saveT = null;
@@ -714,6 +768,7 @@ async function boot() {
       for (const it of saved.inv) inventory.add(it);
       if (saved.equipId) { const eq = inventory.items.find(i => i.id === saved.equipId); if (eq) inventory.equip(eq); }
     }
+    if (saved.gold) { wallet.setGold(saved.gold); hud.setGold(wallet.gold); }
     combat.hpMax = progress.hpMax; combat.hp = progress.hpMax;
     hud.setHP(combat.hp, combat.hpMax);
     hud.setXP(progress.xp, progress.xpNext, progress.level);
@@ -763,6 +818,7 @@ async function boot() {
     addEventListener('keydown', (e) => {
       if (e.code !== 'KeyB' || teleCh > 0 || player.locked) return;
       teleCh = 2.0;
+      sfx.teleport();
       player.locked = true;                                  // channeling: no te mueves
       aura = new THREE.Group();
       const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.25, 3.2, 28, 1, true), auraMat(0x2fb8f5));
@@ -811,7 +867,9 @@ async function boot() {
       poiUi.update(player.pos.x, player.pos.z);
       coordsEl.textContent = 'X ' + Math.round(player.pos.x) + ' · Z ' + Math.round(player.pos.z);
     }
-    minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes);
+    skills.update(dt);
+    minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes,
+      { mobs: net.mobs, pois: publicPois, partyIds: partyIdSet });
     if (trailer) trailer.afterFrame(dt);
     renderer.render(scene, camera);
   });

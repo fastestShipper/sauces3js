@@ -1,7 +1,7 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260701e';
+import { TIERS } from './fx.js?v=20260701f';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -149,8 +149,21 @@ export class Inventory {
     return true;
   }
 
+  remove(id) {
+    const before = this.items.length;
+    this.items = this.items.filter(i => i.id !== id);
+    if (this.equippedWeapon && this.equippedWeapon.id === id) this.equippedWeapon = null;
+    if (this.items.length !== before) { this._render(); this.onChange(); }
+  }
+
   equip(item) {
     if (!item || !this.items.some(i => i.id === item.id)) return false;
+    // pocion: clic = beber (onUse la consume), no se equipa
+    if (item.kind === 'potion') {
+      if (this.onUse) { this.onUse(item); this.remove(item.id); }
+      return true;
+    }
+    if (!item.weaponName) return false;   // solo armas son equipables (MVP)
     this.equippedWeapon = item;
     this._render();
     this.onChange();
@@ -194,14 +207,16 @@ export class Inventory {
       slot.className = 'rpg-slot filled';
       slot.style.setProperty('--tc', color);
       if (this.equippedWeapon && this.equippedWeapon.id === item.id) slot.classList.add('equipped');
-      slot.textContent = glyph(item.weaponName);
+      slot.textContent = item.kind === 'potion' ? '🧪' : glyph(item.weaponName);
       const tierName = (TIERS[item.tier] && TIERS[item.tier].name) || item.tier;
       const tip = document.createElement('div');
       tip.className = 'tip';
       const nameEl = document.createElement('b');
       nameEl.textContent = item.name;            // textContent: nunca parsea HTML
       tip.appendChild(nameEl);
-      const lines = [`Tier: ${tierName}`, `ATK ${item.atk}`];
+      const lines = item.kind === 'potion'
+        ? [`Cura ${item.heal} HP`, 'Clic para beber']
+        : [`Tier: ${tierName}`, `ATK ${item.atk}`];
       if (item.classReq) lines.push(`Clase: ${item.classReq}`);
       for (const line of lines) {
         tip.appendChild(document.createElement('br'));

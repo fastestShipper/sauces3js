@@ -197,6 +197,8 @@ function sanitizeChar(raw, account) {
       tier: clean(it.tier, 40),
       classReq: clean(it.classReq, 40),
       atk: clampNum(it.atk, 0, 100000),
+      kind: clean(it.kind, 12),
+      heal: clampNum(it.heal, 0, 10000),
     });
   }
 
@@ -206,6 +208,7 @@ function sanitizeChar(raw, account) {
     level: clampInt(raw.level, 1, 200),
     xp: clampNum(raw.xp, 0, 1e9),
     hpMax: clampNum(raw.hpMax, 1, 100000),
+    gold: clampNum(raw.gold, 0, 1e9),
     inv,
     equipId: clean(raw.equipId, 40),
   };
@@ -221,7 +224,7 @@ const MOB_CAP = 40;
 const MOB_RESPAWN_MS = 12000;
 const MOB_DMG_MAX = 3000;
 const MOB_TICK_MS = 100;
-const MOB_AGGRO_RANGE = 28;
+const MOB_AGGRO_RANGE = 22;
 const MOB_ATTACK_RANGE = 2.8;
 const MOB_LEASH_RANGE = 42;
 const MOB_SPEED = 4.2;
@@ -355,8 +358,10 @@ function stepMobWander(mob, now, dt) {
   return false;
 }
 
+// balance: los clusters fundian al lvl 1 en segundos; pegan menos y desde
+// mas cerca para que la primera experiencia no sea morir camninando
 function mobDamage(mob) {
-  return 7 + mob.lvl * 4;
+  return 5 + mob.lvl * 3;
 }
 
 function mobTick() {
@@ -607,7 +612,7 @@ wss.on('connection', (ws, req) => {
       me.char = String(m.char || 'char_knight.glb').slice(0, 40);
       const players = [];
       for (const [oid, c] of clients) {
-        if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, x: c.x, z: c.z, h: c.h, a: c.a });
+        if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
       }
       send(ws, { t: 'roster', players });
       // estado actual de los mobs compartidos (server-authoritative).
@@ -619,8 +624,11 @@ wss.on('connection', (ws, req) => {
         send(ws, { t: 'flist', friends: friendsPayload(me.account) });
       }
     } else if (m.t === 's') {
-      me.x = m.x; me.z = m.z; me.h = m.h; me.a = m.a;
-      broadcast(id, { t: 's', id, x: m.x, z: m.z, h: m.h, a: m.a });
+      // sanitizar SIEMPRE lo que entra (pos/heading/anim) + vida visible p/ todos
+      me.x = clampNum(m.x, -3000, 3000); me.z = clampNum(m.z, -3000, 3000);
+      me.h = clampNum(m.h, -10, 10); me.a = clean(m.a, 12) || 'Idle';
+      me.hp = clampInt(m.hp, 0, 100000); me.hm = clampInt(m.hm ?? 100, 1, 100000);
+      broadcast(id, { t: 's', id, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm });
     } else if (m.t === 'atk') {
       broadcast(id, { t: 'atk', id });
     } else if (m.t === 'chat') {

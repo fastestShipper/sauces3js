@@ -3,20 +3,47 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260701e';
-import { makeNametag } from './nametag.js?v=20260701e';
-import { cloneSkinned } from './npcs.js?v=20260701e';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701e';
-import { showBubble } from './chat.js?v=20260701e';
-import { WS_URL } from './rpg/account.js?v=20260701e';
+import { sanitizeImported } from './glbutil.js?v=20260701f';
+import { makeNametag } from './nametag.js?v=20260701f';
+import { cloneSkinned } from './npcs.js?v=20260701f';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701f';
+import { showBubble } from './chat.js?v=20260701f';
+import { WS_URL } from './rpg/account.js?v=20260701f';
 
 const SCALE = 1.9 / 2.54;
+
+// barra de vida flotante para remotos: sprite canvas actualizable (fill por ratio)
+function makeHpBar() {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 20;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sp.scale.set(1.35, 0.21, 1);
+  sp.position.y = 2.06;      // justo debajo del nametag (2.35)
+  sp.renderOrder = 998;
+  const draw = (hp, hpMax) => {
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, 128, 20);
+    c.fillStyle = 'rgba(12,10,24,0.8)';
+    c.roundRect(2, 4, 124, 12, 6); c.fill();
+    const ratio = Math.max(0, Math.min(1, hp / Math.max(1, hpMax)));
+    if (ratio > 0) {
+      c.fillStyle = ratio > 0.5 ? '#5fd18a' : ratio > 0.25 ? '#ffcf5c' : '#ff5a48';
+      c.roundRect(4, 6, 120 * ratio, 8, 4); c.fill();
+    }
+    tex.needsUpdate = true;
+  };
+  draw(1, 1);
+  return { sprite: sp, draw };
+}
 
 export class Net {
   constructor(scene, player, token) {
     this.scene = scene;
     this.player = player;
     this.token = token || null;   // ata la conexion de juego a la cuenta (para guardar)
+    this.combat = null;           // lo setea app.js: fuente de hp/hpMax local
     this.remotes = new Map();   // id -> {root, mixer, walkA, idleA, x,z,rot, tx,tz,th, anim, walking, ready}
     this.protos = {};           // charFile -> gltf
     this.loader = new GLTFLoader();
@@ -73,7 +100,16 @@ export class Net {
   _onMsg(m) {
     if (m.t === 'roster') { for (const p of m.players) this._spawn(p); }
     else if (m.t === 'join') this._spawn(m);
-    else if (m.t === 's') { const r = this.remotes.get(m.id); if (r) { r.tx = m.x; r.tz = m.z; r.th = m.h; r.anim = m.a; } }
+    else if (m.t === 's') {
+      const r = this.remotes.get(m.id);
+      if (r) {
+        r.tx = m.x; r.tz = m.z; r.th = m.h; r.anim = m.a;
+        if (Number.isFinite(m.hp) && (r.hp !== m.hp || r.hpMax !== m.hm)) {
+          r.hp = m.hp; r.hpMax = m.hm || 100;
+          if (r.hpBar) r.hpBar.draw(r.hp, r.hpMax);
+        }
+      }
+    }
     else if (m.t === 'atk') { const r = this.remotes.get(m.id); if (r) this._remoteAttack(r); }
     else if (m.t === 'leave') { const r = this.remotes.get(m.id); if (r) { this.scene.remove(r.root); this.remotes.delete(m.id); } }
     else if (m.t === 'chat') {
@@ -189,6 +225,11 @@ export class Net {
     ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
     r.root.add(ch);
     if (p.name) r.root.add(makeNametag(p.name));
+    r.hp = Number.isFinite(p.hp) ? p.hp : 100;
+    r.hpMax = Number.isFinite(p.hm) && p.hm > 0 ? p.hm : 100;
+    r.hpBar = makeHpBar();
+    r.hpBar.draw(r.hp, r.hpMax);
+    r.root.add(r.hpBar.sprite);
     await equipWeapon(this.loader, ch, p.char || 'char_knight.glb');   // arma de clase
     r.mixer = new THREE.AnimationMixer(ch);
     if (this.walkClip) r.walkA = r.mixer.clipAction(this.walkClip);
@@ -213,6 +254,8 @@ export class Net {
       this.ws.send(JSON.stringify({
         t: 's', x: +player.pos.x.toFixed(2), z: +player.pos.z.toFixed(2),
         h: +player.heading.toFixed(2), a: player.cur || 'Idle',
+        hp: this.combat ? Math.round(this.combat.hp) : 100,
+        hm: this.combat ? Math.round(this.combat.hpMax) : 100,
       }));
     }
     // interpolar remotos

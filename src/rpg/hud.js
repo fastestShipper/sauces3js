@@ -54,7 +54,25 @@ function injectStyle() {
   font-size: 15px; font-weight: 600; letter-spacing: 0.3px; text-align: center;
   padding: 12px 20px; border-radius: 14px;
   opacity: 0; transition: opacity 320ms ease, transform 320ms ease; pointer-events: none; }
-.rpg-hud-toast.is-on { opacity: 1; transform: translate(-50%, 0); }`;
+.rpg-hud-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.rpg-hud-gold { position: absolute; right: 10px; top: -34px; display: flex;
+  align-items: center; gap: 6px; padding: 4px 12px 4px 6px; border-radius: 999px;
+  background: rgba(23,20,41,0.88); border: 1px solid rgba(255,224,138,0.4);
+  box-shadow: 0 6px 16px rgba(10,8,24,.35); font-size: 13px; font-weight: 700;
+  color: #ffe9b3; font-variant-numeric: tabular-nums; }
+.rpg-hud-gold i { width: 17px; height: 17px; border-radius: 999px; font-style: normal;
+  display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #7a4e0a;
+  background: radial-gradient(circle at 35% 30%, #fff3c4, #f3c54a 50%, #c98a18);
+  border: 1px solid #8a5a10; }
+.rpg-hud-death { position: fixed; inset: 0; z-index: 48; display: none;
+  align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+  background: radial-gradient(circle at 50% 45%, rgba(60,8,10,0.42), rgba(16,4,8,0.78));
+  pointer-events: none; }
+.rpg-hud-death.is-on { display: flex; }
+.rpg-hud-death .d-title { font-size: 46px; font-weight: 700; letter-spacing: 2px;
+  color: #ff8a76; text-shadow: 0 4px 24px rgba(0,0,0,.8); }
+.rpg-hud-death .d-sub { font-size: 15px; font-weight: 500; color: #f2d9d4; }
+.rpg-hud-death .d-count { font-size: 30px; font-weight: 700; color: #ffe08a; }`;
   const el = document.createElement('style');
   el.id = STYLE_ID;
   el.textContent = css;
@@ -74,6 +92,7 @@ export class HUD {
     root.innerHTML = `
       <div class="rpg-hud-panel rpg-hud-bottom">
         <div class="rpg-hud-lvl-badge">1</div>
+        <div class="rpg-hud-gold"><i>G</i><span class="rpg-hud-gold-num">0</span></div>
         <div>
           <div class="rpg-hud-label"><span>VIDA</span><span class="rpg-hud-hp-num">0/0</span></div>
           <div class="rpg-hud-bar"><div class="rpg-hud-fill rpg-hud-fill-hp"></div></div>
@@ -91,7 +110,10 @@ export class HUD {
         <div class="rpg-hud-qtitle">Mision</div>
         <div><span class="rpg-hud-qcount">0/0</span><span class="rpg-hud-qtext"></span></div>
       </div>
-      <div class="rpg-hud-panel rpg-hud-toast"></div>`;
+      <div class="rpg-hud-panel rpg-hud-toast"></div>
+      <div class="rpg-hud-death"><div class="d-title">HAS CAÍDO</div>
+        <div class="d-sub">La Virgen de la gruta te levanta…</div>
+        <div class="d-count">3</div></div>`;
     (rootEl || document.body).appendChild(root);
 
     this.root = root;
@@ -107,7 +129,20 @@ export class HUD {
     this.elQuestText = root.querySelector('.rpg-hud-qtext');
     this.elQuestCount = root.querySelector('.rpg-hud-qcount');
     this.elToast = root.querySelector('.rpg-hud-toast');
+    this.elGold = root.querySelector('.rpg-hud-gold-num');
+    this.elDeath = root.querySelector('.rpg-hud-death');
+    this.elDeathCount = root.querySelector('.rpg-hud-death .d-count');
     this._toastTimer = null;
+  }
+
+  setGold(n) {
+    if (this.elGold) this.elGold.textContent = String(Math.max(0, Math.round(n || 0)));
+  }
+
+  showDeath() { if (this.elDeath) this.elDeath.classList.add('is-on'); }
+  hideDeath() { if (this.elDeath) this.elDeath.classList.remove('is-on'); }
+  setDeathCount(t) {
+    if (this.elDeathCount) this.elDeathCount.textContent = String(Math.max(0, Math.ceil(t)));
   }
 
   setHP(cur, max) {
