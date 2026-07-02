@@ -717,12 +717,22 @@ wss.on('connection', (ws, req) => {
       if (me.lastPvpMs && now - me.lastPvpMs < PVP_CD_MS) return;
       me.lastPvpMs = now;
       const dmg = clampNum(m.dmg, 0, PVP_DMG_MAX);
+      // registrar el atacante en la VICTIMA: pvpdead solo vale contra esto
+      target.lastAttackerId = id;
+      target.lastAttackerMs = now;
       send(target.ws, { t: 'pvph', from: id, name: me.name, dmg });
 
     } else if (m.t === 'pvpdead') {
-      // la victima anuncia su muerte PvP -> kill feed global
+      // la victima anuncia su muerte PvP. Solo vale si `by` la golpeo hace poco
+      // (estado server-side): sin esto cualquiera fabrica kills para el feed.
       const by = Number(m.by);
-      const killer = Number.isInteger(by) ? clients.get(by) : null;
+      const now = Date.now();
+      if (!Number.isInteger(by) || by !== me.lastAttackerId) return;
+      if (!me.lastAttackerMs || now - me.lastAttackerMs > 15000) return;
+      if (me.lastDeathMs && now - me.lastDeathMs < 5000) return;   // anti-spam
+      me.lastDeathMs = now;
+      me.lastAttackerId = null;
+      const killer = clients.get(by);
       broadcastAll({ t: 'pvpkill', killer: killer ? killer.name : 'Alguien', victim: me.name });
 
     // --- FRIENDS ---
@@ -739,11 +749,21 @@ wss.on('connection', (ws, req) => {
       if (!target.account) { send(ws, { t: 'ferr', error: 'Ese jugador explora sin cuenta' }); return; }
       if (target.account === me.account) return;
       if (accountFriends(me.account).includes(target.account)) { send(ws, { t: 'ferr', error: 'Ya son amigos' }); return; }
+      // anti-spam + estado: la solicitud queda REGISTRADA en la victima; facc
+      // solo acepta solicitudes que realmente existieron.
+      const nowReq = Date.now();
+      if (me.lastFreqMs && nowReq - me.lastFreqMs < 2000) return;
+      me.lastFreqMs = nowReq;
+      if (!target.friendReqs) target.friendReqs = new Set();
+      if (target.friendReqs.size < 20) target.friendReqs.add(id);
       send(target.ws, { t: 'freqin', from: id, name: me.name, user: me.account });
 
     } else if (m.t === 'facc') {
       if (!me.account) return;
       const from = Number(m.from);
+      // sin solicitud previa registrada NO hay amistad (evita amistades forzadas)
+      if (!me.friendReqs || !me.friendReqs.has(from)) return;
+      me.friendReqs.delete(from);
       const requester = Number.isInteger(from) ? clients.get(from) : null;
       if (!requester || !requester.account || requester.account === me.account) return;
       const mine = accountFriends(me.account);
