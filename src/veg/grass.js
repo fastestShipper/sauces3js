@@ -17,7 +17,7 @@ const BUILDS_PER_FRAME = 2;          // tiles construidos por frame (evita hitch
 const RING_HYSTERESIS = 1.8;         // metros extra antes de rebuild por cambio de anillo
 
 // [distancia max, hojas/m2] — desktop y mobile
-const RINGS_DESKTOP = [[20, 10], [34, 4.5], [50, 1.7]];
+const RINGS_DESKTOP = [[20, 12], [34, 5], [50, 1.7]];
 const RINGS_MOBILE = [[13, 5], [22, 2.2], [32, 0.9]];
 
 function mulberry32(a) {

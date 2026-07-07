@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260707a';
 import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260707a';
-import { GrassSystem } from './veg/grass.js?v=20260707a';
+import { GrassSystem } from './veg/grass.js?v=20260707b';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260707b';
 import { Player } from './player.js?v=20260707a';
 import { MiniMap } from './minimap.js?v=20260701f';
 import { StreetLife } from './npcs.js?v=20260707a';
@@ -413,11 +414,44 @@ async function boot() {
       scene.add(im);
     }
   };
-  const instanced = async (file, spots, opts = {}) => {
-    if (!spots.length) return;
-    const gltf = await loader.loadAsync(MOD + file);
-    sanitizeImported(gltf.scene, aniso);
-    instancedRoot(gltf.scene, spots, opts);
+  // precarga del decor pesado EN PARALELO durante el boot/login: al entrar al
+  // mundo los arboles/autos/arbustos aparecen al instante (antes se empezaban
+  // a descargar recien en el primer frame jugable = pop-in feo)
+  const CAR_FILES = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
+  const preloadGLB = (file) => loader.loadAsync(MOD + file).catch((e) => {
+    console.warn(file + ' preload failed', e);
+    return null;
+  });
+  const decorPreload = {
+    trees: preloadGLB('trees_real.glb'),
+    bushes: preloadGLB('bushes_real.glb'),
+    cars: CAR_FILES.map(preloadGLB),
+  };
+
+  // vaiven sutil del follaje (cartas de hoja alpha-tested) con fase por
+  // instancia; amplitud crece con la altura local = copa se mece, tronco no
+  const foliageTime = { value: 0 };
+  const addFoliageSway = (root) => {
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      if (!m || !(m.alphaTest > 0) || m.userData.sway) return;
+      m.userData.sway = true;
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.uFoliageTime = foliageTime;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nuniform float uFoliageTime;')
+          .replace('#include <begin_vertex>', `
+vec3 transformed = vec3( position );
+#ifdef USE_INSTANCING
+vec3 fIPos = vec3( instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2] );
+float fPh = dot( fIPos.xz, vec2( 0.17, 0.23 ) ) + uFoliageTime * 1.3;
+float fGust = 1.0 + 0.5 * sin( uFoliageTime * 0.5 + fIPos.x * 0.05 );
+transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 ) * 0.006 * fGust;
+#endif`);
+      };
+      m.customProgramCacheKey = () => 'sauces-foliage-sway';
+    });
   };
   const F = R.furniture;
   // mobiliario urbano TOON procedural (sync; no large GLBs)
@@ -427,6 +461,10 @@ async function boot() {
   instancedRoot(buildToonBin(), F.misc.filter((_, i) => i % 2 === 1), { y: WALK_Y, randRot: true, seed: 20 });
   instancedRoot(buildToonStreetSign(), F.signs || [], { y: WALK_Y, seed: 21 });
   instancedRoot(buildToonPlanter(), F.planters || [], { y: WALK_Y, seed: 22 });
+  // margaritas en el tercio de scatter que no usan los arbustos (sin sombra:
+  // el depth pass no alpha-testea grupos tan chicos y proyectaria rectangulos)
+  instancedRoot(buildFlowerTuft(), (P.parkScatter || []).filter((_, i) => i % 3 === 2),
+    { y: 0.015, randRot: true, seed: 54, shadows: false });
 
   const loadHeavyDecor = async () => {
     // planta un set de variantes (nodos con nombre de un GLB) sobre los spots
@@ -456,11 +494,15 @@ async function boot() {
     ];
     let planted = false;
     // arboles realistas horneados con ez-tree (corteza PBR + hojas alpha-card)
-    try {
-      const tg = await loader.loadAsync(MOD + 'trees_real.glb');
+    const tg = await decorPreload.trees;
+    if (tg) {
       const TREES = pickNodes(tg, ['tree_oak_a', 'tree_oak_b', 'tree_ash_a', 'tree_aspen_a']);
-      if (TREES.length === 4) { plantSet(TREES, treePlan); planted = true; }
-    } catch (e) { console.warn('trees_real.glb failed, fallback to kaykit', e); }
+      if (TREES.length === 4) {
+        TREES.forEach(addFoliageSway);
+        plantSet(TREES, treePlan);
+        planted = true;
+      }
+    }
     if (!planted) {
       try {
         const fg = await loader.loadAsync(MOD + 'kaykit_forest.glb');
@@ -469,12 +511,15 @@ async function boot() {
       } catch (e) { console.warn('Forest GLB deferred load failed', e); }
     }
     // arbustos realistas sobre los puntos de scatter de parques
-    try {
-      const bg = await loader.loadAsync(MOD + 'bushes_real.glb');
+    const bg = await decorPreload.bushes;
+    if (bg) {
       const BUSHES = pickNodes(bg, ['bush_a', 'bush_b', 'bush_c']);
       const bushSpots = (P.parkScatter || []).filter((_, i) => i % 3 !== 2);
-      if (BUSHES.length) plantSet(BUSHES, [[bushSpots, [0.7, 1.35], 53]]);
-    } catch (e) { console.warn('bushes_real.glb deferred load failed', e); }
+      if (BUSHES.length) {
+        BUSHES.forEach(addFoliageSway);
+        plantSet(BUSHES, [[bushSpots, [0.7, 1.35], 53]]);
+      }
+    }
     const carSpots = [];
     {
       const rng = mulberry32(777);
@@ -501,9 +546,12 @@ async function boot() {
         }
       }
     }
-    const carFiles = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
-    for (let ci = 0; ci < carFiles.length; ci++) {
-      await instanced(carFiles[ci], carSpots.filter((_, i) => i % carFiles.length === ci), { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
+    for (let ci = 0; ci < CAR_FILES.length; ci++) {
+      const spots = carSpots.filter((_, i) => i % CAR_FILES.length === ci);
+      const cg = await decorPreload.cars[ci];
+      if (!cg || !spots.length) continue;
+      sanitizeImported(cg.scene, aniso);
+      instancedRoot(cg.scene, spots, { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
     }
   };
   // pilares de las vias elevadas (cilindro unidad escalado en Y a cada altura)
@@ -936,6 +984,7 @@ async function boot() {
       }
     }
     if (grass) grass.update(dt, player.pos);
+    foliageTime.value += dt;
     life.update(dt, player.pos);
     net.update(dt, player);
     teleportTick(dt);
