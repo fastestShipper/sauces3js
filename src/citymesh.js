@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260707a';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260701f';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260707c';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260707c';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -295,7 +295,7 @@ function roofBox(B, cx, y, cz, sx, sy, sz, c) {
 
 export function buildRoads(city) {
   const road = new Bucket(), walk = new Bucket(), paint = new Bucket(), median = new Bucket(), berma = new Bucket(), curb = new Bucket(), path = new Bucket(), deck = new Bucket();
-  const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [], pillars: [], signs: [], planters: [] };
+  const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [], pillars: [], signs: [], planters: [], cableCrossings: [] };
   // franjas de berma [ax, az, bx, bz, y] (semi-ancho fijo 0.5) para sembrar pasto 3D
   const bermaStrips = [];
   // elevacion por capa OSM: la data trae `layer` pero NO altura -> la sintetizo.
@@ -332,7 +332,9 @@ export function buildRoads(city) {
     const full = r.w ?? 6.0;
     const hw = full * 0.5;
     const ped = full < 4.0;
-    const run = [];
+    // tendido electrico AMBOS lados (desfasados media cuadra) = mas postes,
+    // y pares de postes enfrentados para cruzar cables sobre la pista
+    const runA = [], runB = [];
     // jitter de altura POR CALLE: dos pistas que se cruzan ya no comparten
     // el plano exacto (z-fight en cada interseccion = el "blinking")
     const yo = (TYPE_Y[r.t] ?? 0.02) + (ri++ % 3) * 0.0015;
@@ -404,9 +406,13 @@ export function buildRoads(city) {
               [ebx + snx * (hw + 0.4), WALK_Y + yo + 0.03, ebz + snz * (hw + 0.4)],
               [eax + snx * (hw + 0.4), WALK_Y + yo + 0.03, eaz + snz * (hw + 0.4)],
               [-snx, 0, -snz], ccol);
-            // postes de luz (un solo lado, cada 40 m) para tender cables
-            if (side === 1 && full >= 6.0 && phase >= 5 && phase < 8) {
-              run.push([mx + snx * (hw + 1.42), mz + snz * (hw + 1.42), Math.atan2(ux, uz)]);
+            // postes de luz cada 40 m POR LADO, desfasados 20 m entre lados
+            if (full >= 6.0) {
+              if (side === 1 && phase >= 5 && phase < 8) {
+                runA.push([mx + snx * (hw + 1.42), mz + snz * (hw + 1.42), Math.atan2(ux, uz)]);
+              } else if (side === -1 && phase >= 25 && phase < 28) {
+                runB.push([mx + snx * (hw + 1.42), mz + snz * (hw + 1.42), Math.atan2(ux, uz)]);
+              }
             }
             if (full >= 8.0) {
               const fang = Math.atan2(-(-uz) * side, -ux * side);
@@ -483,7 +489,21 @@ export function buildRoads(city) {
         }
       }
     }
-    if (run.length > 1) furniture.poleRuns.push(run);
+    if (runA.length > 1) furniture.poleRuns.push(runA);
+    if (runB.length > 1) furniture.poleRuns.push(runB);
+    // cruces de calle: cada poste del lado A con su enfrentado mas cercano del
+    // lado B (la maranha diagonal que cuelga sobre la pista, firma limena)
+    if (runA.length && runB.length) {
+      for (let pi = 0; pi < runA.length; pi++) {
+        const a = runA[pi];
+        let best = null, bd = 1e9;
+        for (const b of runB) {
+          const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (d < bd) { bd = d; best = b; }
+        }
+        if (best && bd > 6 && bd < 34) furniture.cableCrossings.push([a[0], a[1], best[0], best[1]]);
+      }
+    }
   }
   return { road, walk, paint, median, berma, curb, path, deck, furniture, bermaStrips };
 }
@@ -718,6 +738,9 @@ export function buildParks(city) {
   const PLAZA_R = 11;
   const bigC = [-62, -15];
   const inPlaza = (x, z) => Math.hypot(x - bigC[0], z - bigC[1]) < PLAZA_R + 0.5;
+  // area de juegos (parche de arena en buildParkLandmark, centro cx-20/cz+1
+  // r6.5): el cesped se dibuja debajo pero el pasto 3D NO debe brotar ahi
+  const inSand = (x, z) => Math.hypot(x - (bigC[0] - 20), z - (bigC[1] + 1)) < 7.4;
   for (let gi = 0; gi < city.data.green.length; gi++) {
     const g = city.data.green[gi];
     const ring = g.p;
@@ -735,7 +758,7 @@ export function buildParks(city) {
         const patch = hashF(Math.floor(gx * 3.1) + Math.floor(gz * 5.7)) * 0.08;
         const col = [shade * (0.90 + patch), shade * (0.98 + patch * 0.5), shade * (0.82 - patch * 0.3)];
         lawn.quad([gx, 0.015, gz], [gx, 0.015, z1], [x1, 0.015, z1], [x1, 0.015, gz], [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
-        grassRects.push([gx, gz, x1, z1]);
+        if (!inSand(cx, cz)) grassRects.push([gx, gz, x1, z1]);
       }
     }
     const want = Math.max(2, Math.min(60, Math.floor((maxx - minx) * (maxz - minz) / 170)));

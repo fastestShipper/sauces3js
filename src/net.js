@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260701f';
-import { makeNametag } from './nametag.js?v=20260701f';
-import { cloneSkinned } from './npcs.js?v=20260707a';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260701f';
-import { showBubble } from './chat.js?v=20260701f';
-import { WS_URL } from './rpg/account.js?v=20260701f';
+import { sanitizeImported } from './glbutil.js?v=20260707c';
+import { makeNametag } from './nametag.js?v=20260707c';
+import { cloneSkinned } from './npcs.js?v=20260707c';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260707c';
+import { showBubble } from './chat.js?v=20260707c';
+import { WS_URL } from './rpg/account.js?v=20260707c';
 
 const SCALE = 1.9 / 2.54;
 
@@ -210,6 +210,10 @@ export class Net {
 
   async _spawn(p) {
     if (this.remotes.has(p.id)) return;
+    // defensa en profundidad: char remoto se usa como ruta de asset -> solo
+    // archivos conocidos aunque el relay este comprometido o sea viejo
+    const CHAR_OK = ['char_knight.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue_hooded.glb', 'char_cernunnos.glb'];
+    const charFile = CHAR_OK.includes(p.char) ? p.char : 'char_knight.glb';
     const r = {
       x: p.x || 0, z: p.z || 0, rot: p.h || 0, tx: p.x || 0, tz: p.z || 0, th: p.h || 0,
       anim: p.a || 'Idle', root: new THREE.Group(), ready: false, walking: false,
@@ -218,7 +222,7 @@ export class Net {
     r.root.position.set(r.x, 0, r.z);
     this.scene.add(r.root);
     this.remotes.set(p.id, r);   // reservar el id antes del await (evita doble spawn)
-    const proto = await this._proto(p.char || 'char_knight.glb');
+    const proto = await this._proto(charFile);
     if (!proto || !this.remotes.has(p.id)) return;
     const ch = cloneSkinned(proto.scene);
     ch.scale.setScalar(SCALE);
@@ -230,11 +234,11 @@ export class Net {
     r.hpBar = makeHpBar();
     r.hpBar.draw(r.hp, r.hpMax);
     r.root.add(r.hpBar.sprite);
-    await equipWeapon(this.loader, ch, p.char || 'char_knight.glb');   // arma de clase
+    await equipWeapon(this.loader, ch, charFile);   // arma de clase
     r.mixer = new THREE.AnimationMixer(ch);
     if (this.walkClip) r.walkA = r.mixer.clipAction(this.walkClip);
     r.idleA = this.idleClip ? r.mixer.clipAction(this.idleClip) : r.walkA;
-    const aClip = this.clips.find(c => c.name === attackClipName(p.char || 'char_knight.glb'));
+    const aClip = this.clips.find(c => c.name === attackClipName(charFile));
     if (aClip) {
       // plantar el ataque: quitar root motion (root/hips.position) como en el jugador
       const planted = aClip.clone();

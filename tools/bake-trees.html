@@ -45,6 +45,41 @@ async function waitTextures(root, timeoutMs = 20000) {
   }
 }
 
+// SAUCE LLORON custom (no hay preset willow en ez-tree; si hay corteza willow).
+// Base Ash Medium + tronco alto, ramas largas con force hacia ABAJO (weeping)
+// y hojas colgantes. `droop` y `lean` permiten variar entre variantes.
+function applyWillow(tree, { droop = 0.14, lean = 0, seed = 1 } = {}) {
+  tree.loadPreset('Ash Medium');
+  const o = tree.options;
+  o.seed = seed;
+  o.bark.type = 'willow';
+  o.bark.tint = 0xffffff;
+  o.bark.textureScale = { x: 1, y: 4 };
+  // tronco CORTO y grueso (el force down dobla todo: cuanto mas corto el
+  // tronco, menos se nota); ramas primarias horizontales largas que caen
+  o.branch.levels = 3;
+  o.branch.angle = { 1: 78, 2: 55, 3: 45 };
+  o.branch.children = { 0: 4, 1: 3, 2: 2 };
+  o.branch.force = { direction: { x: lean, y: -1, z: 0 }, strength: droop };
+  o.branch.gnarliness = { 0: 0.05, 1: 0.1, 2: 0.14, 3: 0.1 };
+  // ramas cortas: con el force down, ramas largas arquean muy por debajo del
+  // suelo (bbox min.y −15) y el fit del juego encoge el arbol a bonsai
+  o.branch.length = { 0: 9, 1: 8, 2: 6, 3: 3.5 };
+  o.branch.radius = { 0: 1.5, 1: 0.6, 2: 0.5, 3: 0.4 };
+  o.branch.sections = { 0: 3, 1: 3, 2: 2, 3: 1 };
+  o.branch.start = { 1: 0.55, 2: 0.15, 3: 0.1 };
+  o.branch.taper = { 0: 0.85, 1: 0.6, 2: 0.68, 3: 0.72 };
+  o.branch.twist = { 0: 0.08, 1: 0.12, 2: 0, 3: 0 };
+  o.leaves.type = 'ash';
+  o.leaves.billboard = 'double';
+  o.leaves.angle = 72;
+  o.leaves.count = 9;
+  o.leaves.start = 0.05;
+  o.leaves.size = 3.2;
+  o.leaves.sizeVariance = 0.55;
+  o.leaves.tint = 0xcfe6a8;
+}
+
 // presupuesto de triangulos: los presets traen ~10-14k tris por arbol (5k+
 // cartas de hoja). Instanciados cientos de veces en las calles funden el GPU.
 // Recorte: menos ramas hijas, menos segmentos, menos hojas pero mas grandes.
@@ -63,29 +98,35 @@ function slim(tree, { leafMul = 0.3, leafSizeMul = 2.0, childMax = [4, 3, 2] } =
   o.leaves.size *= leafSizeMul;
 }
 
-function makeTree(preset, seed, name, slimOpts) {
+function makeTree(it) {
   const tree = new Tree();
-  tree.loadPreset(preset);
-  tree.options.seed = seed;
-  slim(tree, slimOpts);
+  if (it.willow) applyWillow(tree, it.willow);
+  else { tree.loadPreset(it.preset); tree.options.seed = it.seed; }
+  slim(tree, it.slim);
   tree.generate();
-  tree.name = name;
+  tree.name = it.name;
   tree.updateMatrixWorld(true);
-  // reporte de presupuesto por variante
+  // reporte de presupuesto y de bbox (min.y muy negativo = fit bonsai en el juego)
   let tris = 0;
   tree.traverse((n) => { if (n.isMesh) tris += (n.geometry.index ? n.geometry.index.count : n.geometry.attributes.position.count) / 3; });
-  log(name + ': ' + Math.round(tris) + ' tris');
+  const bb = new THREE.Box3().setFromObject(tree);
+  log(it.name + ': ' + Math.round(tris) + ' tris | y ' + bb.min.y.toFixed(1) + ' .. ' + bb.max.y.toFixed(1));
   return tree;
 }
 
-async function exportGroup(items, filename) {
+function buildGroupScene(items) {
   const scene = new THREE.Scene();
   let x = 0;
   for (const it of items) {
-    const t = makeTree(it.preset, it.seed, it.name, it.slim);
+    const t = makeTree(it);
     t.position.x = x; x += 30;   // separados para que sus bounding boxes no se mezclen
     scene.add(t);
   }
+  return scene;
+}
+
+async function exportGroup(items, filename) {
+  const scene = buildGroupScene(items);
   await waitTextures(scene);
   const exporter = new GLTFExporter();
   const buf = await exporter.parseAsync(scene, { binary: true });
@@ -96,20 +137,53 @@ async function exportGroup(items, filename) {
   log(filename + ' exportado (' + Math.round(blob.size / 1024) + ' KB)');
 }
 
+// SOLO sauces: el Comandante decreto que el unico arbol del barrio es el sauce
+// slim neutro en hojas: el follaje del sauce ya viene afinado en applyWillow
+const WSLIM = { leafMul: 1, leafSizeMul: 1, childMax: [4, 3, 2] };
+const TREE_SET = [
+  { name: 'sauce_a', willow: { droop: 0.1, lean: 0, seed: 101 }, slim: WSLIM },
+  { name: 'sauce_b', willow: { droop: 0.13, lean: 0.12, seed: 202 }, slim: WSLIM },
+  { name: 'sauce_c', willow: { droop: 0.08, lean: -0.1, seed: 303 }, slim: WSLIM },
+  { name: 'sauce_d', willow: { droop: 0.11, lean: 0.05, seed: 404 }, slim: WSLIM },
+];
+
+// modo preview (?preview=1): renderiza el set en pantalla para iterar params
+async function preview(items) {
+  const scene = buildGroupScene(items);
+  await waitTextures(scene);
+  scene.background = new THREE.Color(0x9fc8ea);
+  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x9a8a6a, 1.0));
+  const sun = new THREE.DirectionalLight(0xfff1d0, 2.2);
+  sun.position.set(40, 60, 30);
+  scene.add(sun);
+  const box = new THREE.Box3().setFromObject(scene);
+  const size = box.getSize(new THREE.Vector3());
+  const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.5, 800);
+  cam.position.set(size.x * 0.5, size.y * 0.7, size.y * 2.6);
+  cam.lookAt(size.x * 0.5, size.y * 0.45, 0);
+  const r = new THREE.WebGLRenderer({ antialias: true });
+  r.setSize(innerWidth, innerHeight);
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  document.body.appendChild(r.domElement);
+  r.render(scene, cam);
+  window.__BAKE_STATE__ = 'preview';
+  log('PREVIEW listo');
+}
+
 try {
-  await exportGroup([
-    { preset: 'Oak Medium', seed: 4021, name: 'tree_oak_a' },
-    { preset: 'Oak Large', seed: 977, name: 'tree_oak_b' },
-    { preset: 'Ash Medium', seed: 1311, name: 'tree_ash_a' },
-    { preset: 'Aspen Medium', seed: 2205, name: 'tree_aspen_a' },
-  ], 'trees_real.glb');
-  await exportGroup([
-    { preset: 'Bush 1', seed: 51, name: 'bush_a', slim: { leafMul: 0.3, leafSizeMul: 1.8, childMax: [4, 2, 1] } },
-    { preset: 'Bush 2', seed: 77, name: 'bush_b', slim: { leafMul: 0.35, leafSizeMul: 1.7, childMax: [4, 2, 1] } },
-    { preset: 'Bush 3', seed: 90, name: 'bush_c', slim: { leafMul: 0.35, leafSizeMul: 1.7, childMax: [4, 2, 1] } },
-  ], 'bushes_real.glb');
-  window.__BAKE_STATE__ = 'done';
-  log('LISTO');
+  if (new URLSearchParams(location.search).get('preview') === '1') {
+    await preview(TREE_SET);
+  } else {
+    await exportGroup(TREE_SET, 'trees_real.glb');
+    await exportGroup([
+      { preset: 'Bush 1', seed: 51, name: 'bush_a', slim: { leafMul: 0.3, leafSizeMul: 1.8, childMax: [4, 2, 1] } },
+      { preset: 'Bush 2', seed: 77, name: 'bush_b', slim: { leafMul: 0.35, leafSizeMul: 1.7, childMax: [4, 2, 1] } },
+      { preset: 'Bush 3', seed: 90, name: 'bush_c', slim: { leafMul: 0.35, leafSizeMul: 1.7, childMax: [4, 2, 1] } },
+    ], 'bushes_real.glb');
+    window.__BAKE_STATE__ = 'done';
+    log('LISTO');
+  }
 } catch (e) {
   window.__BAKE_STATE__ = 'error: ' + e.message;
   log('ERROR: ' + e.message);

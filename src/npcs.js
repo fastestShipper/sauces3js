@@ -2,9 +2,9 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260707a';
-import { sanitizeImported } from './glbutil.js?v=20260701f';
-import { equipWeapon } from './weapons.js?v=20260701f';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260707c';
+import { sanitizeImported } from './glbutil.js?v=20260707c';
+import { equipWeapon } from './weapons.js?v=20260707c';
 
 const ADV_SCALE = 1.9 / 2.54;   // personajes KayKit (rig Medium ~2.54u) a ~1.9m
 const ADV_FILES = ['char_knight.glb', 'char_barbarian.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue.glb', 'char_rogue_hooded.glb'];
@@ -126,7 +126,7 @@ export class StreetLife {
       const collider = { x: 0, z: 0, ang: 0, hw: 1.9, hd: 1.05, roofY: CAR_H - 0.15 };
       this.city.carColliders.push(collider);
       this.traffic.push({
-        node: wrap, pts: r.p, hw: (r.w ?? 6) * 0.5,
+        node: wrap, pts: r.p, hw: (r.w ?? 6) * 0.5, idx: k,
         seg: Math.floor(trng() * Math.max(1, r.p.length - 1)),
         t: trng(), fwd: trng() < 0.5, spd: 6.5 + trng() * 3.5, collider,
       });
@@ -184,13 +184,15 @@ export class StreetLife {
       const lookX = px0 + fdx * 3.5, lookZ = pz0 + fdz * 3.5;
       let blocked = playerPos.y < 1.0 &&
         Math.hypot(playerPos.x - lookX, playerPos.z - lookZ) < 2.3;
-      // freno de following: otro auto ~3.5m adelante en el MISMO sentido.
-      // Los cruces no se frenan entre si (deadlock garantizado en esquinas).
+      // freno anti-solape: otro auto ~3.5m adelante. Mismo sentido = following
+      // normal; en CRUCES cede solo el de indice mayor (orden total de
+      // prioridad -> imposible el deadlock mutuo de esquina).
       if (!blocked) {
         for (const o of this.traffic) {
           if (o === car || o.yaw === undefined) continue;
           if (Math.hypot(o.collider.x - lookX, o.collider.z - lookZ) > 2.6) continue;
-          if (fdx * Math.sin(o.yaw) + fdz * Math.cos(o.yaw) > 0.25) { blocked = true; break; }
+          const sameDir = fdx * Math.sin(o.yaw) + fdz * Math.cos(o.yaw) > 0.25;
+          if (sameDir || o.idx < car.idx) { blocked = true; break; }
         }
       }
       if (!blocked) {

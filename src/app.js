@@ -3,36 +3,36 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260707a';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260707a';
-import { GrassSystem } from './veg/grass.js?v=20260707b';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260707b';
-import { Player } from './player.js?v=20260707a';
-import { MiniMap } from './minimap.js?v=20260701f';
-import { StreetLife } from './npcs.js?v=20260707a';
-import { sanitizeImported } from './glbutil.js?v=20260701f';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701f';
-import { Net } from './net.js?v=20260707a';
-import { ChatUI, showBubble } from './chat.js?v=20260701f';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701f';
-import { authRequest } from './rpg/account.js?v=20260701f';
-import { MobField } from './rpg/mobs.js?v=20260701f';
-import { Inventory } from './rpg/loot.js?v=20260701f';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260701f';
-import { Combat } from './rpg/combat.js?v=20260701f';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260701f';
-import { Effects } from './rpg/effects.js?v=20260701f';
-import { attachWeaponByName } from './weapons.js?v=20260701f';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260701f';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260701f';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260701f';
-import { SocialPanel } from './social.js?v=20260701f';
-import { SkillSystem } from './rpg/skills.js?v=20260701f';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260701f';
-import { createSfx } from './sfx.js?v=20260701f';
-import { installTouchControls } from './touch.js?v=20260701f';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260707c';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260707c';
+import { GrassSystem } from './veg/grass.js?v=20260707c';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260707c';
+import { Player } from './player.js?v=20260707c';
+import { MiniMap } from './minimap.js?v=20260707c';
+import { StreetLife } from './npcs.js?v=20260707c';
+import { sanitizeImported } from './glbutil.js?v=20260707c';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260707c';
+import { Net } from './net.js?v=20260707c';
+import { ChatUI, showBubble } from './chat.js?v=20260707c';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260707c';
+import { authRequest } from './rpg/account.js?v=20260707c';
+import { MobField } from './rpg/mobs.js?v=20260707c';
+import { Inventory } from './rpg/loot.js?v=20260707c';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260707c';
+import { Combat } from './rpg/combat.js?v=20260707c';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260707c';
+import { Effects } from './rpg/effects.js?v=20260707c';
+import { attachWeaponByName } from './weapons.js?v=20260707c';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260707c';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260707c';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260707c';
+import { SocialPanel } from './social.js?v=20260707c';
+import { SkillSystem } from './rpg/skills.js?v=20260707c';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260707c';
+import { createSfx } from './sfx.js?v=20260707c';
+import { installTouchControls } from './touch.js?v=20260707c';
 
-const APP_VERSION = '20260707a';
+const APP_VERSION = '20260707c';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -400,7 +400,10 @@ async function boot() {
       const up = new THREE.Vector3(0, 1, 0);
       spots.forEach((sp, i) => {
         const targetH = opts.h ? (opts.h[0] + rng() * (opts.h[1] - opts.h[0])) : 1;
-        const sc = opts.fit ? targetH / Math.max(size.y, 0.05) : (opts.scale ?? 1);
+        // fitTop: escala por la altura VISIBLE (base->copa). Para arboles con
+        // faldon colgante bajo la base (sauces), size.y completo da bonsai.
+        const fitBase = opts.fitTop ? Math.max(box.max.y, 0.05) : Math.max(size.y, 0.05);
+        const sc = opts.fit ? targetH / fitBase : (opts.scale ?? 1);
         const ang = sp[2] !== undefined && !opts.randRot ? sp[2] : rng() * Math.PI * 2;
         q.setFromAxisAngle(up, ang);
         const baseY = (opts.y ?? 0) + (opts.lift ? -box.min.y * sc : 0);
@@ -423,8 +426,10 @@ async function boot() {
     return null;
   });
   const decorPreload = {
-    trees: preloadGLB('trees_real.glb'),
-    bushes: preloadGLB('bushes_real.glb'),
+    // GOTCHA: los GLB no llevan ?v= y el cache del browser puede servir la
+    // version vieja tras un deploy. Los que se REGENERAN llevan el stamp.
+    trees: preloadGLB('trees_real.glb?v=' + APP_VERSION),
+    bushes: preloadGLB('bushes_real.glb?v=' + APP_VERSION),
     cars: CAR_FILES.map(preloadGLB),
   };
 
@@ -468,10 +473,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
 
   const loadHeavyDecor = async () => {
     // planta un set de variantes (nodos con nombre de un GLB) sobre los spots
-    const plantSet = (variants, plan) => variants.forEach((t, k) =>
+    const plantSet = (variants, plan, lift = true) => variants.forEach((t, k) =>
       plan.forEach(([spots, h, seed0]) =>
         instancedRoot(t, spots.filter((_, i) => i % variants.length === k),
-          { fit: true, h, lift: true, randRot: true, seed: seed0 + k })));
+          { fit: true, fitTop: !lift, h, lift, randRot: true, seed: seed0 + k })));
     const pickNodes = (gltf, names) => {
       const byName = {};
       for (const sc of gltf.scenes) {
@@ -486,20 +491,24 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       }
       return names.map((n) => byName[n]).filter(Boolean);
     };
+    // alturas +20% vs los arboles previos: el bbox del sauce incluye el faldon
+    // colgante bajo el tronco, asi que el fit lo "achica" si no se compensa
     const treePlan = [
-      [F.trees, [4.0, 5.6], 11],
-      [F.medianTrees, [3.4, 4.6], 16],
-      [P.parkTrees, [4.6, 7.2], 41],
-      ...(data.trees?.length ? [[data.trees, [4.0, 5.6], 77]] : []),
+      [F.trees, [4.8, 6.6], 11],
+      [F.medianTrees, [4.0, 5.4], 16],
+      [P.parkTrees, [5.5, 8.4], 41],
+      ...(data.trees?.length ? [[data.trees, [4.8, 6.6], 77]] : []),
     ];
     let planted = false;
-    // arboles realistas horneados con ez-tree (corteza PBR + hojas alpha-card)
+    // SAUCES llorones horneados con ez-tree: el unico arbol del barrio (decreto
+    // del Comandante — es el Parque LOS SAUCES). lift:false = el pivote del
+    // tronco va al suelo y las ramas colgantes barren el pasto, como sauce real
     const tg = await decorPreload.trees;
     if (tg) {
-      const TREES = pickNodes(tg, ['tree_oak_a', 'tree_oak_b', 'tree_ash_a', 'tree_aspen_a']);
+      const TREES = pickNodes(tg, ['sauce_a', 'sauce_b', 'sauce_c', 'sauce_d']);
       if (TREES.length === 4) {
         TREES.forEach(addFoliageSway);
-        plantSet(TREES, treePlan);
+        plantSet(TREES, treePlan, false);
         planted = true;
       }
     }
@@ -564,7 +573,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     scene.add(pim);
   }
 
-  // postes de luz de concreto + cables con catenaria (firma limeña)
+  // postes de concreto AMBOS lados + la MARANHA de cables limena: manojos a
+  // varias alturas y sags, cables flojos de telefonica y cruces sobre la pista
   {
     const spots = F.poleRuns.flat();
     const poleGeo = new THREE.CylinderGeometry(0.07, 0.14, 7.5, 7);
@@ -584,8 +594,46 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       });
       scene.add(im);
     }
+    // transformadores grises en uno de cada 4 postes (firma de esquina limena)
+    {
+      const tSpots = spots.filter((_, i) => i % 4 === 1);
+      if (tSpots.length) {
+        const tGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.85, 8);
+        tGeo.translate(0.32, 5.7, 0);
+        const tim = new THREE.InstancedMesh(tGeo, new THREE.MeshStandardMaterial({ color: 0x6f6f6a, roughness: 0.9 }), tSpots.length);
+        tim.castShadow = true;
+        const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+        const up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+        tSpots.forEach((sp, i) => {
+          q.setFromAxisAngle(up, sp[2]);
+          m4.compose(new THREE.Vector3(sp[0], 0, sp[1]), q, one);
+          tim.setMatrixAt(i, m4);
+        });
+        scene.add(tim);
+      }
+    }
     const cpos = [];
     const SEGS = 6;
+    const rngC = mulberry32(4242);
+    // catenaria generica entre dos puntos 3D de anclaje
+    const catenary = (x1, z1, x2, z2, hy, sag, jitter = 0) => {
+      const jx = jitter ? (rngC() - 0.5) * jitter : 0;
+      const jz = jitter ? (rngC() - 0.5) * jitter : 0;
+      for (let s = 0; s < SEGS; s++) {
+        for (const tt of [s / SEGS, (s + 1) / SEGS]) {
+          cpos.push(
+            x1 + (x2 - x1) * tt + jx * Math.sin(Math.PI * tt),
+            hy - Math.sin(Math.PI * tt) * sag,
+            z1 + (z2 - z1) * tt + jz * Math.sin(Math.PI * tt));
+        }
+      }
+    };
+    // manojo por vano: [offset en el brazo, altura, mult de sag]
+    const BUNDLE = [
+      [-0.45, 7.05, 1.0], [-0.15, 7.05, 1.12], [0.15, 7.05, 0.94], [0.45, 7.05, 1.06],
+      [-0.3, 6.35, 1.3], [0.3, 6.35, 1.2],
+      [0.08, 5.8, 2.1], [-0.42, 5.7, 1.8],   // telefonica floja (la que cuelga)
+    ];
     for (const runArr of F.poleRuns) {
       for (let i = 0; i + 1 < runArr.length; i++) {
         const a = runArr[i], b = runArr[i + 1];
@@ -594,17 +642,16 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
         const sag = span * 0.05;
         // brazo perpendicular a la calle: yaw mapea +X a (cos,−sin)
         const armX = Math.cos(a[2]), armZ = -Math.sin(a[2]);
-        for (const [off, hy] of [[-0.45, 7.05], [0.45, 7.05], [0, 6.35]]) {
-          for (let s = 0; s < SEGS; s++) {
-            for (const tt of [s / SEGS, (s + 1) / SEGS]) {
-              cpos.push(
-                a[0] + (b[0] - a[0]) * tt + armX * off,
-                hy - Math.sin(Math.PI * tt) * sag,
-                a[1] + (b[1] - a[1]) * tt + armZ * off);
-            }
-          }
+        for (const [off, hy, sm] of BUNDLE) {
+          catenary(a[0] + armX * off, a[1] + armZ * off, b[0] + armX * off, b[1] + armZ * off, hy, sag * sm, 0.5);
         }
       }
+    }
+    // cruces sobre la pista: 2 cables por par de postes enfrentados
+    for (const [x1, z1, x2, z2] of (F.cableCrossings || [])) {
+      const span = Math.hypot(x2 - x1, z2 - z1);
+      catenary(x1, z1, x2, z2, 6.6, span * 0.07, 0.4);
+      catenary(x1, z1, x2, z2, 6.0, span * 0.1, 0.8);
     }
     const cgeo = new THREE.BufferGeometry();
     cgeo.setAttribute('position', new THREE.Float32BufferAttribute(cpos, 3));

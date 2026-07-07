@@ -532,7 +532,17 @@ function notifyFriendPresence(user) {
 // conexion WS
 // ---------------------------------------------------------------------------
 
+// origenes de navegador permitidos (prod + dev local). Clientes sin Origin
+// (herramientas no-browser) pasan: el header solo es confiable EN browsers.
+const ORIGIN_ALLOW = /^(https:\/\/sauces\.controla\.group|https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
+
 wss.on('connection', (ws, req) => {
+  const origin = req && req.headers && req.headers.origin;
+  if (origin && !ORIGIN_ALLOW.test(origin)) {
+    console.log('conn RECHAZADA por origin', origin);
+    ws.close(1008, 'origin');
+    return;
+  }
   const id = nextId++;
   const me = { ws, name: 'Anon', char: 'char_knight.glb', x: 0, z: 0, h: 0, a: 'Idle', account: null };
   clients.set(id, me);
@@ -609,7 +619,11 @@ wss.on('connection', (ws, req) => {
       // si trae token valido, atamos la conexion a la cuenta (para los saves).
       if (m.token && tokens.has(m.token)) me.account = tokens.get(m.token);
       me.name = clean(m.name, 16) || 'Anon';
-      me.char = String(m.char || 'char_knight.glb').slice(0, 40);
+      // char SOLO de la allowlist: se rebroadcastea y cada cliente lo usa como
+      // ruta de asset (path traversal si va crudo). Cernunnos solo Diosito.
+      const wantChar = String(m.char || '');
+      me.char = (CHAR_ALLOWLIST.includes(wantChar) && !(wantChar === GOD_CHAR && me.account !== GOD_USER))
+        ? wantChar : 'char_knight.glb';
       const players = [];
       for (const [oid, c] of clients) {
         if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
