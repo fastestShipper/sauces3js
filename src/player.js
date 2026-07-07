@@ -193,6 +193,12 @@ export class Player {
       }
       this.heading = Math.atan2(dx, dz);
     }
+    // un auto EN MOVIMIENTO puede invadir al jugador quieto (el blocked() de
+    // arriba solo evita entrar): si hay solape, empujarlo fuera del auto
+    if (this.pos.y < 1.25) {
+      const p = this.city.carPushOut(this.pos.x, this.pos.z, 0.28);
+      if (p && !this.city.inRealBuilding(p[0], p[1], 0)) { this.pos.x = p[0]; this.pos.z = p[1]; }
+    }
     if (!this.locked && this.keys['Space'] && this.grounded) { this.velY = 8.4; this.grounded = false; }
     const roofY = this.city.carRoofAt(this.pos.x, this.pos.z);
     if (!this.grounded) {

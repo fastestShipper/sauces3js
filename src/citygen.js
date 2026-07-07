@@ -19,6 +19,72 @@ export const TRIM_COLORS = [
   [0.92, 0.91, 0.88], [0.25, 0.30, 0.28],
 ];
 
+// ancla del mundo: centro de la gruta del Parque Los Sauces (coord pinneada)
+export const WORLD_ANCHOR = [-62, -15];
+// radio jugable: 1 km a la redonda de la gruta
+export const WORLD_RADIUS = 1000;
+
+// Recorta la data OSM a un radio desde el ancla. Calles y barreras se clipean
+// al circulo (con punto de interseccion exacto); poligonos (edificios/verde)
+// entran o salen completos por centroide; arboles y POIs por distancia.
+export function cropZoneData(data, cx = WORLD_ANCHOR[0], cz = WORLD_ANCHOR[1], radius = WORLD_RADIUS) {
+  const r2 = radius * radius;
+  const d2 = (x, z) => { const dx = x - cx, dz = z - cz; return dx * dx + dz * dz; };
+  const inside = (p) => d2(p[0], p[1]) <= r2;
+  // punto donde el segmento a(dentro)->b(fuera) cruza el circulo
+  const edgePoint = (a, b) => {
+    const ax = a[0] - cx, az = a[1] - cz;
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const A = dx * dx + dz * dz;
+    if (A < 1e-9) return [a[0], a[1]];
+    const B = 2 * (ax * dx + az * dz);
+    const C = ax * ax + az * az - r2;
+    const disc = Math.max(0, B * B - 4 * A * C);
+    const t = Math.max(0, Math.min(1, (-B + Math.sqrt(disc)) / (2 * A)));
+    return [+(a[0] + dx * t).toFixed(2), +(a[1] + dz * t).toFixed(2)];
+  };
+  // parte una polilinea en tramos que quedan dentro del circulo
+  const clipPolyline = (pts) => {
+    const runs = [];
+    let cur = null;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (inside(p)) {
+        if (!cur) {
+          cur = [];
+          if (i > 0) cur.push(edgePoint(p, pts[i - 1]));
+        }
+        cur.push(p);
+      } else if (cur) {
+        cur.push(edgePoint(pts[i - 1], p));
+        if (cur.length >= 2) runs.push(cur);
+        cur = null;
+      }
+    }
+    if (cur && cur.length >= 2) runs.push(cur);
+    return runs;
+  };
+  const centroidIn = (ring) => {
+    let sx = 0, sz = 0;
+    for (const p of ring) { sx += p[0]; sz += p[1]; }
+    return d2(sx / ring.length, sz / ring.length) <= r2;
+  };
+  const clipAll = (list) => {
+    const out = [];
+    for (const item of list || []) {
+      for (const run of clipPolyline(item.p || [])) out.push({ ...item, p: run });
+    }
+    return out;
+  };
+  data.roads = clipAll(data.roads);
+  data.barriers = clipAll(data.barriers);
+  data.buildings = (data.buildings || []).filter((b) => b.p?.length >= 3 && centroidIn(b.p));
+  data.green = (data.green || []).filter((g) => g.p?.length >= 3 && centroidIn(g.p));
+  data.trees = (data.trees || []).filter((t) => d2(t[0], t[1]) <= r2);
+  data.pois = (data.pois || []).filter((p) => d2(p.x, p.z) <= r2);
+  return data;
+}
+
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -238,6 +304,28 @@ export class City {
       if (Math.abs(lz) < c.hw + pad && Math.abs(lx) < c.hd + pad) return true;
     }
     return false;
+  }
+
+  // Si (x,z) quedo DENTRO de un auto (p. ej. un auto en movimiento barrio al
+  // jugador), devuelve el punto mas cercano fuera del collider; null si libre.
+  carPushOut(x, z, pad = 0.25) {
+    for (const c of this.carColliders) {
+      const dx = x - c.x, dz = z - c.z;
+      if (dx * dx + dz * dz > 16) continue;
+      const s = Math.sin(-c.ang), co = Math.cos(-c.ang);
+      const lx = dx * co - dz * s;
+      const lz = dx * s + dz * co;
+      const penD = (c.hd + pad) - Math.abs(lx);
+      const penW = (c.hw + pad) - Math.abs(lz);
+      if (penD <= 0 || penW <= 0) continue;
+      // empuja por el eje de menor penetracion hasta el borde del collider
+      let nlx = lx, nlz = lz;
+      if (penD < penW) nlx = (lx >= 0 ? 1 : -1) * (c.hd + pad);
+      else nlz = (lz >= 0 ? 1 : -1) * (c.hw + pad);
+      // local -> mundo: rotacion +ang (cos(ang) = co, sin(ang) = -s)
+      return [c.x + nlx * co + nlz * s, c.z + (-nlx * s + nlz * co)];
+    }
+    return null;
   }
 
   parcelHeight(full, rng, mcx, mcz) {

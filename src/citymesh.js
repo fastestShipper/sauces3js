@@ -3,7 +3,7 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260701f';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260707a';
 import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260701f';
 
 class Bucket {
@@ -296,6 +296,8 @@ function roofBox(B, cx, y, cz, sx, sy, sz, c) {
 export function buildRoads(city) {
   const road = new Bucket(), walk = new Bucket(), paint = new Bucket(), median = new Bucket(), berma = new Bucket(), curb = new Bucket(), path = new Bucket(), deck = new Bucket();
   const furniture = { trees: [], lamps: [], benches: [], misc: [], medianTrees: [], poleRuns: [], pillars: [], signs: [], planters: [] };
+  // franjas de berma [ax, az, bx, bz, y] (semi-ancho fijo 0.5) para sembrar pasto 3D
+  const bermaStrips = [];
   // elevacion por capa OSM: la data trae `layer` pero NO altura -> la sintetizo.
   // layer 1 = puente/overpass, 2 = pasarela peatonal sobre el, -1 = subterraneo.
   const LAYER_H = (lay) => (lay === 1 ? 5.5 : lay === 2 ? 8.5 : lay === -1 ? -4 : 0);
@@ -386,6 +388,10 @@ export function buildRoads(city) {
           if (!city.onAnyRoad(px, pz, 1.2) && !city.onAnyRoad(qax, qaz, 1.2) && !city.onAnyRoad(qbx, qbz, 1.2)) {
             // san borja real: sardinel → BERMA verde con arboles → vereda de losetas
             quadUV(berma, eax, eaz, ebx, ebz, ux, uz, 0.5, (hw + 0.9) * side, WALK_Y + yo - 0.015, WALK_Y + yo - 0.015, white, 0.35);
+            {
+              const boff = (hw + 0.9) * side;
+              bermaStrips.push([eax + (-uz) * boff, eaz + ux * boff, ebx + (-uz) * boff, ebz + ux * boff, WALK_Y + yo - 0.015]);
+            }
             quadUV(walk, eax, eaz, ebx, ebz, ux, uz, 1.0, (hw + 2.4) * side, WALK_Y + yo, WALK_Y + yo, white, 0.30);
             // sardinel 3D: cara vertical visible desde la pista,
             // pintado AMARILLO cerca de las esquinas (zona rigida limeña)
@@ -479,7 +485,7 @@ export function buildRoads(city) {
     }
     if (run.length > 1) furniture.poleRuns.push(run);
   }
-  return { road, walk, paint, median, berma, curb, path, deck, furniture };
+  return { road, walk, paint, median, berma, curb, path, deck, furniture, bermaStrips };
 }
 
 // Plaza radial empedrada + gruta de la Virgen al centro del parque grande.
@@ -703,6 +709,8 @@ export function buildParks(city) {
   const parkTrees = [];
   const parkBenches = [];
   const parkScatter = [];
+  // celdas de cesped [x0, z0, x1, z1] para sembrar pasto 3D encima
+  const grassRects = [];
   // Parque Los Sauces REAL (centro del barrio, proyectado a coords de juego ~
   // [-90,-25]): la plaza radial + gruta van AQUI, no en el green mas grande
   // (que es otro parque al este). Elige el parque mas cercano al ancla real.
@@ -727,6 +735,7 @@ export function buildParks(city) {
         const patch = hashF(Math.floor(gx * 3.1) + Math.floor(gz * 5.7)) * 0.08;
         const col = [shade * (0.90 + patch), shade * (0.98 + patch * 0.5), shade * (0.82 - patch * 0.3)];
         lawn.quad([gx, 0.015, gz], [gx, 0.015, z1], [x1, 0.015, z1], [x1, 0.015, gz], [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
+        grassRects.push([gx, gz, x1, z1]);
       }
     }
     const want = Math.max(2, Math.min(60, Math.floor((maxx - minx) * (maxz - minz) / 170)));
@@ -760,5 +769,5 @@ export function buildParks(city) {
     }
   }
   if (bigC) buildParkLandmark(plaza, feature, parkBenches, bigC[0], bigC[1]);
-  return { lawn, plaza, feature, parkTrees, parkBenches, parkScatter, landmark: bigC };
+  return { lawn, plaza, feature, parkTrees, parkBenches, parkScatter, grassRects, landmark: bigC };
 }

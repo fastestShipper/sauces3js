@@ -2,7 +2,7 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260701f';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260707a';
 import { sanitizeImported } from './glbutil.js?v=20260701f';
 import { equipWeapon } from './weapons.js?v=20260701f';
 
@@ -182,8 +182,17 @@ export class StreetLife {
       const pz0 = az + uz * L * car.t + ux * lane;
       const fdx = car.fwd ? ux : -ux, fdz = car.fwd ? uz : -uz;
       const lookX = px0 + fdx * 3.5, lookZ = pz0 + fdz * 3.5;
-      const blocked = playerPos.y < 1.0 &&
+      let blocked = playerPos.y < 1.0 &&
         Math.hypot(playerPos.x - lookX, playerPos.z - lookZ) < 2.3;
+      // freno de following: otro auto ~3.5m adelante en el MISMO sentido.
+      // Los cruces no se frenan entre si (deadlock garantizado en esquinas).
+      if (!blocked) {
+        for (const o of this.traffic) {
+          if (o === car || o.yaw === undefined) continue;
+          if (Math.hypot(o.collider.x - lookX, o.collider.z - lookZ) > 2.6) continue;
+          if (fdx * Math.sin(o.yaw) + fdz * Math.cos(o.yaw) > 0.25) { blocked = true; break; }
+        }
+      }
       if (!blocked) {
         car.t += (car.spd * dt / L) * (car.fwd ? 1 : -1);
         if (car.t >= 1) { car.t = 0; car.seg = this.advance(car); continue; }

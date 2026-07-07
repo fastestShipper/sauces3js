@@ -3,14 +3,15 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y } from './citygen.js?v=20260701f';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260701f';
-import { Player } from './player.js?v=20260701f';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260707a';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260707a';
+import { GrassSystem } from './veg/grass.js?v=20260707a';
+import { Player } from './player.js?v=20260707a';
 import { MiniMap } from './minimap.js?v=20260701f';
-import { StreetLife } from './npcs.js?v=20260701f';
+import { StreetLife } from './npcs.js?v=20260707a';
 import { sanitizeImported } from './glbutil.js?v=20260701f';
 import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260701f';
-import { Net } from './net.js?v=20260701f';
+import { Net } from './net.js?v=20260707a';
 import { ChatUI, showBubble } from './chat.js?v=20260701f';
 import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260701f';
 import { authRequest } from './rpg/account.js?v=20260701f';
@@ -30,7 +31,7 @@ import { rollDrops, Wallet } from './rpg/economy.js?v=20260701f';
 import { createSfx } from './sfx.js?v=20260701f';
 import { installTouchControls } from './touch.js?v=20260701f';
 
-const APP_VERSION = '20260701f';
+const APP_VERSION = '20260707a';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -101,11 +102,15 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
+// consola de diagnostico: renderer.info / escena desde devtools
+window.__SAUCES_R__ = renderer;
 
 const scene = new THREE.Scene();
+window.__SAUCES_SCENE__ = scene;
 // near 0.5: con near 0.1 la precision del depth buffer a 100m+ se pulveriza
 // y todas las capas planas (pista/pintura/vereda) parpadean entre si
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 1500);
+window.__SAUCES_CAM__ = camera;
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -274,9 +279,13 @@ async function boot() {
   scene.add(ground);
 
   const data = await (await fetch('./assets/zone.json')).json();
+  // area jugable: 1 km a la redonda de la gruta (presupuesto de detalle
+  // concentrado donde se juega, no en los bordes del export OSM)
+  cropZoneData(data);
   const publicPoisPromise = loadPublicPois(APP_VERSION, data.pois || []);
   setProgress(0.28, 'Mapa OSM…');
   const city = new City(data, cityGenOptions());
+  window.__SAUCES_CITY__ = city;
   setProgress(0.48, 'Edificios y calles…');
 
   // edificios
@@ -314,9 +323,11 @@ async function boot() {
   worldTex.surface('path', { map: worldTex.paving, roughness: 0.96 });
   addBucket(R.road, worldTex._mats.road, false);
   addBucket(R.walk, worldTex._mats.walk, false);
-  addBucket(R.berma, new THREE.MeshStandardMaterial({ map: worldTex.grass, roughness: 1 }), false);
+  const bermaMat = new THREE.MeshStandardMaterial({ map: worldTex.grass, roughness: 1 });
+  addBucket(R.berma, bermaMat, false);
   addBucket(R.paint, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.72 }), false);
-  addBucket(R.median, new THREE.MeshStandardMaterial({ map: worldTex.paving, color: 0xe6ddc8, roughness: 0.96 }), false);
+  const medianMat = new THREE.MeshStandardMaterial({ map: worldTex.paving, color: 0xe6ddc8, roughness: 0.96 });
+  addBucket(R.median, medianMat, false);
   addBucket(R.curb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), false);
   addBucket(R.path, worldTex._mats.path, false);
   // tableros/parapetos de puentes elevados (trebol): concreto toon, proyecta sombra
@@ -327,12 +338,50 @@ async function boot() {
   const P = buildParks(city);
   worldTex.surface('lawn', { map: worldTex.grass, vertexColors: true, roughness: 0.98 });
   addBucket(P.lawn, worldTex._mats.lawn, false);
-  addBucket(P.plaza, new THREE.MeshStandardMaterial({ map: worldTex.paving, vertexColors: true, roughness: 0.9 }), false);
+  const plazaMat = new THREE.MeshStandardMaterial({ map: worldTex.paving, vertexColors: true, roughness: 0.9 });
+  addBucket(P.plaza, plazaMat, false);
   addBucket(P.feature, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), true);
 
   // props instanciados
   const loader = new GLTFLoader();
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+
+  // suelos foto-reales: cuando cada foto carga reemplaza el canvas toon del
+  // material. Tinte leve por material para armonizar con la paleta del barrio.
+  const applyPhoto = (file, mats, { tint = 0xffffff, normal = false, repeat = 0 } = {}) => {
+    new THREE.TextureLoader().load('./assets/textures/' + file, (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      if (!normal) t.colorSpace = THREE.SRGBColorSpace;
+      if (repeat) t.repeat.set(repeat, repeat);
+      t.anisotropy = aniso;
+      for (const m of mats) {
+        if (!m) continue;
+        if (normal) { m.normalMap = t; m.normalScale.set(0.6, 0.6); }
+        else { m.map = t; m.color.set(tint); }
+        m.needsUpdate = true;
+      }
+    });
+  };
+  // cesped bajo el pasto 3D (campo lejano realista)
+  applyPhoto('grass.jpg', [worldTex._mats.lawn, bermaMat], { tint: 0xc8e29e });
+  // pistas de asfalto real (grietas y parches), veredas de loseta con relieve,
+  // sendas/plaza/berma central en adoquin calido
+  applyPhoto('asphalt_real.jpg', [worldTex._mats.road]);
+  applyPhoto('sidewalk.jpg', [worldTex._mats.walk], { tint: 0xf4ead6 });
+  applyPhoto('sidewalk_n.jpg', [worldTex._mats.walk], { normal: true });
+  applyPhoto('paving_real.jpg', [worldTex._mats.path, plazaMat, medianMat], { tint: 0xe9ddc4 });
+  // plano de relleno (todo lo que no es pista/vereda/parque): concreto real
+  applyPhoto('concrete.jpg', [ground.material], { tint: 0xd9d2c2, repeat: 700 });
+  applyPhoto('concrete_n.jpg', [ground.material], { normal: true, repeat: 700 });
+
+  // pasto 3D instanciado (parques + bermas). ?grass=off|low|high para debug
+  const grassParam = new URLSearchParams(location.search).get('grass');
+  const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const grass = grassParam === 'off' ? null : new GrassSystem(scene, {
+    rects: P.grassRects || [],
+    strips: R.bermaStrips || [],
+    mobile: grassParam === 'low' ? true : grassParam === 'high' ? false : isTouchDevice,
+  });
   // instancia los meshes de un Object3D ya cargado en cada spot [x, z(, ang)]
   const instancedRoot = (root, spots, opts = {}) => {
     if (!spots.length) return;
@@ -380,21 +429,52 @@ async function boot() {
   instancedRoot(buildToonPlanter(), F.planters || [], { y: WALK_Y, seed: 22 });
 
   const loadHeavyDecor = async () => {
+    // planta un set de variantes (nodos con nombre de un GLB) sobre los spots
+    const plantSet = (variants, plan) => variants.forEach((t, k) =>
+      plan.forEach(([spots, h, seed0]) =>
+        instancedRoot(t, spots.filter((_, i) => i % variants.length === k),
+          { fit: true, h, lift: true, randRot: true, seed: seed0 + k })));
+    const pickNodes = (gltf, names) => {
+      const byName = {};
+      for (const sc of gltf.scenes) {
+        sanitizeImported(sc, aniso);
+        for (const c of sc.children) {
+          // los GLB horneados traen cada variante desplazada en X (layout del
+          // bake): se anula para que el pivote quede en el origen
+          c.position.set(0, 0, 0);
+          c.updateMatrixWorld(true);
+          byName[c.name] = c;
+        }
+      }
+      return names.map((n) => byName[n]).filter(Boolean);
+    };
+    const treePlan = [
+      [F.trees, [4.0, 5.6], 11],
+      [F.medianTrees, [3.4, 4.6], 16],
+      [P.parkTrees, [4.6, 7.2], 41],
+      ...(data.trees?.length ? [[data.trees, [4.0, 5.6], 77]] : []),
+    ];
+    let planted = false;
+    // arboles realistas horneados con ez-tree (corteza PBR + hojas alpha-card)
     try {
-      const fg = await loader.loadAsync(MOD + 'kaykit_forest.glb');
-      const fnode = {};
-      for (const sc of fg.scenes) { sanitizeImported(sc, aniso); for (const c of sc.children) fnode[c.name] = c; }
-      const TREES = ['Tree_1_A_Color1', 'Tree_2_A_Color1', 'Tree_3_A_Color1', 'Tree_4_A_Color1']
-        .map(n => fnode[n]).filter(Boolean);
-      const plantTrees = (spots, h, seed0) => TREES.forEach((t, k) =>
-        instancedRoot(t, spots.filter((_, i) => i % TREES.length === k),
-          { fit: true, h, lift: true, randRot: true, seed: seed0 + k }));
-      plantTrees(F.trees, [4.0, 5.6], 11);
-      plantTrees(F.medianTrees, [3.4, 4.6], 16);
-      plantTrees(P.parkTrees, [4.6, 7.2], 41);
-      if (data.trees?.length) plantTrees(data.trees, [4.0, 5.6], 77);
-
-    } catch (e) { console.warn('Forest GLB deferred load failed', e); }
+      const tg = await loader.loadAsync(MOD + 'trees_real.glb');
+      const TREES = pickNodes(tg, ['tree_oak_a', 'tree_oak_b', 'tree_ash_a', 'tree_aspen_a']);
+      if (TREES.length === 4) { plantSet(TREES, treePlan); planted = true; }
+    } catch (e) { console.warn('trees_real.glb failed, fallback to kaykit', e); }
+    if (!planted) {
+      try {
+        const fg = await loader.loadAsync(MOD + 'kaykit_forest.glb');
+        const TREES = pickNodes(fg, ['Tree_1_A_Color1', 'Tree_2_A_Color1', 'Tree_3_A_Color1', 'Tree_4_A_Color1']);
+        plantSet(TREES, treePlan);
+      } catch (e) { console.warn('Forest GLB deferred load failed', e); }
+    }
+    // arbustos realistas sobre los puntos de scatter de parques
+    try {
+      const bg = await loader.loadAsync(MOD + 'bushes_real.glb');
+      const BUSHES = pickNodes(bg, ['bush_a', 'bush_b', 'bush_c']);
+      const bushSpots = (P.parkScatter || []).filter((_, i) => i % 3 !== 2);
+      if (BUSHES.length) plantSet(BUSHES, [[bushSpots, [0.7, 1.35], 53]]);
+    } catch (e) { console.warn('bushes_real.glb deferred load failed', e); }
     const carSpots = [];
     {
       const rng = mulberry32(777);
@@ -845,6 +925,17 @@ async function boot() {
     }
     if (trailer) trailer.beforeFrame(dt);
     player.update(dt, camera);
+    {
+      // borde del mundo: nada de caminar hacia el vacio fuera del radio
+      const dxw = player.pos.x - WORLD_ANCHOR[0], dzw = player.pos.z - WORLD_ANCHOR[1];
+      const dw = Math.hypot(dxw, dzw);
+      const lim = WORLD_RADIUS - 3;
+      if (dw > lim) {
+        player.pos.x = WORLD_ANCHOR[0] + (dxw / dw) * lim;
+        player.pos.z = WORLD_ANCHOR[1] + (dzw / dw) * lim;
+      }
+    }
+    if (grass) grass.update(dt, player.pos);
     life.update(dt, player.pos);
     net.update(dt, player);
     teleportTick(dt);

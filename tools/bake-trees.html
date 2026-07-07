@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>bake-trees — genera GLBs realistas con ez-tree (solo tooling, no juego)</title>
+</head>
+<body>
+<pre id="log">bake-trees: generando…</pre>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "@dgreenheck/ez-tree": "https://cdn.jsdelivr.net/npm/@dgreenheck/ez-tree@1.1.0/build/ez-tree.es.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { Tree } from '@dgreenheck/ez-tree';
+
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; console.log('[bake]', m); };
+window.__BAKE_STATE__ = 'running';
+
+// espera a que todas las texturas de un objeto tengan imagen decodificada
+async function waitTextures(root, timeoutMs = 20000) {
+  const t0 = performance.now();
+  const pending = () => {
+    const list = [];
+    root.traverse((o) => {
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      for (const m of mats) {
+        for (const k of ['map', 'normalMap', 'aoMap', 'roughnessMap']) {
+          const t = m?.[k];
+          if (t && (!t.image || (t.image.complete === false))) list.push(k);
+        }
+      }
+    });
+    return list;
+  };
+  while (pending().length) {
+    if (performance.now() - t0 > timeoutMs) throw new Error('timeout esperando texturas: ' + pending().join(','));
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+// presupuesto de triangulos: los presets traen ~10-14k tris por arbol (5k+
+// cartas de hoja). Instanciados cientos de veces en las calles funden el GPU.
+// Recorte: menos ramas hijas, menos segmentos, menos hojas pero mas grandes.
+function slim(tree, { leafMul = 0.3, leafSizeMul = 2.0, childMax = [4, 3, 2] } = {}) {
+  const o = tree.options;
+  o.branch.children[0] = Math.min(o.branch.children[0], childMax[0]);
+  o.branch.children[1] = Math.min(o.branch.children[1], childMax[1]);
+  o.branch.children[2] = Math.min(o.branch.children[2], childMax[2]);
+  const segCap = { 0: 5, 1: 4, 2: 3, 3: 3 };
+  const secCap = { 0: 5, 1: 3, 2: 2, 3: 1 };
+  for (const k of [0, 1, 2, 3]) {
+    o.branch.segments[k] = Math.max(3, Math.min(o.branch.segments[k], segCap[k]));
+    o.branch.sections[k] = Math.max(1, Math.min(o.branch.sections[k], secCap[k]));
+  }
+  o.leaves.count = Math.max(4, Math.round(o.leaves.count * leafMul));
+  o.leaves.size *= leafSizeMul;
+}
+
+function makeTree(preset, seed, name, slimOpts) {
+  const tree = new Tree();
+  tree.loadPreset(preset);
+  tree.options.seed = seed;
+  slim(tree, slimOpts);
+  tree.generate();
+  tree.name = name;
+  tree.updateMatrixWorld(true);
+  // reporte de presupuesto por variante
+  let tris = 0;
+  tree.traverse((n) => { if (n.isMesh) tris += (n.geometry.index ? n.geometry.index.count : n.geometry.attributes.position.count) / 3; });
+  log(name + ': ' + Math.round(tris) + ' tris');
+  return tree;
+}
+
+async function exportGroup(items, filename) {
+  const scene = new THREE.Scene();
+  let x = 0;
+  for (const it of items) {
+    const t = makeTree(it.preset, it.seed, it.name, it.slim);
+    t.position.x = x; x += 30;   // separados para que sus bounding boxes no se mezclen
+    scene.add(t);
+  }
+  await waitTextures(scene);
+  const exporter = new GLTFExporter();
+  const buf = await exporter.parseAsync(scene, { binary: true });
+  const blob = new Blob([buf], { type: 'model/gltf-binary' });
+  // POST al mini-servidor local (las descargas multiples las bloquea Chrome)
+  const res = await fetch('http://127.0.0.1:8124/' + filename, { method: 'POST', body: blob });
+  if (!res.ok) throw new Error('upload fallo: ' + res.status);
+  log(filename + ' exportado (' + Math.round(blob.size / 1024) + ' KB)');
+}
+
+try {
+  await exportGroup([
+    { preset: 'Oak Medium', seed: 4021, name: 'tree_oak_a' },
+    { preset: 'Oak Large', seed: 977, name: 'tree_oak_b' },
+    { preset: 'Ash Medium', seed: 1311, name: 'tree_ash_a' },
+    { preset: 'Aspen Medium', seed: 2205, name: 'tree_aspen_a' },
+  ], 'trees_real.glb');
+  await exportGroup([
+    { preset: 'Bush 1', seed: 51, name: 'bush_a', slim: { leafMul: 0.3, leafSizeMul: 1.8, childMax: [4, 2, 1] } },
+    { preset: 'Bush 2', seed: 77, name: 'bush_b', slim: { leafMul: 0.35, leafSizeMul: 1.7, childMax: [4, 2, 1] } },
+    { preset: 'Bush 3', seed: 90, name: 'bush_c', slim: { leafMul: 0.35, leafSizeMul: 1.7, childMax: [4, 2, 1] } },
+  ], 'bushes_real.glb');
+  window.__BAKE_STATE__ = 'done';
+  log('LISTO');
+} catch (e) {
+  window.__BAKE_STATE__ = 'error: ' + e.message;
+  log('ERROR: ' + e.message);
+}
+</script>
+</body>
+</html>
