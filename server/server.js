@@ -220,7 +220,10 @@ function sanitizeChar(raw, account) {
 // ---------------------------------------------------------------------------
 
 const MOB_SPAWNS_PATH = path.join(__dirname, 'mob_spawns.json');
-const MOB_CAP = 40;
+// cap >= spawns totales: TODAS las zonas pobladas desde el arranque. Con 40
+// de 66 el orden del JSON dejaba vacias las zonas cercanas al spawn/parque
+// tras cada restart ("faltan los mobs") hasta que los respawns rotaban.
+const MOB_CAP = 66;
 const MOB_RESPAWN_MS = 12000;
 const MOB_DMG_MAX = 3000;
 const MOB_TICK_MS = 100;
