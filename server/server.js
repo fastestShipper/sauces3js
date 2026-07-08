@@ -176,6 +176,18 @@ function clampInt(v, min, max) {
 // saneado del personaje guardado (anti-cheat + limites)
 // ---------------------------------------------------------------------------
 
+// customizacion visual: slots de rig + accesorios + paleta (allowlists duras)
+const CU_RIGS = ['knight', 'barbarian', 'mage', 'ranger', 'rogue', 'rogue_hooded', 'druid'];
+const CU_ACCS = ['cape_knight', 'helmet', 'visor', 'bearhat', 'hat_mage', 'cape_mage', 'quiver', 'cape_ranger', 'mask', 'cape_rogue', 'backpack'];
+function sanitizeCu(cu) {
+  const rig = (v) => (CU_RIGS.includes(v) ? v : null);
+  return {
+    t: clampInt(cu && cu.t, 0, 3),
+    hd: rig(cu && cu.hd), tr: rig(cu && cu.tr), lg: rig(cu && cu.lg),
+    ac: Array.isArray(cu && cu.ac) ? cu.ac.filter((x) => CU_ACCS.includes(x)).slice(0, 5) : null,
+  };
+}
+
 function sanitizeChar(raw, account) {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -208,12 +220,7 @@ function sanitizeChar(raw, account) {
     level: clampInt(raw.level, 1, 200),
     xp: clampNum(raw.xp, 0, 1e9),
     hpMax: clampNum(raw.hpMax, 1, 100000),
-    custom: {
-      t: clampInt(raw.custom && raw.custom.t, 0, 3),
-      h: Array.isArray(raw.custom && raw.custom.h)
-        ? raw.custom.h.filter((x) => ['cape', 'helmet', 'visor', 'hat', 'quiver', 'mask'].includes(x)).slice(0, 4)
-        : [],
-    },
+    custom: sanitizeCu(raw.custom),
     gold: clampNum(raw.gold, 0, 1e9),
     inv,
     equipId: clean(raw.equipId, 40),
@@ -724,12 +731,8 @@ wss.on('connection', (ws, req) => {
       const wantChar = String(m.char || '');
       me.char = (CHAR_ALLOWLIST.includes(wantChar) && !(wantChar === GOD_CHAR && me.account !== GOD_USER))
         ? wantChar : 'char_knight.glb';
-      // customizacion visual (tinte + piezas ocultas): saneada y rebroadcasteada
-      const VALID_PIECES = ['cape', 'helmet', 'visor', 'hat', 'quiver', 'mask'];
-      me.cu = {
-        t: clampInt(m.cu && m.cu.t, 0, 3),
-        h: Array.isArray(m.cu && m.cu.h) ? m.cu.h.filter((x) => VALID_PIECES.includes(x)).slice(0, 4) : [],
-      };
+      // customizacion visual mix-and-match: saneada y rebroadcasteada
+      me.cu = sanitizeCu(m.cu);
       const players = [];
       for (const [oid, c] of clients) {
         if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, cu: c.cu, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });

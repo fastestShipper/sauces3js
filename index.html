@@ -179,6 +179,15 @@
     min-height: 250px; border-radius: 18px;
     background: radial-gradient(ellipse 70% 60% at 50% 42%, rgba(255,224,138,.14), rgba(255,255,255,0) 70%); }
   #ob-custom { display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px; align-items: center; }
+  .ob-slots { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .ob-slot { display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 4px 8px; }
+  .ob-slot .l { font-size: 10px; font-weight: 700; color: #8b86ac; text-transform: uppercase;
+    letter-spacing: .5px; }
+  .ob-slot .v { font-size: 12px; font-weight: 600; color: #f2f0fa; min-width: 84px; text-align: center; }
+  .ob-slot button { border: 0; background: rgba(255,207,92,.15); color: #ffcf5c; width: 22px;
+    height: 22px; border-radius: 999px; cursor: pointer; font-size: 10px; line-height: 1; }
+  .ob-slot button:hover { background: rgba(255,207,92,.35); }
   .ob-swatches { display: flex; gap: 9px; }
   .ob-swatch { width: 26px; height: 26px; border-radius: 999px; cursor: pointer;
     border: 2px solid rgba(255,255,255,.25); transition: transform .1s, border-color .12s; }
@@ -258,6 +267,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708o"></script>
+<script type="module" src="./src/app.js?v=20260708p"></script>
 </body>
 </html>

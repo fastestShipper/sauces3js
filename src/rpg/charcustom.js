@@ -1,31 +1,57 @@
-// Customizacion de personaje sobre los rigs KayKit MODULARES: cada char trae
-// piezas con nombre (capa/casco/visera/sombrero/carcaj/mascara) que se pueden
-// ocultar, y el tinte se elige de una paleta curada por heroe. El mismo
-// applyCustom() lo usan el jugador local, el preview del onboarding y los
-// jugadores REMOTOS (todos te ven igual).
+// Customizacion REAL mix-and-match: los 7 aventureros KayKit comparten el
+// MISMO esqueleto (root/hips/spine/chest...), asi que sus piezas skinneadas
+// (cabeza/torso+brazos/piernas/accesorios) son intercambiables re-bindeando
+// cada malla donante a los huesos del rig base POR NOMBRE. Miles de combos.
+// El mismo composeCharacter() lo usan el jugador local, el preview del
+// onboarding y los jugadores REMOTOS (todos te ven igual).
 import * as THREE from 'three';
 
-// piezas toggleables por rig (nombre de nodo REAL dentro del GLB)
-export const PIECES_BY_CHAR = {
-  'char_knight.glb': [
-    { id: 'cape', node: 'Knight_Cape', name: 'Capa' },
-    { id: 'helmet', node: 'Knight_Helmet', name: 'Casco' },
-    { id: 'visor', node: 'Knight_HelmetVisor', name: 'Visera' },
-  ],
-  'char_mage.glb': [
-    { id: 'cape', node: 'Mage_Cape', name: 'Capa' },
-    { id: 'hat', node: 'Mage_Hat', name: 'Sombrero' },
-  ],
-  'char_ranger.glb': [
-    { id: 'cape', node: 'Ranger_Cape', name: 'Capa' },
-    { id: 'quiver', node: 'Ranger_Quiver', name: 'Carcaj' },
-  ],
-  'char_rogue_hooded.glb': [
-    { id: 'cape', node: 'RogueHooded_Cape', name: 'Capa' },
-    { id: 'mask', node: 'RogueHooded_Mask', name: 'Máscara' },
-  ],
-  'char_cernunnos.glb': [],
+// los 7 rigs compatibles y el prefijo de sus nodos dentro del GLB
+export const RIGS = {
+  knight: { file: 'char_knight.glb', prefix: 'Knight', name: 'Caballero' },
+  barbarian: { file: 'char_barbarian.glb', prefix: 'Barbarian', name: 'Bárbaro' },
+  mage: { file: 'char_mage.glb', prefix: 'Mage', name: 'Mago' },
+  ranger: { file: 'char_ranger.glb', prefix: 'Ranger', name: 'Explorador' },
+  rogue: { file: 'char_rogue.glb', prefix: 'Rogue', name: 'Pícaro' },
+  rogue_hooded: { file: 'char_rogue_hooded.glb', prefix: 'RogueHooded', name: 'Encapuchado' },
+  druid: { file: 'char_cernunnos.glb', prefix: 'Druid', name: 'Druida' },
 };
+export const RIG_IDS = Object.keys(RIGS);
+
+// nodos por slot: cabeza / torso (body+brazos) / piernas
+const SLOT_NODES = {
+  head: (p) => [p + '_Head'],
+  torso: (p) => [p + '_Body', p + '_ArmLeft', p + '_ArmRight'],
+  legs: (p) => [p + '_LegLeft', p + '_LegRight'],
+};
+
+// accesorios: pieza suelta de un rig concreto, vestible por CUALQUIERA
+export const ACCESSORIES = {
+  cape_knight: { rig: 'knight', node: 'Knight_Cape', name: 'Capa roja' },
+  helmet: { rig: 'knight', node: 'Knight_Helmet', name: 'Casco' },
+  visor: { rig: 'knight', node: 'Knight_HelmetVisor', name: 'Yelmo' },
+  bearhat: { rig: 'barbarian', node: 'Barbarian_BearHat', name: 'Gorro de oso' },
+  hat_mage: { rig: 'mage', node: 'Mage_Hat', name: 'Sombrero' },
+  cape_mage: { rig: 'mage', node: 'Mage_Cape', name: 'Capa mística' },
+  quiver: { rig: 'ranger', node: 'Ranger_Quiver', name: 'Carcaj' },
+  cape_ranger: { rig: 'ranger', node: 'Ranger_Cape', name: 'Capa verde' },
+  mask: { rig: 'rogue_hooded', node: 'RogueHooded_Mask', name: 'Máscara' },
+  cape_rogue: { rig: 'rogue_hooded', node: 'RogueHooded_Cape', name: 'Capa sombría' },
+  backpack: { rig: 'druid', node: 'Druid_Backpack', name: 'Mochila' },
+};
+export const ACC_IDS = Object.keys(ACCESSORIES);
+
+// accesorios PROPIOS de cada clase (el default con el que nace el heroe)
+const DEFAULT_ACC = {
+  'char_knight.glb': ['cape_knight', 'helmet', 'visor'],
+  'char_mage.glb': ['cape_mage', 'hat_mage'],
+  'char_ranger.glb': ['cape_ranger', 'quiver'],
+  'char_rogue_hooded.glb': ['cape_rogue', 'mask'],
+  'char_cernunnos.glb': ['backpack'],
+};
+
+// rig "nativo" de cada charFile de clase (para defaults de slots)
+const RIG_BY_FILE = Object.fromEntries(Object.entries(RIGS).map(([id, r]) => [r.file, id]));
 
 // 4 paletas por heroe: la [0] es la identidad de clase; el resto, looks curados
 export const PALETTES_BY_CLASS = {
@@ -58,35 +84,139 @@ export const PALETTES_BY_CLASS = {
   ],
 };
 
-const VALID_PIECE_IDS = new Set(['cape', 'helmet', 'visor', 'hat', 'quiver', 'mask']);
-
-// sanea un custom {t, h} venido de red/save (defensa: nunca confiar)
-export function sanitizeCustom(cu) {
-  const t = Math.max(0, Math.min(3, Number(cu && cu.t) | 0));
-  const h = Array.isArray(cu && cu.h)
-    ? cu.h.filter((x) => VALID_PIECE_IDS.has(x)).slice(0, 4)
-    : [];
-  return { t, h };
+// custom por defecto de una clase: todo nativo
+export function defaultCustom(charFile) {
+  const rig = RIG_BY_FILE[charFile] || 'knight';
+  return { t: 0, hd: rig, tr: rig, lg: rig, ac: [...(DEFAULT_ACC[charFile] || [])] };
 }
 
-// aplica tinte + visibilidad de piezas a una escena de personaje YA clonada.
-// spec = heroe de classes.js (para charFile/paleta); custom = {t, h}.
-export function applyCustom(charScene, spec, custom) {
-  const cu = sanitizeCustom(custom);
+// sanea un custom venido de red/save. Acepta el formato viejo {t,h} (lo ignora
+// mas alla del tinte) y el nuevo {t,hd,tr,lg,ac}.
+export function sanitizeCustom(cu, charFile) {
+  const d = defaultCustom(charFile || 'char_knight.glb');
+  if (!cu || typeof cu !== 'object') return d;
+  const pick = (v, fallback) => (RIG_IDS.includes(v) ? v : fallback);
+  return {
+    t: Math.max(0, Math.min(3, Number(cu.t) | 0)),
+    hd: pick(cu.hd, d.hd),
+    tr: pick(cu.tr, d.tr),
+    lg: pick(cu.lg, d.lg),
+    ac: Array.isArray(cu.ac) ? cu.ac.filter((x) => ACC_IDS.includes(x)).slice(0, 5) : d.ac,
+  };
+}
+
+// cache de GLTF donantes (un load por archivo por sesion)
+const donorCache = new Map();
+async function loadDonor(loader, file) {
+  if (!donorCache.has(file)) {
+    donorCache.set(file, loader.loadAsync('./assets/models/' + file));
+  }
+  return donorCache.get(file);
+}
+
+// re-bindea una SkinnedMesh donante al esqueleto del rig base mapeando huesos
+// POR NOMBRE (los 7 rigs comparten jerarquia y bind pose; los boneInverses del
+// donante siguen valiendo). Devuelve el clon listo para colgar del base.
+function rebindToSkeleton(donorMesh, bonesByName, fallbackBone) {
+  const mesh = donorMesh.clone();
+  mesh.geometry = donorMesh.geometry;          // la geometria se comparte
+  mesh.material = donorMesh.material.clone();  // material propio (tintes)
+  const bones = donorMesh.skeleton.bones.map((b) => bonesByName.get(b.name) || fallbackBone);
+  mesh.skeleton = new THREE.Skeleton(bones, donorMesh.skeleton.boneInverses);
+  mesh.frustumCulled = false;
+  mesh.castShadow = true;
+  return mesh;
+}
+
+// encuentra la SkinnedMesh de nombre dado en un gltf (nodo mesh con ese name)
+function findSkinned(gltfScene, nodeName) {
+  let found = null;
+  gltfScene.traverse((o) => {
+    if (!found && o.isSkinnedMesh && o.name === nodeName) found = o;
+  });
+  return found;
+}
+
+// ===== COMPONE el personaje: rig base de la clase + piezas elegidas =====
+// charScene = escena YA CLONADA del GLB de la clase (con su esqueleto vivo).
+// Oculta las piezas nativas reemplazadas / no elegidas y cuelga las donantes.
+export async function composeCharacter(loader, charScene, spec, custom) {
+  const cu = sanitizeCustom(custom, spec.char);
+  const baseRig = RIG_BY_FILE[spec.char] || 'knight';
+  const basePrefix = RIGS[baseRig].prefix;
+
+  // indice de huesos del BASE por nombre + un contenedor skinned del base
+  const bonesByName = new Map();
+  let anchor = null;   // SkinnedMesh del base: su parent recibe las piezas
+  charScene.traverse((o) => {
+    if (o.isBone) bonesByName.set(o.name, o);
+    if (!anchor && o.isSkinnedMesh) anchor = o;
+  });
+  const fallbackBone = bonesByName.get('hips') || bonesByName.get('root');
+  if (!anchor || !fallbackBone) return applyTint(charScene, spec, cu);
+
+  // 1) ocultar TODAS las piezas nativas de slots reemplazados y TODOS los
+  //    accesorios nativos (los elegidos se re-agregan como donantes)
+  const hideNodes = new Set();
+  for (const [slot, key] of [['head', 'hd'], ['torso', 'tr'], ['legs', 'lg']]) {
+    if (cu[key] !== baseRig) for (const n of SLOT_NODES[slot](basePrefix)) hideNodes.add(n);
+  }
+  for (const acc of Object.values(ACCESSORIES)) hideNodes.add(acc.node);
+  charScene.traverse((o) => { if (hideNodes.has(o.name)) o.visible = false; });
+
+  // 2) piezas donantes: cargar cada rig necesario y re-bindear sus mallas
+  const wanted = [];   // [rigId, nodeName]
+  for (const [slot, key] of [['head', 'hd'], ['torso', 'tr'], ['legs', 'lg']]) {
+    if (cu[key] !== baseRig) {
+      for (const n of SLOT_NODES[slot](RIGS[cu[key]].prefix)) wanted.push([cu[key], n]);
+    }
+  }
+  for (const accId of cu.ac) {
+    const acc = ACCESSORIES[accId];
+    if (!acc) continue;
+    if (acc.rig === baseRig) {
+      // accesorio nativo: basta con volver a mostrarlo
+      charScene.traverse((o) => { if (o.name === acc.node) o.visible = true; });
+    } else {
+      wanted.push([acc.rig, acc.node]);
+    }
+  }
+  const rigsNeeded = [...new Set(wanted.map(([r]) => r))];
+  const donors = new Map();
+  await Promise.all(rigsNeeded.map(async (r) => {
+    try { donors.set(r, await loadDonor(loader, RIGS[r].file)); }
+    catch { /* pieza perdida: el personaje sale sin ella, jamas revienta */ }
+  }));
+  for (const [rigId, nodeName] of wanted) {
+    const g = donors.get(rigId);
+    if (!g) continue;
+    const donorMesh = findSkinned(g.scene, nodeName);
+    if (!donorMesh) continue;
+    anchor.parent.add(rebindToSkeleton(donorMesh, bonesByName, fallbackBone));
+  }
+
+  return applyTint(charScene, spec, cu);
+}
+
+// tinte de paleta sobre TODO el personaje compuesto (material propio por malla)
+function applyTint(charScene, spec, cu) {
   const palette = PALETTES_BY_CLASS[spec.id] || PALETTES_BY_CLASS.verdugo;
   const tintHex = (palette[cu.t] || palette[0]).tint;
-  const tint = tintHex ? new THREE.Color(tintHex) : null;
-  const hidden = new Set(
-    (PIECES_BY_CHAR[spec.char] || [])
-      .filter((p) => cu.h.includes(p.id))
-      .map((p) => p.node),
-  );
+  if (!tintHex) return charScene;
+  const tint = new THREE.Color(tintHex);
   charScene.traverse((o) => {
-    if (hidden.has(o.name)) o.visible = false;
-    if (o.isMesh && tint && o.material && o.material.color) {
-      // material propio para no pintar caches compartidos
-      o.material = o.material.clone();
+    if (o.isMesh && o.material && o.material.color) {
+      if (!o.material.userData.__tinted) {
+        o.material = o.material.clone();
+        o.material.userData.__tinted = true;
+      }
       o.material.color.multiply(tint);
     }
   });
+  return charScene;
+}
+
+// compat: applyCustom viejo (solo tinte) para llamadas que no componen
+export function applyCustom(charScene, spec, custom) {
+  return applyTint(charScene, spec, sanitizeCustom(custom, spec.char));
 }

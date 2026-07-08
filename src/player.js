@@ -1,10 +1,10 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708o';
-import { makeNametag } from './nametag.js?v=20260708o';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708o';
-import { applyCustom } from './rpg/charcustom.js?v=20260708o';
+import { sanitizeImported } from './glbutil.js?v=20260708p';
+import { makeNametag } from './nametag.js?v=20260708p';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708p';
+import { composeCharacter } from './rpg/charcustom.js?v=20260708p';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -78,8 +78,9 @@ export class Player {
     ch.scale.setScalar(sc);
     ch.position.y = 0;
     ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
-    // look del heroe: paleta elegida + piezas ocultas (charcustom)
-    if (this.heroSpec) applyCustom(ch, this.heroSpec, this.custom);
+    // look del heroe COMPUESTO: cabeza/torso/piernas/accesorios elegidos
+    // de cualquier rig KayKit + paleta (mix-and-match real)
+    if (this.heroSpec) await composeCharacter(loader, ch, this.heroSpec, this.custom);
     sanitizeImported(ch);
     this.char = ch;
     this.root.add(ch);

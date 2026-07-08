@@ -3,38 +3,38 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708o';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708o';
-import { GrassSystem } from './veg/grass.js?v=20260708o';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708o';
-import { Player } from './player.js?v=20260708o';
-import { MiniMap } from './minimap.js?v=20260708o';
-import { StreetLife } from './npcs.js?v=20260708o';
-import { sanitizeImported } from './glbutil.js?v=20260708o';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708o';
-import { Net } from './net.js?v=20260708o';
-import { ChatUI, showBubble } from './chat.js?v=20260708o';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708o';
-import { applyCustom, sanitizeCustom, PIECES_BY_CHAR, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708o';
-import { equipWeapon } from './weapons.js?v=20260708o';
-import { authRequest } from './rpg/account.js?v=20260708o';
-import { MobField } from './rpg/mobs.js?v=20260708o';
-import { Inventory } from './rpg/loot.js?v=20260708o';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708o';
-import { Combat } from './rpg/combat.js?v=20260708o';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708o';
-import { Effects } from './rpg/effects.js?v=20260708o';
-import { attachWeaponByName } from './weapons.js?v=20260708o';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708o';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708o';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708o';
-import { SocialPanel } from './social.js?v=20260708o';
-import { SkillSystem } from './rpg/skills.js?v=20260708o';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708o';
-import { createSfx } from './sfx.js?v=20260708o';
-import { installTouchControls } from './touch.js?v=20260708o';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708p';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708p';
+import { GrassSystem } from './veg/grass.js?v=20260708p';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708p';
+import { Player } from './player.js?v=20260708p';
+import { MiniMap } from './minimap.js?v=20260708p';
+import { StreetLife } from './npcs.js?v=20260708p';
+import { sanitizeImported } from './glbutil.js?v=20260708p';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708p';
+import { Net } from './net.js?v=20260708p';
+import { ChatUI, showBubble } from './chat.js?v=20260708p';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708p';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708p';
+import { equipWeapon } from './weapons.js?v=20260708p';
+import { authRequest } from './rpg/account.js?v=20260708p';
+import { MobField } from './rpg/mobs.js?v=20260708p';
+import { Inventory } from './rpg/loot.js?v=20260708p';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708p';
+import { Combat } from './rpg/combat.js?v=20260708p';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708p';
+import { Effects } from './rpg/effects.js?v=20260708p';
+import { attachWeaponByName } from './weapons.js?v=20260708p';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708p';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708p';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708p';
+import { SocialPanel } from './social.js?v=20260708p';
+import { SkillSystem } from './rpg/skills.js?v=20260708p';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708p';
+import { createSfx } from './sfx.js?v=20260708p';
+import { installTouchControls } from './touch.js?v=20260708p';
 
-const APP_VERSION = '20260708o';
+const APP_VERSION = '20260708p';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -258,7 +258,7 @@ function showClassPick(prefillName) {
 
     // ===== estado de customizacion =====
     let sel = CLASS_LIST[0];
-    let custom = { t: 0, h: [] };
+    let custom = defaultCustom(sel.char);
 
     async function refresh() {
       const seq = ++pLoadSeq;
@@ -269,7 +269,8 @@ function showClassPick(prefillName) {
         pgroup = new THREE.Group();
         const ch = g.scene;
         ch.scale.setScalar(1.9 / 2.54);
-        applyCustom(ch, sel, custom);
+        await composeCharacter(ploader, ch, sel, custom);
+        if (pdisposed || seq !== pLoadSeq) return;
         pgroup.add(ch);
         psc.add(pgroup);
         pmixer = new THREE.AnimationMixer(ch);
@@ -296,6 +297,55 @@ function showClassPick(prefillName) {
     }
     function renderCustomRow() {
       customRow.replaceChildren();
+      // === MIX-AND-MATCH: cabeza / torso / piernas de CUALQUIER rig ===
+      const slots = [['hd', 'Cabeza'], ['tr', 'Torso'], ['lg', 'Piernas']];
+      const selRow = document.createElement('div');
+      selRow.className = 'ob-slots';
+      for (const [key, label] of slots) {
+        const wrap = document.createElement('div');
+        wrap.className = 'ob-slot';
+        const lab = document.createElement('span');
+        lab.className = 'l';
+        lab.textContent = label;
+        const prev = document.createElement('button');
+        prev.type = 'button'; prev.textContent = '◀';
+        const val = document.createElement('span');
+        val.className = 'v';
+        val.textContent = RIGS[custom[key]].name;
+        const next = document.createElement('button');
+        next.type = 'button'; next.textContent = '▶';
+        const cycle = (dir) => {
+          const i = RIG_IDS.indexOf(custom[key]);
+          custom[key] = RIG_IDS[(i + dir + RIG_IDS.length) % RIG_IDS.length];
+          val.textContent = RIGS[custom[key]].name;
+          refresh();
+        };
+        prev.onclick = () => cycle(-1);
+        next.onclick = () => cycle(1);
+        wrap.append(lab, prev, val, next);
+        selRow.appendChild(wrap);
+      }
+      customRow.appendChild(selRow);
+      // === ACCESORIOS: todo el guardarropa del pack, mezclable ===
+      const pc = document.createElement('div');
+      pc.className = 'ob-pieces';
+      for (const accId of ACC_IDS) {
+        const acc = ACCESSORIES[accId];
+        const on = custom.ac.includes(accId);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'ob-piece' + (on ? ' on' : '');
+        b.textContent = (on ? '✓ ' : '') + acc.name;
+        b.onclick = () => {
+          if (on) custom.ac = custom.ac.filter(x => x !== accId);
+          else if (custom.ac.length < 5) custom.ac = [...custom.ac, accId];
+          renderCustomRow();
+          refresh();
+        };
+        pc.appendChild(b);
+      }
+      customRow.appendChild(pc);
+      // === PALETA ===
       const pal = PALETTES_BY_CLASS[sel.id] || [];
       const sw = document.createElement('div');
       sw.className = 'ob-swatches';
@@ -309,25 +359,6 @@ function showClassPick(prefillName) {
         sw.appendChild(b);
       });
       customRow.appendChild(sw);
-      const pieces = PIECES_BY_CHAR[sel.char] || [];
-      if (pieces.length) {
-        const pc = document.createElement('div');
-        pc.className = 'ob-pieces';
-        for (const piece of pieces) {
-          const on = !custom.h.includes(piece.id);
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'ob-piece' + (on ? ' on' : '');
-          b.textContent = (on ? '✓ ' : '✗ ') + piece.name;
-          b.onclick = () => {
-            custom.h = on ? [...custom.h, piece.id] : custom.h.filter(x => x !== piece.id);
-            renderCustomRow();
-            refresh();
-          };
-          pc.appendChild(b);
-        }
-        customRow.appendChild(pc);
-      }
     }
 
     const ACCENTS = { verdugo: '#ff6b5e', piromante: '#ff9a4d', cazadora: '#5fd18a', sombra: '#a98aff' };
@@ -341,7 +372,7 @@ function showClassPick(prefillName) {
       cardBtn.append(eSpan, nSpan, rSpan);
       cardBtn.onclick = () => {
         sel = c;
-        custom = { t: 0, h: [] };
+        custom = defaultCustom(sel.char);
         [...grid.children].forEach(x => x.classList.remove('on'));
         cardBtn.classList.add('on');
         go.disabled = false;
@@ -364,7 +395,7 @@ function showClassPick(prefillName) {
         char: sel.char,
         name: (nameI.value.trim() || sel.name).slice(0, 16),
         className: sel.id,
-        custom: sanitizeCustom(custom),
+        custom: sanitizeCustom(custom, sel.char),
       });
     };
   });
@@ -879,7 +910,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   } else if (auth.god) {
     choice = { char: CERNUNNOS.char, name: CERNUNNOS.name, className: 'cernunnos', god: true };
   } else if (auth.char && auth.char.charFile) {
-    choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className, custom: sanitizeCustom(auth.char.custom || {}) };
+    choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className, custom: sanitizeCustom(auth.char.custom || {}, auth.char.charFile) };
   } else if (auth.guest) {
     choice = await showClassPick('Explorador');
   } else {
@@ -896,7 +927,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     weapon: heroSpec.weapon,
     combatStyle: heroSpec.combatStyle,
     heroSpec,
-    custom: choice.custom || (auth.char && auth.char.custom) || { t: 0, h: [] },
+    custom: sanitizeCustom(choice.custom || (auth.char && auth.char.custom) || {}, heroSpec.char),
   });
   await player.load();
   setBootOverlay(0.42, 'Conectando al barrio…');
