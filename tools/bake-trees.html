@@ -48,35 +48,36 @@ async function waitTextures(root, timeoutMs = 20000) {
 // SAUCE LLORON custom (no hay preset willow en ez-tree; si hay corteza willow).
 // Base Ash Medium + tronco alto, ramas largas con force hacia ABAJO (weeping)
 // y hojas colgantes. `droop` y `lean` permiten variar entre variantes.
-function applyWillow(tree, { droop = 0.14, lean = 0, seed = 1 } = {}) {
+function applyWillow(tree, { droop = 0.1, lean = 0, seed = 1, levels = 2 } = {}) {
   tree.loadPreset('Ash Medium');
   const o = tree.options;
   o.seed = seed;
   o.bark.type = 'willow';
   o.bark.tint = 0xffffff;
   o.bark.textureScale = { x: 1, y: 4 };
-  // tronco CORTO y grueso (el force down dobla todo: cuanto mas corto el
-  // tronco, menos se nota); ramas primarias horizontales largas que caen
-  o.branch.levels = 3;
-  o.branch.angle = { 1: 78, 2: 55, 3: 45 };
-  o.branch.children = { 0: 4, 1: 3, 2: 2 };
+  // CLAVES anti-"arbol destrozado" (feedback del Comandante en prod):
+  // 1. secciones ALTAS = arcos suaves (con 2-3 el force down da codos rotos)
+  // 2. esqueleto SIMPLE (levels 2) = menos ramas peladas sobresaliendo
+  // 3. hojas desde start 0 y count alto = el esqueleto queda CUBIERTO
+  o.branch.levels = levels;
+  o.branch.angle = { 1: 72, 2: 48, 3: 40 };
+  o.branch.children = levels === 2 ? { 0: 6, 1: 3, 2: 2 } : { 0: 4, 1: 3, 2: 2 };
   o.branch.force = { direction: { x: lean, y: -1, z: 0 }, strength: droop };
-  o.branch.gnarliness = { 0: 0.05, 1: 0.1, 2: 0.14, 3: 0.1 };
-  // ramas cortas: con el force down, ramas largas arquean muy por debajo del
-  // suelo (bbox min.y −15) y el fit del juego encoge el arbol a bonsai
-  o.branch.length = { 0: 9, 1: 8, 2: 6, 3: 3.5 };
-  o.branch.radius = { 0: 1.5, 1: 0.6, 2: 0.5, 3: 0.4 };
-  o.branch.sections = { 0: 3, 1: 3, 2: 2, 3: 1 };
-  o.branch.start = { 1: 0.55, 2: 0.15, 3: 0.1 };
-  o.branch.taper = { 0: 0.85, 1: 0.6, 2: 0.68, 3: 0.72 };
-  o.branch.twist = { 0: 0.08, 1: 0.12, 2: 0, 3: 0 };
+  o.branch.gnarliness = { 0: 0.04, 1: 0.05, 2: 0.06, 3: 0.06 };
+  o.branch.length = { 0: 9, 1: 9, 2: 6, 3: 3 };
+  o.branch.radius = { 0: 1.5, 1: 0.55, 2: 0.45, 3: 0.35 };
+  o.branch.sections = { 0: 4, 1: 7, 2: 5, 3: 3 };
+  o.branch.segments = { 0: 5, 1: 4, 2: 3, 3: 3 };
+  o.branch.start = { 1: 0.5, 2: 0.25, 3: 0.2 };
+  o.branch.taper = { 0: 0.85, 1: 0.75, 2: 0.7, 3: 0.7 };
+  o.branch.twist = { 0: 0.05, 1: 0.08, 2: 0, 3: 0 };
   o.leaves.type = 'ash';
   o.leaves.billboard = 'double';
-  o.leaves.angle = 72;
-  o.leaves.count = 9;
-  o.leaves.start = 0.05;
-  o.leaves.size = 3.2;
-  o.leaves.sizeVariance = 0.55;
+  o.leaves.angle = 68;
+  o.leaves.count = levels === 2 ? 22 : 12;
+  o.leaves.start = 0;
+  o.leaves.size = 2.6;
+  o.leaves.sizeVariance = 0.5;
   o.leaves.tint = 0xcfe6a8;
 }
 
@@ -139,12 +140,14 @@ async function exportGroup(items, filename) {
 
 // SOLO sauces: el Comandante decreto que el unico arbol del barrio es el sauce
 // slim neutro en hojas: el follaje del sauce ya viene afinado en applyWillow
-const WSLIM = { leafMul: 1, leafSizeMul: 1, childMax: [4, 3, 2] };
+const WSLIM = { leafMul: 1, leafSizeMul: 1, childMax: [6, 3, 2] };
+// TODAS levels 2: esqueleto simple bien cubierto (el levels 3 asomaba puntas
+// peladas que en el juego leian como "arboles destrozados")
 const TREE_SET = [
-  { name: 'sauce_a', willow: { droop: 0.1, lean: 0, seed: 101 }, slim: WSLIM },
-  { name: 'sauce_b', willow: { droop: 0.13, lean: 0.12, seed: 202 }, slim: WSLIM },
-  { name: 'sauce_c', willow: { droop: 0.08, lean: -0.1, seed: 303 }, slim: WSLIM },
-  { name: 'sauce_d', willow: { droop: 0.11, lean: 0.05, seed: 404 }, slim: WSLIM },
+  { name: 'sauce_a', willow: { droop: 0.08, lean: 0, seed: 505, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_b', willow: { droop: 0.12, lean: 0.1, seed: 606, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_c', willow: { droop: 0.09, lean: -0.08, seed: 303, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_d', willow: { droop: 0.11, lean: 0.05, seed: 404, levels: 2 }, slim: WSLIM },
 ];
 
 // modo preview (?preview=1): renderiza el set en pantalla para iterar params
@@ -159,8 +162,9 @@ async function preview(items) {
   const box = new THREE.Box3().setFromObject(scene);
   const size = box.getSize(new THREE.Vector3());
   const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.5, 800);
-  cam.position.set(size.x * 0.5, size.y * 0.7, size.y * 2.6);
-  cam.lookAt(size.x * 0.5, size.y * 0.45, 0);
+  // a altura de ojos y ~2 alturas de distancia: silueta completa como en el juego
+  cam.position.set(size.x * 0.5, 3, size.y * 2.1);
+  cam.lookAt(size.x * 0.5, size.y * 0.35, 0);
   const r = new THREE.WebGLRenderer({ antialias: true });
   r.setSize(innerWidth, innerHeight);
   r.toneMapping = THREE.ACESFilmicToneMapping;
