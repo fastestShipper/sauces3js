@@ -189,7 +189,9 @@
       transform: translateX(-50%); bottom: 8px; padding: 7px 10px 7px 52px; }
     .rpg-hud-root .rpg-hud-lvl-badge { width: 34px; height: 34px; font-size: 15px; }
     .rpg-hud-root .rpg-hud-bar { height: 11px; }
-    .rpg-skill-root { transform: translateX(-50%); bottom: 84px; align-items: center; }
+    /* body-prefijo: el <style> inyectado de skills.js va DESPUES en la cascada
+       y ganaria con la misma especificidad */
+    body .rpg-skill-root { left: 50%; transform: translateX(-50%); bottom: 88px; align-items: center; }
     .rpg-skill-root .rpg-skill-slot { width: 48px; height: 48px; }
     .rpg-skill-root .rpg-skill-slot .s-emoji { font-size: 20px; }
     .rpg-skill-root .rpg-skill-resbox { width: 216px; }
@@ -242,6 +244,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708i"></script>
+<script type="module" src="./src/app.js?v=20260708j"></script>
 </body>
 </html>
