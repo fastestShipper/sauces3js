@@ -2,9 +2,10 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260709g';
-import { sanitizeImported } from './glbutil.js?v=20260709g';
-import { equipWeapon } from './weapons.js?v=20260709g';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260709h';
+import { sanitizeImported } from './glbutil.js?v=20260709h';
+import { equipWeapon } from './weapons.js?v=20260709h';
+import { CAR_PAINTS, styleCarShell, addHeadlights } from './carstyle.js?v=20260709h';
 
 const ADV_SCALE = 1.9 / 2.54;   // personajes KayKit (rig Medium ~2.54u) a ~1.9m
 const ADV_FILES = ['char_knight.glb', 'char_barbarian.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue.glb', 'char_rogue_hooded.glb'];
@@ -105,7 +106,7 @@ export class StreetLife {
     const carFiles = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
     const carProtos = [];
     for (const f of carFiles) {
-      try { carProtos.push(await loader.loadAsync('./assets/models/' + f)); } catch { }
+      try { const gl = await loader.loadAsync('./assets/models/' + f); gl._file = f; carProtos.push(gl); } catch { }
     }
     for (const p of carProtos) sanitizeImported(p.scene);
     const trng = mulberry32(555);
@@ -115,10 +116,24 @@ export class StreetLife {
       const r = pool[Math.floor(trng() * pool.length)];
       const proto = carProtos[Math.floor(trng() * carProtos.length)];
       const car = proto.scene.clone(true);
+      // pintura por auto de la paleta curada; el taxi conserva su amarillo iconico
+      const paint = proto._file === 'k_taxi.glb' ? null : CAR_PAINTS[Math.floor(trng() * CAR_PAINTS.length)];
+      styleCarShell(car, paint);
       const box = new THREE.Box3().setFromObject(proto.scene);
       const size = box.getSize(new THREE.Vector3());
       const sc = CAR_H / Math.max(size.y, 0.1);
       car.scale.setScalar(sc);
+      addHeadlights(car, box);
+      // ruedas con lado nombrado giran por velocidad; el repuesto del suv
+      // ('wheel-back' sin left/right, montado en el porton) queda quieto
+      const wheels = [];
+      car.traverse(o => { if (o.isMesh && /^wheel-.*(left|right)$/.test(o.name)) wheels.push(o); });
+      let wheelR = 0.3 * sc;
+      if (wheels.length) {
+        const g = wheels[0].geometry;
+        if (!g.boundingBox) g.computeBoundingBox();
+        wheelR = Math.max((g.boundingBox.max.z - g.boundingBox.min.z) * 0.5, 0.05) * sc;
+      }
       const wrap = new THREE.Group();
       wrap.add(car);
       car.position.y = -box.min.y * sc;
@@ -129,6 +144,7 @@ export class StreetLife {
         node: wrap, pts: r.p, hw: (r.w ?? 6) * 0.5, idx: k,
         seg: Math.floor(trng() * Math.max(1, r.p.length - 1)),
         t: trng(), fwd: trng() < 0.5, spd: 6.5 + trng() * 3.5, collider,
+        wheels, wheelR, spin: 0,
       });
     }
     // KayKit no trae anim de sentarse -> vecinos QUIETOS (idle) junto a las bancas
@@ -210,6 +226,12 @@ export class StreetLife {
       car.yaw += dy * Math.min(1, dt * 9);
       car.node.rotation.y = car.yaw;
       car.collider.x = px; car.collider.z = pz; car.collider.ang = car.yaw;
+      // ruedas ruedan segun avance real (frenado = quietas); solo cerca del
+      // jugador para no tocar 150 nodos por frame al otro lado del barrio
+      if (!blocked && car.wheels.length && Math.hypot(playerPos.x - px, playerPos.z - pz) < 130) {
+        car.spin += (car.spd * dt) / car.wheelR;
+        for (const w of car.wheels) w.rotation.x = car.spin;
+      }
     }
   }
 

@@ -1,7 +1,8 @@
 // MobField: renderiza los MOBS que el SERVER posee (vista pura, sin logica).
 // El server decide HP, spawn y muerte; este modulo solo dibuja esqueletos KayKit
 // (Mage/Minion/Rogue/Warrior), billboardea sus barras de vida y reproduce los
-// clips empaquetados (Idle, Hit_A, Death_A, Spawn_Ground) que vienen en el GLB.
+// clips empaquetados del GLB con VARIEDAD determinista por id (idle/ataque/
+// muerte salen de pools) y andar por personalidad k2 del server.
 //
 // El GLB kaykit_skeletons.glb trae 4 rigs (Rig_Mage/Rig_Minion/Rig_Rogue/
 // Rig_Warrior) con sus partes skinned y los clips de animacion. Los huesos calzan
@@ -11,7 +12,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260709g';
+import { sanitizeImported } from '../glbutil.js?v=20260709h';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -22,6 +23,21 @@ const HIT_SPEED = 1.4;             // acelera el clip de impacto para que sea sn
 
 // kind % 4 -> tipo de esqueleto. El server manda kind; el cliente solo lo mapea a un look.
 const KIND_TO_TYPE = ['Minion', 'Rogue', 'Warrior', 'Mage'];
+
+// Pools de VARIEDAD (nombres VERIFICADOS dentro de kaykit_skeletons.glb).
+// Cada mob elige determinista por id: el mismo zombie ataca/idlea/muere igual siempre.
+const ATTACK_POOL = ['1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Horizontal', '1H_Melee_Attack_Stab'];
+const IDLE_POOL = ['Idle_Combat', 'Idle', 'Idle_B', 'Unarmed_Idle'];
+const DEATH_POOL = ['Death_A', 'Death_B', 'Death_C_Skeletons'];
+
+// hash determinista barato del id (numero o string) para repartir variantes estables
+function idHash(id) {
+  if (typeof id === 'number' && Number.isFinite(id)) return Math.abs(id | 0);
+  const s = String(id);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
 // Tinte ZOMBIE: verde putrefacto que oscurece con el nivel (los duros se ven
 // mas podridos). Multiplica el albedo hueso del pack = carne verdosa.
@@ -148,7 +164,8 @@ export class MobField {
     const v = this._createMob(mob);
     // el zombie se LEVANTA del suelo (Awaken); fallback al spawn generico
     if (v) this._playOnce(v, v.actions.Awaken ? 'Awaken' : 'Spawn_Ground');
-    // la ABOMINACION ruge al nacer (se escucha antes de verse)
+    // la ABOMINACION ruge al nacer: encadena el Taunt cuando termina de levantarse
+    if (v && mob && mob.b && v.actions.Taunt) v.queued = 'Taunt';
     if (mob && mob.b && this.sfx) this.sfx.bossRoar?.();
   }
 
@@ -201,21 +218,38 @@ export class MobField {
       const clip = this.clips.find(c => c.name === name);
       return clip ? mixer.clipAction(clip) : null;
     };
-    actions.Idle = bind('Idle_Combat') || bind('Idle') || bind('Idle_B');
-    // andar ZOMBIE del pack (arrastrado) con fallback al walk normal
-    actions.Walk = bind('Walking_D_Skeletons') || bind('Walking_A') || bind('Walk') || bind('Run');
+    // VARIEDAD determinista por id: idle, ataque y muerte salen de pools con
+    // desplazamientos de bits distintos para que no correlacionen entre si.
+    const h = idHash(mob.id);
+    actions.Idle = bind(IDLE_POOL[(h >> 4) % IDLE_POOL.length]) || bind('Idle_Combat') || bind('Idle');
     actions.Hit = bind('Hit_A') || bind('Hit_B');
-    actions.Attack = bind('1H_Melee_Attack_Slice_Diagonal') || bind('Unarmed_Melee_Attack_Punch_A');
-    actions.Death = bind('Death_A') || bind('Death_B');
+    actions.Attack = bind(ATTACK_POOL[h % ATTACK_POOL.length]) || bind('Unarmed_Melee_Attack_Punch_A');
+    actions.Death = bind(DEATH_POOL[(h >> 2) % DEATH_POOL.length]) || bind('Death_A') || bind('Death_B');
+    // ANDAR por personalidad (k2 del server): 0=arrastre normal, 1=corredor, 2=tanque
+    const k2 = mob.k2 | 0;
+    if (k2 === 1) {
+      // corredor: trote real del pack acelerado (se ve frenetico, calza con su velocidad)
+      actions.Walk = bind('Running_A') || bind('Walking_D_Skeletons') || bind('Walking_A');
+      if (actions.Walk) actions.Walk.timeScale = 1.15;
+    } else if (k2 === 2) {
+      // tanque: el mismo arrastre zombie pero LENTO y pesado
+      actions.Walk = bind('Walking_D_Skeletons') || bind('Walking_A');
+      if (actions.Walk) actions.Walk.timeScale = 0.75;
+    } else {
+      // andar ZOMBIE del pack (arrastrado) con fallback al walk normal
+      actions.Walk = bind('Walking_D_Skeletons') || bind('Walking_A') || bind('Walk') || bind('Run');
+    }
     actions.Spawn_Ground = bind('Spawn_Ground');
     actions.Awaken = bind('Skeletons_Awaken_Floor') || null;
+    // solo el BOSS ruge: Taunt encadenado tras levantarse (ver _onSpawn/update)
+    if (mob.b) actions.Taunt = bind('Taunt_Longer') || bind('Taunt');
     if (actions.Idle) actions.Idle.play();
     const v = {
       id: mob.id, root, ch, mixer, actions, bar, ring, mats,
       hp: mob.hp != null ? mob.hp : (mob.hpMax || 1),
       hpMax: mob.hpMax || mob.hp || 1,
       tx: mob.x || 0, tz: mob.z || 0, th: mob.h || 0, state: mob.state || 'idle',
-      busyT: 0, dead: false, flashT: 0,
+      busyT: 0, dead: false, flashT: 0, queued: null,
     };
     this.mobs.set(mob.id, v);
     return v;
@@ -320,7 +354,14 @@ export class MobField {
       if (Number.isFinite(v.th)) v.root.rotation.y = v.th;
       if (v.busyT > 0) {
         v.busyT -= dt;
-        if (v.busyT <= 0 && v.actions.Idle) { try { v.actions.Idle.reset().play(); v.walking = false; } catch {} }
+        if (v.busyT <= 0) {
+          // one-shot ENCADENADO pendiente (p.ej. el Taunt del boss tras el Awaken)
+          const q = v.queued;
+          v.queued = null;
+          if (q && v.actions[q]) {
+            this._playOnce(v, q);
+          } else if (v.actions.Idle) { try { v.actions.Idle.reset().play(); v.walking = false; } catch {} }
+        }
       } else if (v.actions.Walk && v.actions.Idle) {
         const moving = v.state === 'walk';
         if (moving && !v.walking) {

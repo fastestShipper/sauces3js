@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709g';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260709g';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709h';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260709h';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -74,6 +74,15 @@ function triangulate(ring) {
   return tris;
 }
 
+// paleta de toldos comerciales limeños (color solido, sin rayas):
+// rojo teja, verde botella, azul, amarillo mostaza
+const TOLDO_COLORS = [
+  [0.70, 0.25, 0.18],
+  [0.10, 0.32, 0.20],
+  [0.16, 0.32, 0.58],
+  [0.83, 0.62, 0.16],
+];
+
 export function buildBuildings(city) {
   const W = { wall: new Bucket(), glass: new Bucket(), trim: new Bucket(), door: new Bucket(), roof: new Bucket() };
   const blds = city.data.buildings;
@@ -101,14 +110,23 @@ function extrude(W, city, b, bi) {
   const h = Math.max(b.h ?? 5.0, 2.8);
   const parapet = h > 3.5 ? 0.22 : 0.12;
   const base = WALL_COLORS[bi % WALL_COLORS.length];
-  const lite = hashF(bi * 11) * 0.10 - 0.05;
   const plain = !!b.plain;
+  const filler = !b.osm; // relleno generado (frontage/carpet), sin footprint OSM
+  // jitter de brillo mas ancho en el relleno: fillers vecinos con tono distinto
+  // para que la fila party-wall no lea como la misma caja pintada.
+  // OJO: hashF vive en [0.5,1), por eso el centrado en 0.75
+  const lite = filler ? (hashF(bi * 11) - 0.75) * 0.28 : hashF(bi * 11) * 0.10 - 0.05;
   let col = base.map(v => Math.min(1, Math.max(0, v + lite)));
   const ht = b.h ?? 5;
   if (ht >= 11) col = col.map((v, i) => v * (i === 2 ? 1.04 : i === 0 ? 0.94 : 0.97));
   else if (ht >= 8.5) col = col.map((v) => v * 0.98);
   else if (ht < 4.8) col = col.map((v, i) => v * (i < 2 ? 1.03 : 0.96));
   if (plain) col = col.map((v) => v * 0.96);
+  if (filler) {
+    // desvio calido/frio determinista por edificio (variedad party-wall)
+    const warm = (hashF(bi * 13) - 0.75) * 0.24;
+    col = col.map((v, i) => Math.min(1, Math.max(0, v * (1 + (i === 0 ? warm : i === 2 ? -warm : 0)))));
+  }
   {
     // saturar: alejar cada canal de la media (el ACES web lava los tintes)
     const avg = (col[0] + col[1] + col[2]) / 3;
@@ -117,6 +135,11 @@ function extrude(W, city, b, bi) {
   const tcol = TRIM_COLORS[Math.floor(hashF(bi * 23) * 4.99)];
   const zoc = hashF(bi * 29) < 0.7 ? col.map(v => v * 0.55) : [0.40, 0.40, 0.42];
   const rnd = hashF(bi);
+  // toldo comercial sobre la puerta en ~30% de los edificios que dan a calle
+  // (el carpet interior no da a calle); hashF ∈ [0.5,1) → el corte va en 0.65
+  const toldoCol = (!plain && hashF(bi * 71) < 0.65)
+    ? TOLDO_COLORS[Math.floor((hashF(bi * 83) - 0.5) * 2 * 3.99)] : null;
+  let toldoDone = false;
 
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], nb = ring[(i + 1) % ring.length];
@@ -146,6 +169,11 @@ function extrude(W, city, b, bi) {
     if (L < 2.6) continue;
     // expuesta solo parcialmente: pared si, fachada no
     if (buriedMid) continue;
+    // medianera de relleno con vecino mas bajo (jitter ±15% de citygen):
+    // la franja alta queda expuesta pero es medianera CIEGA — pared si,
+    // fachada no (ni ventanas ni zocalo flotando dentro del vecino)
+    if (filler && city.inTallerBuilding(
+      a[0] + ux * L * 0.5 + nx * 0.55, a[1] + uz * L * 0.5 + nz * 0.55, 2.5)) continue;
     // zocalo + cornisa
     const dirt = zoc.map((v) => v * 0.42);
     W.wall.quad(
@@ -154,7 +182,10 @@ function extrude(W, city, b, bi) {
     W.wall.quad(
       [a[0] + nx * .015, 0.38, a[1] + nz * .015], [nb[0] + nx * .015, 0.38, nb[1] + nz * .015],
       [nb[0] + nx * .015, 0.95, nb[1] + nz * .015], [a[0] + nx * .015, 0.95, a[1] + nz * .015], n, zoc, wallUV);
-    W.wall.quad(
+    // relleno: cornisa SALIENTE que rompe la silueta de caja; OSM conserva
+    // la banda plana pintada de siempre
+    if (filler) cornice(W, a, nb, ux, uz, nx, nz, h, tcol);
+    else W.wall.quad(
       [a[0] + nx * .03, h - 0.22, a[1] + nz * .03], [nb[0] + nx * .03, h - 0.22, nb[1] + nz * .03],
       [nb[0] + nx * .03, h, nb[1] + nz * .03], [a[0] + nx * .03, h, a[1] + nz * .03], n, tcol, wallUV);
     // celdas de fachada
@@ -168,7 +199,12 @@ function extrude(W, city, b, bi) {
       const bx = a[0] + ux * cu, bz = a[1] + uz * cu;
       const gk = hashF(bi * 17 + i * 7 + c);
       if (h >= 2.6) {
-        if (c === doorCell && gk < 0.6) door(W, bx, bz, ux, uz, nx, nz, tcol);
+        // si el edificio tiene toldo pendiente, fuerza la puerta comercial
+        const wantToldo = toldoCol && !toldoDone && cw >= 2.2;
+        if (c === doorCell && (gk < 0.6 || wantToldo)) {
+          door(W, bx, bz, ux, uz, nx, nz, tcol);
+          if (wantToldo) { toldo(W, bx, bz, ux, uz, nx, nz, toldoCol); toldoDone = true; }
+        }
         else if (gk < 0.30) garage(W, bx, bz, ux, uz, nx, nz);
         else win(W, bx, bz, 1.05, ux, uz, nx, nz, tcol, hasRejas);
       }
@@ -252,6 +288,39 @@ function garage(W, bx, bz, ux, uz, nx, nz) {
     W.door.quad(P(-hw, y0, .03), P(hw, y0, .03), P(hw, y1, .03), P(-hw, y1, .03), n, shade);
   }
   W.trim.quad(P(-hw - .1, gh, .10), P(hw + .1, gh, .10), P(hw + .1, gh + .18, .10), P(-hw - .1, gh + .18, .10), n, [1, 1, 1]);
+}
+
+// cornisa saliente de relleno: caja delgada perimetral (frente + tapa + fondo
+// + tapas laterales) que sobresale 0.25 m en el remate de la fachada — rompe
+// la silueta de caja pintada. Va al bucket trim (DoubleSide). 10 tris/fachada.
+function cornice(W, a, nb, ux, uz, nx, nz, h, c) {
+  const d0 = 0.03, d1 = 0.25, y0 = h - 0.30;
+  const n = [nx, 0, nz];
+  const P = (p, y, dn) => [p[0] + nx * dn, y, p[1] + nz * dn];
+  W.trim.quad(P(a, y0, d1), P(nb, y0, d1), P(nb, h, d1), P(a, h, d1), n, c);
+  W.trim.quad(P(a, h, d1), P(nb, h, d1), P(nb, h, d0), P(a, h, d0), [0, 1, 0], c);
+  // fondo en sombra (se ve desde la vereda mirando arriba)
+  const dark = c.map((v) => v * 0.82);
+  W.trim.quad(P(a, y0, d0), P(nb, y0, d0), P(nb, y0, d1), P(a, y0, d1), [0, -1, 0], dark);
+  W.trim.quad(P(a, y0, d0), P(a, y0, d1), P(a, h, d1), P(a, h, d0), [-ux, 0, -uz], c);
+  W.trim.quad(P(nb, y0, d0), P(nb, y0, d1), P(nb, h, d1), P(nb, h, d0), [ux, 0, uz], c);
+}
+
+// toldo comercial: faldon inclinado + cenefa frontal colgante + triangulos
+// laterales sobre la puerta de planta baja (color solido de TOLDO_COLORS).
+// bucket trim DoubleSide: el faldon se ve tambien desde abajo. 6 tris.
+function toldo(W, bx, bz, ux, uz, nx, nz, c) {
+  const tw = 1.05, yB = 2.75, yF = 2.35, d0 = 0.06, d1 = 0.95, flap = 0.25;
+  const P = (du, y, dn) => [bx + ux * du + nx * dn, y, bz + uz * du + nz * dn];
+  W.trim.quad(P(-tw, yB, d0), P(tw, yB, d0), P(tw, yF, d1), P(-tw, yF, d1), [nx * 0.42, 0.91, nz * 0.42], c);
+  W.trim.quad(P(-tw, yF, d1), P(tw, yF, d1), P(tw, yF - flap, d1), P(-tw, yF - flap, d1), [nx, 0, nz], c.map((v) => v * 0.9));
+  const sc = c.map((v) => v * 0.82);
+  for (const s of [-1, 1]) {
+    const u = tw * s;
+    W.trim.vert(P(u, yB, d0), [ux * s, 0, uz * s], sc, [0, 0]);
+    W.trim.vert(P(u, yF, d1), [ux * s, 0, uz * s], sc, [0, 0]);
+    W.trim.vert(P(u, yF - flap, d1), [ux * s, 0, uz * s], sc, [0, 0]);
+  }
 }
 
 // balcon: losa volada + baranda frontal y laterales (los materiales del

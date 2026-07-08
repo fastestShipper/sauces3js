@@ -380,7 +380,14 @@ export class City {
               if (ok && (this.inRealBuilding(mcx, mcz, 0.6) || this.inAnyGreen(mcx, mcz))) ok = false;
               if (ok) break;
             }
-            if (ok) fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz), osm: false, generated: 'frontage' });
+            if (ok) {
+              // variedad party-wall: ±15% de altura por parcela (seed por posicion,
+              // determinista) para que la fila de fillers no lea como una caja
+              // repetida. Gratis para colision: el jugador solo usa el footprint 2D
+              // y cachePolys() se rehace despues de fillGaps con esta h ya aplicada.
+              const hj = 0.85 + (hashF(Math.trunc(mcx * 3.7) + Math.trunc(mcz * 5.3) * 57) - 0.5) * 0.6;
+              fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz) * hj, osm: false, generated: 'frontage' });
+            }
             d += frontage;
           }
         }

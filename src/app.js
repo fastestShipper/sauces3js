@@ -3,39 +3,40 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g';
-import { GrassSystem } from './veg/grass.js?v=20260709g';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709g';
-import { Player } from './player.js?v=20260709g';
-import { MiniMap } from './minimap.js?v=20260709g';
-import { StreetLife } from './npcs.js?v=20260709g';
-import { sanitizeImported } from './glbutil.js?v=20260709g';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g';
-import { Net } from './net.js?v=20260709g';
-import { ChatUI, showBubble } from './chat.js?v=20260709g';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g';
-import { equipWeapon } from './weapons.js?v=20260709g';
-import { authRequest } from './rpg/account.js?v=20260709g';
-import { MobField } from './rpg/mobs.js?v=20260709g';
-import { Inventory } from './rpg/loot.js?v=20260709g';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709g';
-import { Combat } from './rpg/combat.js?v=20260709g';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g';
-import { Effects } from './rpg/effects.js?v=20260709g';
-import { attachWeaponByName } from './weapons.js?v=20260709g';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g';
-import { SocialPanel } from './social.js?v=20260709g';
-import { SkillSystem } from './rpg/skills.js?v=20260709g';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260709g';
-import { createSfx } from './sfx.js?v=20260709g';
-import { installTouchControls } from './touch.js?v=20260709g';
-import { createIntroScene } from './introscene.js?v=20260709g';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709h';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709h';
+import { GrassSystem } from './veg/grass.js?v=20260709h';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709h';
+import { Player } from './player.js?v=20260709h';
+import { MiniMap } from './minimap.js?v=20260709h';
+import { StreetLife } from './npcs.js?v=20260709h';
+import { sanitizeImported } from './glbutil.js?v=20260709h';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709h';
+import { Net } from './net.js?v=20260709h';
+import { ChatUI, showBubble } from './chat.js?v=20260709h';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709h';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709h';
+import { equipWeapon } from './weapons.js?v=20260709h';
+import { authRequest } from './rpg/account.js?v=20260709h';
+import { MobField } from './rpg/mobs.js?v=20260709h';
+import { Inventory } from './rpg/loot.js?v=20260709h';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709h';
+import { Combat } from './rpg/combat.js?v=20260709h';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709h';
+import { Effects } from './rpg/effects.js?v=20260709h';
+import { attachWeaponByName } from './weapons.js?v=20260709h';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709h';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709h';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709h';
+import { SocialPanel } from './social.js?v=20260709h';
+import { SkillSystem } from './rpg/skills.js?v=20260709h';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260709h';
+import { createSfx } from './sfx.js?v=20260709h';
+import { installTouchControls } from './touch.js?v=20260709h';
+import { createIntroScene } from './introscene.js?v=20260709h';
+import { styleCarShell } from './carstyle.js?v=20260709h';
 
-const APP_VERSION = '20260709g';
+const APP_VERSION = '20260709h';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -684,9 +685,9 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     // alturas +20% vs los arboles previos: el bbox del sauce incluye el faldon
     // colgante bajo el tronco, asi que el fit lo "achica" si no se compensa
     const treePlan = [
-      [F.trees, [4.8, 6.6], 11],
-      [F.medianTrees, [4.0, 5.4], 16],
-      [P.parkTrees, [5.5, 8.4], 41],
+      [F.trees, [5.6, 7.4], 11],
+      [F.medianTrees, [5.0, 6.4], 16],
+      [P.parkTrees, [6.2, 9.2], 41],
       ...(data.trees?.length ? [[data.trees, [4.8, 6.6], 77]] : []),
     ];
     let planted = false;
@@ -750,6 +751,9 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       const cg = await decorPreload.cars[ci];
       if (!cg || !spots.length) continue;
       sanitizeImported(cg.scene, aniso);
+      // carroceria PBR + vidrio oscuro reflectivo; sin repintar (estacionados
+      // conservan color de fabrica, la variedad la ponen los que circulan)
+      styleCarShell(cg.scene);
       instancedRoot(cg.scene, spots, { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
     }
   };
