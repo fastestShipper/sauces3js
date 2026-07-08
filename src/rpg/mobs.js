@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260709a';
+import { sanitizeImported } from '../glbutil.js?v=20260709b';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -277,6 +277,8 @@ export class MobField {
       } catch { /* clip corrupto: igual se retira */ }
     }
     this.mobs.delete(id);              // ya no es "vivo" para meshes()/picking
+    // cap de cadaveres: en masacres, los mas viejos se retiran ya
+    while (this.dying.length >= 40) { const d0 = this.dying.shift(); this._disposeMob(d0.v); }
     this.dying.push({ v, t: DEATH_HOLD });
   }
 
@@ -345,10 +347,28 @@ export class MobField {
       d.t -= dt;
       if (d.t < 1.0) d.v.root.position.y -= dt * 0.9;   // se hunde en la tierra
       if (d.t <= 0) {
-        this.scene.remove(d.v.root);
+        this._disposeMob(d.v);
         this.dying.splice(i, 1);
       }
     }
+  }
+
+  // libera GPU del cadaver: materiales clonados, barra de vida y anillo
+  // (sin esto, 90 zombies ciclando = leak de VRAM hasta el drop de fps)
+  _disposeMob(v) {
+    this.scene.remove(v.root);
+    for (const m of v.mats || []) { try { m.dispose(); } catch {} }
+    v.root.traverse((o) => {
+      if (o.isMesh && !o.isSkinnedMesh) {
+        try { o.geometry.dispose(); } catch {}
+        try { if (o.material && o.material.map) o.material.map.dispose(); } catch {}
+        try { o.material && o.material.dispose(); } catch {}
+      }
+      if (o.isSprite && o.material) {
+        try { if (o.material.map) o.material.map.dispose(); } catch {}
+        try { o.material.dispose(); } catch {}
+      }
+    });
   }
 
   // roots de los mobs vivos (para raycaster.intersectObjects(..., true) del click)

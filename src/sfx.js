@@ -37,6 +37,21 @@ const SAMPLES = {
   bell: ['kenney/impactBell_heavy_000.ogg'],
   jingle: ['kenney/jingles_STEEL02.ogg', 'kenney/jingles_STEEL04.ogg'],
   equip: ['kenney/drawKnife2.ogg'],
+  // ===== lote 2 MuAPI: fuera los beeps midi =====
+  m_coin: ['gen/coin_pickup.mp3'],
+  m_loot: ['gen/loot_drop.mp3'],
+  m_potion: ['gen/potion_drink.mp3'],
+  m_pdeath: ['gen/player_death.mp3'],
+  m_tele: ['gen/teleport_whoosh.mp3'],
+  m_heal: ['gen/heal_soft.mp3'],
+  m_click: ['gen/ui_click.mp3'],
+  m_pvp: ['gen/pvp_kill.mp3'],
+  m_streak: ['gen/streak_sting.mp3'],
+  m_siren: ['gen/wave_siren.mp3'],
+  m_grunt: ['gen/hurt_grunt.mp3'],
+  m_jump: ['gen/jump_hop.mp3'],
+  m_spend: ['gen/gold_spend.mp3'],
+  m_bossdeath: ['gen/boss_death.mp3'],
 };
 
 // pool de sample por TIPO de skill: cada skill suena distinto
@@ -242,7 +257,8 @@ class Sfx {
 
   // te mordieron: sample de dolor + thump
   hurt() {
-    if (!this._sample('hurt', { gain: 0.55 })) {
+    this._sample('m_grunt', { gain: 0.5, spread: 0.15 });
+    if (!this._sample('hurt', { gain: 0.4 })) {
       this._tone({ type: 'sawtooth', f0: 200, f1: 90, dur: 0.16, gain: 0.28 });
     }
     this._sample('bass', { gain: 0.4, rate: 1.1 });
@@ -254,6 +270,7 @@ class Sfx {
     this._tone({ type: 'triangle', f0: 520, f1: 780, dur: 0.1, gain: 0.22, delay: 0.1 });
   }
   coin() {
+    if (this._sample('m_coin', { gain: 0.45 })) return;
     if (!this._sample('coins', { gain: 0.5 })) {
       this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 });
       this._tone({ type: 'square', f0: 1760, f1: 1760, dur: 0.1, gain: 0.12, delay: 0.06 });
@@ -264,7 +281,11 @@ class Sfx {
     this._sample('steps', { gain: running ? 0.34 : 0.26, spread: 0.12 });
   }
   equipSound() { this._sample('equip', { gain: 0.5 }); }
-  loot() { this._tone({ type: 'sine', f0: 660, f1: 990, dur: 0.12, gain: 0.24 }); this._tone({ type: 'sine', f0: 990, f1: 1320, dur: 0.16, gain: 0.2, delay: 0.1 }); }
+  loot() {
+    if (this._sample('m_loot', { gain: 0.5 })) return;
+    this._tone({ type: 'sine', f0: 660, f1: 990, dur: 0.12, gain: 0.24 });
+    this._tone({ type: 'sine', f0: 990, f1: 1320, dur: 0.16, gain: 0.2, delay: 0.1 });
+  }
   levelup() {
     // jingle musical + campana + sub-bass: level-up con PESO
     const j = this._sample('jingle', { gain: 0.75, spread: 0 });
@@ -274,23 +295,25 @@ class Sfx {
     if (this._sample('levelup_real', { gain: 0.7, spread: 0 })) return;
     for (let i = 0; i < 4; i++) this._tone({ type: 'triangle', f0: 440 * Math.pow(1.26, i), f1: 440 * Math.pow(1.26, i), dur: 0.14, gain: 0.24, delay: i * 0.09 });
   }
-  potion() { this._tone({ type: 'sine', f0: 300, f1: 620, dur: 0.22, gain: 0.24 }); }
-  death() { this._tone({ type: 'sawtooth', f0: 300, f1: 60, dur: 0.7, gain: 0.3 }); this._sample('bass', { gain: 0.7, rate: 0.7 }); }
-  teleport() { this._tone({ type: 'sine', f0: 220, f1: 1400, dur: 0.5, gain: 0.2 }); this._noise({ dur: 0.4, gain: 0.1, fc: 2000, q: 0.6 }); }
-  heal() { this._tone({ type: 'sine', f0: 520, f1: 660, dur: 0.25, gain: 0.14 }); }
-  click() { this._tone({ type: 'square', f0: 900, f1: 900, dur: 0.03, gain: 0.1 }); }
-  pvpkill() { this._tone({ type: 'sawtooth', f0: 200, f1: 400, dur: 0.18, gain: 0.24 }); this._tone({ type: 'sawtooth', f0: 400, f1: 300, dur: 0.22, gain: 0.2, delay: 0.16 }); }
+  potion() { if (!this._sample('m_potion', { gain: 0.55 })) this._tone({ type: 'sine', f0: 300, f1: 620, dur: 0.22, gain: 0.24 }); }
+  death() { this._sample('m_pdeath', { gain: 0.65 }); this._sample('bass', { gain: 0.7, rate: 0.7 }); }
+  teleport() { if (!this._sample('m_tele', { gain: 0.5 })) { this._tone({ type: 'sine', f0: 220, f1: 1400, dur: 0.5, gain: 0.2 }); this._noise({ dur: 0.4, gain: 0.1, fc: 2000, q: 0.6 }); } }
+  heal() { if (!this._sample('m_heal', { gain: 0.4 })) this._tone({ type: 'sine', f0: 520, f1: 660, dur: 0.25, gain: 0.14 }); }
+  click() { if (!this._sample('m_click', { gain: 0.35 })) this._tone({ type: 'square', f0: 900, f1: 900, dur: 0.03, gain: 0.1 }); }
+  pvpkill() { if (!this._sample('m_pvp', { gain: 0.6 })) { this._tone({ type: 'sawtooth', f0: 200, f1: 400, dur: 0.18, gain: 0.24 }); this._tone({ type: 'sawtooth', f0: 400, f1: 300, dur: 0.22, gain: 0.2, delay: 0.16 }); } }
   // la racha sube de tono con cada kill encadenado (feedback adictivo) + punch fisico
   streak(n) {
     if (n < 2) return;
     const f = 660 * Math.pow(1.06, Math.min(20, n));
     this._tone({ type: 'square', f0: f, f1: f * 1.5, dur: 0.09, gain: 0.16, delay: 0.12 });
+    if (n >= 4) this._sample('m_streak', { gain: 0.5, rate: 1 + n * 0.03 });
     if (n >= 5) this._sample('bass', { gain: 0.6, rate: 1 + n * 0.02, delay: 0.1 });
   }
   // invasion: riser cinematico + sirena
   wave() {
-    this._sample('bell', { gain: 0.6, rate: 0.7 });   // campanada grave de alarma
-    this._sample('riser', { gain: 0.5, spread: 0.04 });
+    this._sample('m_siren', { gain: 0.55 });
+    this._sample('bell', { gain: 0.5, rate: 0.7 });   // campanada grave de alarma
+    this._sample('riser', { gain: 0.4, spread: 0.04 });
     for (let i = 0; i < 2; i++) this._tone({ type: 'sawtooth', f0: 340, f1: 620, dur: 0.34, gain: 0.16, delay: 0.5 + i * 0.38 });
   }
 }

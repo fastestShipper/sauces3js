@@ -275,6 +275,8 @@ export class Combat {
         const atk = Math.round(this._playerAtk() * (crit ? 2 : 1) * (finisher ? 1.35 : 1));
         const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
         if (this.effects) {
+          // ARCO del tajo: cada golpe melee dibuja su swing luminoso
+          if (!ptype) this.effects.slashArc(this.player.pos, this.player.heading, (this.classSpec && this.classSpec.auraColor) || 0xfff2d8);
           if (ptype) this.effects.projectile({ x: this.player.pos.x, y: 1.35, z: this.player.pos.z }, { x: target.x, y: 0.9, z: target.z }, ptype);
           this.effects.bloodHit({ x: target.x, y: 1.0, z: target.z });
           // los CRITS revientan carne y hueso (mini gore burst)

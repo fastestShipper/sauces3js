@@ -3,39 +3,39 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709a';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709a';
-import { GrassSystem } from './veg/grass.js?v=20260709a';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709a';
-import { Player } from './player.js?v=20260709a';
-import { MiniMap } from './minimap.js?v=20260709a';
-import { StreetLife } from './npcs.js?v=20260709a';
-import { sanitizeImported } from './glbutil.js?v=20260709a';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709a';
-import { Net } from './net.js?v=20260709a';
-import { ChatUI, showBubble } from './chat.js?v=20260709a';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709a';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709a';
-import { equipWeapon } from './weapons.js?v=20260709a';
-import { authRequest } from './rpg/account.js?v=20260709a';
-import { MobField } from './rpg/mobs.js?v=20260709a';
-import { Inventory } from './rpg/loot.js?v=20260709a';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709a';
-import { Combat } from './rpg/combat.js?v=20260709a';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709a';
-import { Effects } from './rpg/effects.js?v=20260709a';
-import { attachWeaponByName } from './weapons.js?v=20260709a';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709a';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709a';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709a';
-import { SocialPanel } from './social.js?v=20260709a';
-import { SkillSystem } from './rpg/skills.js?v=20260709a';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260709a';
-import { createSfx } from './sfx.js?v=20260709a';
-import { installTouchControls } from './touch.js?v=20260709a';
-import { createIntroScene } from './introscene.js?v=20260709a';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709b';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709b';
+import { GrassSystem } from './veg/grass.js?v=20260709b';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709b';
+import { Player } from './player.js?v=20260709b';
+import { MiniMap } from './minimap.js?v=20260709b';
+import { StreetLife } from './npcs.js?v=20260709b';
+import { sanitizeImported } from './glbutil.js?v=20260709b';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709b';
+import { Net } from './net.js?v=20260709b';
+import { ChatUI, showBubble } from './chat.js?v=20260709b';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709b';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709b';
+import { equipWeapon } from './weapons.js?v=20260709b';
+import { authRequest } from './rpg/account.js?v=20260709b';
+import { MobField } from './rpg/mobs.js?v=20260709b';
+import { Inventory } from './rpg/loot.js?v=20260709b';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709b';
+import { Combat } from './rpg/combat.js?v=20260709b';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709b';
+import { Effects } from './rpg/effects.js?v=20260709b';
+import { attachWeaponByName } from './weapons.js?v=20260709b';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709b';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709b';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709b';
+import { SocialPanel } from './social.js?v=20260709b';
+import { SkillSystem } from './rpg/skills.js?v=20260709b';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260709b';
+import { createSfx } from './sfx.js?v=20260709b';
+import { installTouchControls } from './touch.js?v=20260709b';
+import { createIntroScene } from './introscene.js?v=20260709b';
 
-const APP_VERSION = '20260709a';
+const APP_VERSION = '20260709b';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -1285,6 +1285,16 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     }
     if (trailer) trailer.beforeFrame(dt);
     player.update(dt, camera);
+    {
+      // zona SELLADA (edificio hueco en 3,-47): empuja al jugador afuera
+      const sdx = player.pos.x - 3, sdz = player.pos.z - (-47);
+      const sd = Math.hypot(sdx, sdz);
+      if (sd < 11) {
+        const k = 11 / Math.max(sd, 0.01);
+        player.pos.x = 3 + sdx * k;
+        player.pos.z = -47 + sdz * k;
+      }
+    }
     {
       // borde del mundo: nada de caminar hacia el vacio fuera del radio
       const dxw = player.pos.x - WORLD_ANCHOR[0], dzw = player.pos.z - WORLD_ANCHOR[1];

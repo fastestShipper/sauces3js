@@ -42,6 +42,26 @@ function flashTexture() {
   return _flashTex;
 }
 
+// Textura de ARCO de espada: gradiente angular (filo brillante -> estela).
+let _arcTex = null;
+function arcTexture() {
+  if (_arcTex) return _arcTex;
+  const w = 256, h = 128;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, w, 0);
+  g.addColorStop(0.0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.25)');
+  g.addColorStop(0.85, 'rgba(255,255,255,0.9)');
+  g.addColorStop(1.0, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  _arcTex = new THREE.CanvasTexture(c);
+  _arcTex.colorSpace = THREE.SRGBColorSpace;
+  return _arcTex;
+}
+
 // Dibuja un numero en un canvas y devuelve una CanvasTexture lista para Sprite.
 // fill/stroke en CSS; crit usa fuente mas grande.
 function numberTexture(text, fill, crit) {
@@ -76,6 +96,7 @@ export class Effects {
     this.flashes = [];    // { sprite, life, max }
     this.projectiles = []; // { group, dir, speed, dist, traveled, color, type, to, trail }
     this.rings = [];      // { mesh, life, max, radius } anillos de nova expansivos
+    this.arcs = [];       // { mesh, life, max } arcos de espada (slash trails)
     this.chunks = [];     // { mesh, vel, spin, life, max } pedazos de zombie volando
     this.shakeT = 0;      // screen shake restante (s)
     this.shakeAmp = 0;    // amplitud actual del shake (unidades de mundo)
@@ -131,6 +152,14 @@ export class Effects {
     }
   }
 
+  // caps duros: nunca acumular nodos hasta el drop de fps
+  _capArray(arr, cap) {
+    while (arr.length > cap) {
+      const e = arr.shift();
+      this._kill(e.mesh || e.sprite, true);
+    }
+  }
+
   // Mancha plana roja en el piso (CircleGeometry horizontal). Escala y se desvanece.
   _pool(pos) {
     const p = readPos(pos);
@@ -147,6 +176,7 @@ export class Effects {
     mesh.scale.setScalar(0.2);
     this.scene.add(mesh);
     this.pools.push({ mesh, life: POOL_LIFE, max: POOL_LIFE });
+    this._capArray(this.pools, 36);
   }
 
   // Numero flotante que sube y se desvanece. Sprite billboard hacia la camara.
@@ -172,7 +202,26 @@ export class Effects {
     sprite.position.set(p.x, p.y + 1.4, p.z);
     sprite.renderOrder = 999; // por encima de la geometria (depthTest:false)
     this.scene.add(sprite);
+    this._capArray(this.numbers, 80);
     this.numbers.push({ sprite, life: NUMBER_LIFE, max: NUMBER_LIFE });
+  }
+
+  // ARCO DE ESPADA: abanico luminoso que sigue el tajo (el alma visual del melee)
+  slashArc(pos, heading, colorHex) {
+    const p = readPos(pos);
+    const geo = new THREE.RingGeometry(0.7, 2.2, 24, 1, 0, 2.4);
+    const mat = new THREE.MeshBasicMaterial({
+      map: arcTexture(), color: new THREE.Color(colorHex != null ? colorHex : 0xfff2d8),
+      transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p.x, 1.15, p.z);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = -(heading || 0) + Math.PI / 2 - 1.2;
+    this.scene.add(mesh);
+    this.arcs.push({ mesh, life: 0.22, max: 0.22 });
+    this._capArray(this.arcs, 10);
   }
 
   // NOVA: anillo de energia que se expande por el piso hasta `radius` y se apaga.
@@ -189,7 +238,18 @@ export class Effects {
     mesh.position.set(p.x, 0.15, p.z);
     mesh.scale.setScalar(0.4);
     this.scene.add(mesh);
+    this._capArray(this.rings, 30);
     this.rings.push({ mesh, life: 0.55, max: 0.55, radius });
+    // segundo anillo fino y rapido (doble onda = profundidad)
+    const geo2 = new THREE.RingGeometry(0.9, 0.98, 40);
+    const mesh2 = new THREE.Mesh(geo2, mat.clone());
+    mesh2.rotation.x = -Math.PI / 2;
+    mesh2.position.set(p.x, 0.22, p.z);
+    mesh2.scale.setScalar(0.3);
+    this.scene.add(mesh2);
+    this.rings.push({ mesh: mesh2, life: 0.4, max: 0.4, radius: radius * 1.25 });
+    // chispas radiales rasantes
+    this._spurt({ x: p.x, y: 0.5, z: p.z }, 14, 6.5, 0.5, colorHex != null ? colorHex : 0xffa040);
     this.hitFlash({ x: p.x, y: 0.4, z: p.z }, colorHex);
   }
 
@@ -274,6 +334,7 @@ export class Effects {
         life: 4.2, max: 4.2,
       });
     }
+    this._capArray(this.chunks, 60);
   }
 
   // Fogonazo blanco additive corto para feedback de impacto. colorHex opcional.
@@ -308,7 +369,7 @@ export class Effects {
     if (hasGeo && mesh.geometry) mesh.geometry.dispose();
     const mat = mesh.material;
     if (mat) {
-      if (mat.map) mat.map.dispose();
+      if (mat.map) if (mat.map !== _flashTex && mat.map !== _arcTex) mat.map.dispose();
       mat.dispose();
     }
   }
@@ -343,6 +404,7 @@ export class Effects {
     }
     this.scene.add(group);
     const speed = type === 'arrow' ? 40 : 26;
+    this._capArray(this.projectiles, 60);
     this.projectiles.push({ group, dir, speed, dist, traveled: 0, color, type, to: b, trail: 0 });
   }
 
@@ -460,6 +522,16 @@ export class Effects {
       }
       const t = c.life / c.max;
       if (t < 0.3) { c.mesh.material.transparent = true; c.mesh.material.opacity = t / 0.3; }
+    }
+
+    // Arcos de espada: crecen 1->1.7 y se apagan en 220ms
+    for (let i = this.arcs.length - 1; i >= 0; i--) {
+      const a = this.arcs[i];
+      a.life -= d;
+      if (a.life <= 0) { this._kill(a.mesh, true); this.arcs.splice(i, 1); continue; }
+      const t = 1 - a.life / a.max;
+      a.mesh.scale.setScalar(1 + t * 0.7);
+      a.mesh.material.opacity = 0.95 * (1 - t * t);
     }
 
     // Anillos de nova: expanden hasta su radio y se desvanecen.

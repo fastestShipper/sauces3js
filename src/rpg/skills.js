@@ -1,7 +1,7 @@
 // Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
 // (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
 // Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
-import { classById, CERNUNNOS } from './classes.js?v=20260709a';
+import { classById, CERNUNNOS } from './classes.js?v=20260709b';
 
 const STYLE_ID = 'rpg-skill-style';
 
@@ -74,10 +74,12 @@ function clamp01(n) {
 const KEY_TO_CODE = { Q: 'KeyQ', E: 'KeyE', R: 'KeyR', F: 'KeyF' };
 
 // recursos por tipo: furia se construye peleando, mana/energia regeneran
+// economia FRENETICA: recursos que fluyen para rotar Q/E/R/F sin parar
+// bajo presion del pack — el cooldown es el limite, no el recurso
 const RES_SPEC = {
-  furia: { max: 100, regen: 0, buildOnHit: 9 },
-  mana: { max: 100, regen: 6 },
-  energia: { max: 100, regen: 8 },
+  furia: { max: 100, regen: 0, buildOnHit: 13 },
+  mana: { max: 100, regen: 10 },
+  energia: { max: 100, regen: 12 },
 };
 
 export class SkillSystem {

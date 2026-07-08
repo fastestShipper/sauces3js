@@ -338,6 +338,8 @@ function nearestMobTarget(mob) {
   return best;
 }
 
+// zona SELLADA (edificio con hueco en x3 z-47): nadie entra, ni mobs ni bots
+const SEAL_X = 3, SEAL_Z = -47, SEAL_R = 11;
 function stepToward(mob, tx, tz, step) {
   const dx = tx - mob.x, dz = tz - mob.z;
   const d = Math.hypot(dx, dz);
@@ -347,6 +349,8 @@ function stepToward(mob, tx, tz, step) {
   const nz = mob.z + (dz / d) * s;
   // los zombies no pisan la gruta (perimetro sagrado)
   if (Math.hypot(nx - SAFE_X, nz - SAFE_Z) < SAFE_R - 3) return false;
+  // el sello es impenetrable para mobs
+  if (Math.hypot(nx - SEAL_X, nz - SEAL_Z) < SEAL_R) return false;
   mob.x = nx;
   mob.z = nz;
   mob.h = Math.atan2(dx, dz);
