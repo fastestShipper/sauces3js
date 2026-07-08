@@ -107,6 +107,7 @@ export class Effects {
 
   // Genera n particulas saliendo desde pos. spread = magnitud de la velocidad.
   _spurt(pos, n, spread, life, color = BLOOD_COLOR) {
+    if (window.__SAUCES_MOBILE__) n = Math.max(3, n >> 1);   // movil: mitad de gore
     const p = readPos(pos);
     for (let i = 0; i < n; i++) {
       if (this.particles.length >= MAX_PARTICLES) {
@@ -233,7 +234,7 @@ export class Effects {
   dismember(pos, tintHex) {
     const p = readPos(pos);
     const tint = new THREE.Color(tintHex != null ? tintHex : 0x7da364);
-    const n = 4 + ((Math.random() * 3) | 0);
+    const n = window.__SAUCES_MOBILE__ ? 3 : 4 + ((Math.random() * 3) | 0);
     for (let i = 0; i < n; i++) {
       const head = i === 0;   // el primero es "la cabeza": mas grande y redondo
       const geo = head

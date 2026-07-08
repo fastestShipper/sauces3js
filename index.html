@@ -177,13 +177,24 @@
   .ob-hint { color: #8b86ac; font-size: 12px; margin-top: 14px; font-weight: 500; }
   .ob-hint .key { color: var(--gold); font-weight: 600; }
 
-  @media (max-width: 640px) {
+  @media (max-width: 820px) {
     #minimap { width: 118px; height: 118px; border-radius: 14px; }
     #coords { top: 144px; font-size: 11px; padding: 4px 9px; }
     #hint { display: none; }
     #hud .title { font-size: 14px; padding: 5px 11px; }
     #ob-grid { grid-template-columns: repeat(2, 1fr); }
-    .rpg-hud-root .rpg-hud-bottom { width: min(316px, calc(100vw - 20px)); }
+    /* movil: el cluster se APILA al centro (vida abajo, skills encima) para no
+       chocar con el joystick (izq) ni los botones ATK/SALTO (der) */
+    .rpg-hud-root .rpg-hud-bottom { width: min(300px, calc(100vw - 24px));
+      transform: translateX(-50%); bottom: 8px; padding: 7px 10px 7px 52px; }
+    .rpg-hud-root .rpg-hud-lvl-badge { width: 34px; height: 34px; font-size: 15px; }
+    .rpg-hud-root .rpg-hud-bar { height: 11px; }
+    .rpg-skill-root { transform: translateX(-50%); bottom: 84px; align-items: center; }
+    .rpg-skill-root .rpg-skill-slot { width: 48px; height: 48px; }
+    .rpg-skill-root .rpg-skill-slot .s-emoji { font-size: 20px; }
+    .rpg-skill-root .rpg-skill-resbox { width: 216px; }
+    .rpg-hud-root .rpg-hud-streak { right: 10px; top: 32%; }
+    .rpg-hud-root .rpg-hud-streak .s-num { font-size: 26px; }
   }
 </style>
 </head>
@@ -231,6 +242,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708h"></script>
+<script type="module" src="./src/app.js?v=20260708i"></script>
 </body>
 </html>

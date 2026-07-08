@@ -3,36 +3,36 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708h';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708h';
-import { GrassSystem } from './veg/grass.js?v=20260708h';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708h';
-import { Player } from './player.js?v=20260708h';
-import { MiniMap } from './minimap.js?v=20260708h';
-import { StreetLife } from './npcs.js?v=20260708h';
-import { sanitizeImported } from './glbutil.js?v=20260708h';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708h';
-import { Net } from './net.js?v=20260708h';
-import { ChatUI, showBubble } from './chat.js?v=20260708h';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708h';
-import { authRequest } from './rpg/account.js?v=20260708h';
-import { MobField } from './rpg/mobs.js?v=20260708h';
-import { Inventory } from './rpg/loot.js?v=20260708h';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708h';
-import { Combat } from './rpg/combat.js?v=20260708h';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708h';
-import { Effects } from './rpg/effects.js?v=20260708h';
-import { attachWeaponByName } from './weapons.js?v=20260708h';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708h';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708h';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708h';
-import { SocialPanel } from './social.js?v=20260708h';
-import { SkillSystem } from './rpg/skills.js?v=20260708h';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708h';
-import { createSfx } from './sfx.js?v=20260708h';
-import { installTouchControls } from './touch.js?v=20260708h';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708i';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708i';
+import { GrassSystem } from './veg/grass.js?v=20260708i';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708i';
+import { Player } from './player.js?v=20260708i';
+import { MiniMap } from './minimap.js?v=20260708i';
+import { StreetLife } from './npcs.js?v=20260708i';
+import { sanitizeImported } from './glbutil.js?v=20260708i';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708i';
+import { Net } from './net.js?v=20260708i';
+import { ChatUI, showBubble } from './chat.js?v=20260708i';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708i';
+import { authRequest } from './rpg/account.js?v=20260708i';
+import { MobField } from './rpg/mobs.js?v=20260708i';
+import { Inventory } from './rpg/loot.js?v=20260708i';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708i';
+import { Combat } from './rpg/combat.js?v=20260708i';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708i';
+import { Effects } from './rpg/effects.js?v=20260708i';
+import { attachWeaponByName } from './weapons.js?v=20260708i';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708i';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708i';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708i';
+import { SocialPanel } from './social.js?v=20260708i';
+import { SkillSystem } from './rpg/skills.js?v=20260708i';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708i';
+import { createSfx } from './sfx.js?v=20260708i';
+import { installTouchControls } from './touch.js?v=20260708i';
 
-const APP_VERSION = '20260708h';
+const APP_VERSION = '20260708i';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -96,9 +96,14 @@ function hideBootOverlay() {
   document.getElementById('boot-overlay')?.remove();
 }
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// perfil MOVIL: touch = GPU de telefono. Menos pixeles, sombras chicas, menos
+// gore. ?perf=high fuerza el perfil desktop en tablets potentes.
+const IS_MOBILE = (('ontouchstart' in window) || navigator.maxTouchPoints > 0)
+  && new URLSearchParams(location.search).get('perf') !== 'high';
+window.__SAUCES_MOBILE__ = IS_MOBILE;
+const renderer = new THREE.WebGLRenderer({ antialias: !IS_MOBILE, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_MOBILE ? 1.2 : 1.6));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -254,7 +259,7 @@ async function boot() {
   const sun = new THREE.DirectionalLight(0xfff1d0, 2.5);
   sun.position.set(80, 96, -58);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(IS_MOBILE ? 1024 : 2048, IS_MOBILE ? 1024 : 2048);
   sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
   sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
   sun.shadow.camera.far = 400;
@@ -263,7 +268,7 @@ async function boot() {
   // hemisferio (cielo frio arriba, tierra calida abajo) en vez de ambient plano:
   // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
   scene.add(new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 0.55));
-  scene.fog = new THREE.Fog(0xdceefa, 230, 1050);
+  scene.fog = IS_MOBILE ? new THREE.Fog(0xdceefa, 120, 520) : new THREE.Fog(0xdceefa, 230, 1050);
 
   // suelo base
   const groundVar = createGroundVariationTexture();

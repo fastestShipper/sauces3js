@@ -98,7 +98,7 @@ export function installTouchControls({ player, combat }) {
   addEventListener('touchstart', (e) => {
     for (const t of e.changedTouches) {
       const el = document.elementFromPoint(t.clientX, t.clientY);
-      if (el && el.closest('.tc-stick,.tc-btn,.rpg-inv,.soc,#chat-input,.rpg-skill-btn')) continue;
+      if (el && el.closest('.tc-stick,.tc-btn,.rpg-inv,.soc,#chat-input,.rpg-skill-root,.rpg-skill-slot')) continue;
       if (t.clientX < innerWidth * 0.45 || camId !== null) continue;
       camId = t.identifier; lastX = t.clientX; lastY = t.clientY;
     }
