@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from './glbutil.js?v=20260709h';
-import { equipWeapon } from './weapons.js?v=20260709h';
-import { CLASS_LIST } from './rpg/classes.js?v=20260709h';
+import { sanitizeImported } from './glbutil.js?v=20260709i';
+import { equipWeapon } from './weapons.js?v=20260709i';
+import { CLASS_LIST } from './rpg/classes.js?v=20260709i';
 
 const VIRGEN = new THREE.Vector3(-62, 0, -15);
 const BOULEVARD_FARM = new THREE.Vector3(-55, 0, 291);

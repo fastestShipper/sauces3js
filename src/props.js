@@ -2,8 +2,42 @@
 // Kenney look). Each builder returns an Object3D prototype; app.js instances it
 // through instancedRoot, so these are templates, not added to the scene directly.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const mat = (hex, rough = 0.85) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough });
+
+// material blanco que respeta el color por vertice: permite fusionar piezas de
+// tonos distintos en UN solo mesh (instancedRoot crea un InstancedMesh por
+// mesh del template, asi que menos meshes = menos draw calls globales).
+const matVert = (rough = 0.85) => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, vertexColors: true });
+
+// BoxGeometry indexa sus 6 caras en orden fijo (px,nx,py,ny,pz,nz; 6 indices
+// por cara). boxSin() devuelve la caja SIN las caras listadas (extremos,
+// fondos que nunca se ven) para ahorrar triangulos en props instanciados.
+const CARA = { px: 0, nx: 6, py: 12, ny: 18, pz: 24, nz: 30 };
+function boxSin(w, h, d, drop = []) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const idx = g.getIndex().array;
+  const fuera = new Set(drop.map(c => CARA[c]));
+  const keep = [];
+  for (let f = 0; f < 36; f += 6) {
+    if (fuera.has(f)) continue;
+    for (let k = 0; k < 6; k++) keep.push(idx[f + k]);
+  }
+  g.setIndex(keep);
+  return g;
+}
+
+// pinta toda la geometria con un color plano por vertice (hex * mul); el mul
+// da el jitter de tono liston a liston sin duplicar materiales.
+function tinte(g, hex, mul = 1) {
+  const c = new THREE.Color(hex).multiplyScalar(mul);
+  const n = g.getAttribute('position').count;
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
 
 // streetlight: ~4.6 m, base at y=0. Pole + arm + lamp head with a warm lens.
 export function buildToonLamp() {

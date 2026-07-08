@@ -5,7 +5,7 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260709h';
+import { createToonSkyTexture } from './worldmat.js?v=20260709i';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -16,9 +16,10 @@ export function createIntroScene(appVersion) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.8;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.domElement.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none';
+  renderer.domElement.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none;opacity:0;transition:opacity .9s ease';
   document.body.appendChild(renderer.domElement);
-  document.documentElement.classList.add('intro3d');
+  // el fondo CSS se mantiene hasta que los sauces esten plantados: jamas
+  // ensenar el parque pelado (la clase intro3d recien apaga el fallback)
 
   const scene = new THREE.Scene();
   const sky = createToonSkyTexture();
@@ -93,6 +94,9 @@ export function createIntroScene(appVersion) {
       for (let i = 0; i < 14; i++) {
         plant(scene, rng() * Math.PI * 2, i < 8 ? 26 + rng() * 12 : 46 + rng() * 50, 5.2 + rng() * 2.8);
       }
+      // sauces listos: AHORA si el 3D reemplaza el fondo CSS (fade-in)
+      document.documentElement.classList.add('intro3d');
+      renderer.domElement.style.opacity = '1';
       // carga: ALAMEDA de sauces — dos filas grandes enmarcando un sendero
       // con aire al centro y profundidad de niebla (bonito, no saturado)
       for (let side = -1; side <= 1; side += 2) {
