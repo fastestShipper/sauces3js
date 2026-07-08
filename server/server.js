@@ -236,7 +236,7 @@ const MOB_SPAWNS_PATH = path.join(__dirname, 'mob_spawns.json');
 // cap >= spawns totales: TODAS las zonas pobladas desde el arranque. Con 40
 // de 66 el orden del JSON dejaba vacias las zonas cercanas al spawn/parque
 // tras cada restart ("faltan los mobs") hasta que los respawns rotaban.
-const MOB_CAP = 66;
+const MOB_CAP = 90;
 const MOB_RESPAWN_MS = 7000;   // ARPG: la horda vuelve rapido, farmeo sin huecos
 const MOB_DMG_MAX = 3000;
 const MOB_TICK_MS = 100;
@@ -448,8 +448,8 @@ spawnInitialMobs();
 
 // OLEADAS ZOMBIE: cada ~4 min brota una horda temporal alrededor de un jugador
 // al azar. Sin _spawn => no respawnean: limpiarla ES el evento (botin de racha).
-const WAVE_EVERY_MS = Number(process.env.WAVE_EVERY_MS) || 240000;
-const WAVE_SIZE = 10;
+const WAVE_EVERY_MS = Number(process.env.WAVE_EVERY_MS) || 90000;
+const WAVE_SIZE = 14;
 // ciclo dia/noche por reloj compartido: 10 min, el ultimo 40% es NOCHE.
 // El cliente usa la misma formula (Date.now) para el visual: sincronia gratis.
 const DAYNIGHT_MS = 600000;
@@ -465,10 +465,10 @@ const waveTimer = setInterval(() => {
   waveN++;
   const night = isNight();
   // NOCHE DE LOS MUERTOS: la horda nocturna es mas grande y mas brava
-  let size = Math.min(night ? 14 : WAVE_SIZE, Math.round((4 + power) * (night ? 1.5 : 1)));
+  let size = Math.min(night ? 18 : WAVE_SIZE, Math.round((6 + power * 2) * (night ? 1.5 : 1)));
   const lvlCap = Math.min(5, 2 + Math.ceil(power / 2) + (night ? 1 : 0));
   // cada 3ra oleada trae un BOSS: la ABOMINACION (hp x4, nivel alto, TTL largo)
-  const withBoss = waveN % 3 === 0;
+  const withBoss = waveN % 2 === 0;   // ABOMINACION cada 2 oleadas (~3 min)
   for (let i = 0; i < size; i++) {
     const ang = Math.random() * Math.PI * 2;
     const dist = 16 + Math.random() * 24;

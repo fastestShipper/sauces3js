@@ -73,6 +73,9 @@ function injectStyle() {
 .rpg-hud-top .t-row span:first-child { overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 .rpg-hud-top .t-row b { color: #ff8a5c; }
+.rpg-gsplat { position: fixed; inset: 0; z-index: 38; pointer-events: none; opacity: 0; }
+.rpg-gsplat.is-on { animation: gsplat .9s ease-out; }
+@keyframes gsplat { 0% { opacity: 0; } 12% { opacity: .85; } 100% { opacity: 0; } }
 .rpg-hud-hurt { position: fixed; inset: 0; z-index: 39; pointer-events: none;
   opacity: 0; background: radial-gradient(ellipse at center,
   rgba(0,0,0,0) 55%, rgba(190,20,20,0.45) 100%);
@@ -148,6 +151,7 @@ export class HUD {
       </div>
       <div class="rpg-hud-panel rpg-hud-banner"></div>
       <div class="rpg-hud-panel rpg-hud-top"><div class="t-title">\ud83d\udd25 RACHAS HOY</div><div class="t-list"></div></div>
+      <div class="rpg-gsplat"></div>
       <div class="rpg-hud-hurt"></div>
       <div class="rpg-hud-death"><div class="d-title">HAS CAÍDO</div>
         <div class="d-sub">La Virgen de la gruta te levanta…</div>
@@ -253,6 +257,22 @@ export class HUD {
     panel.querySelector('.t-list').innerHTML = rows
       .map((e) => '<div class="t-row"><span>' + String(e.name || '?').replace(/[<>&]/g, '') + '</span><b>x' + (Number(e.v) || 0) + '</b></div>')
       .join('');
+  }
+
+  // SALPICADURA de sangre en pantalla (kills cercanos): manchas aleatorias
+  goreSplat() {
+    const el = this.root.querySelector('.rpg-gsplat');
+    if (!el) return;
+    const blobs = [];
+    for (let i = 0; i < 4; i++) {
+      const x = 8 + Math.random() * 84, y = 8 + Math.random() * 84;
+      const r = 4 + Math.random() * 9;
+      blobs.push('radial-gradient(circle ' + r + 'vmin at ' + x + '% ' + y + '%, rgba(150,10,10,.5) 0%, rgba(120,8,8,.32) 40%, rgba(120,8,8,0) 70%)');
+    }
+    el.style.background = blobs.join(',');
+    el.classList.remove('is-on');
+    void el.offsetWidth;
+    el.classList.add('is-on');
   }
 
   // vignette roja de 160ms cuando el jugador RECIBE dano

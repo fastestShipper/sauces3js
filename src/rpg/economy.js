@@ -2,7 +2,7 @@
 // y MUY de vez en cuando un arma o pieza de gear (raro ~8%). Pura logica de drop
 // (sin three.js) + un HUD DOM chico para el oro. El color de cada item sale de
 // TIERS[tier].glow (hex numerico) que vive en el modulo fx.
-import { TIERS } from './fx.js?v=20260708y';
+import { TIERS } from './fx.js?v=20260708z';
 
 const TIER_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 

@@ -49,7 +49,7 @@ function numberTexture(text, fill, crit) {
   c.width = 128;
   c.height = 64;
   const ctx = c.getContext('2d');
-  const fontPx = crit ? 52 : 40;
+  const fontPx = crit ? 68 : 42;
   ctx.font = 'bold ' + fontPx + 'px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -83,7 +83,7 @@ export class Effects {
 
   // Chorro de sangre generoso: cada golpe SE SIENTE (gore ARPG).
   bloodHit(pos) {
-    this._spurt(pos, 14 + Math.floor(Math.random() * 7), 4.4, HIT_LIFE);
+    this._spurt(pos, 20 + Math.floor(Math.random() * 9), 5.6, HIT_LIFE);
   }
 
   // Estallido mayor (20-30 particulas) + mancha plana en el piso que se desvanece.
@@ -97,9 +97,9 @@ export class Effects {
   // + charco grande que persiste. streak alto = estallido mas grande.
   goreBurst(pos, intensity = 1) {
     const p = readPos(pos);
-    const k = Math.min(2, Math.max(1, intensity));
-    this._spurt(p, Math.round(26 * k), 6.0 * k, DEATH_LIFE * 1.2);
-    this._spurt(p, Math.round(8 * k), 4.5, 0.7, 0xe8e2d4);   // esquirlas de hueso
+    const k = Math.min(2.5, Math.max(1, intensity));
+    this._spurt(p, Math.round(38 * k), 7.2 * k, DEATH_LIFE * 1.35);
+    this._spurt(p, Math.round(12 * k), 5.2, 0.85, 0xe8e2d4);   // esquirlas de hueso
     this._pool(p);
     this._pool({ x: p.x + (Math.random() - 0.5) * 1.2, y: p.y, z: p.z + (Math.random() - 0.5) * 1.2 });
     this.hitFlash(p, 0xff3020);
@@ -134,7 +134,7 @@ export class Effects {
   // Mancha plana roja en el piso (CircleGeometry horizontal). Escala y se desvanece.
   _pool(pos) {
     const p = readPos(pos);
-    const geo = new THREE.CircleGeometry(0.7 + Math.random() * 0.5, 16);
+    const geo = new THREE.CircleGeometry(1.15 + Math.random() * 0.85, 16);
     const mat = new THREE.MeshBasicMaterial({
       color: BLOOD_COLOR,
       transparent: true,
@@ -167,7 +167,7 @@ export class Effects {
       depthWrite: false,
     });
     const sprite = new THREE.Sprite(mat);
-    const base = opts.crit ? 1.5 : 1.1;
+    const base = opts.crit ? 2.1 : 1.15;
     sprite.scale.set(base, base * 0.5, 1);
     sprite.position.set(p.x, p.y + 1.4, p.z);
     sprite.renderOrder = 999; // por encima de la geometria (depthTest:false)
@@ -255,23 +255,23 @@ export class Effects {
   dismember(pos, tintHex) {
     const p = readPos(pos);
     const tint = new THREE.Color(tintHex != null ? tintHex : 0x7da364);
-    const n = window.__SAUCES_MOBILE__ ? 3 : 4 + ((Math.random() * 3) | 0);
+    const n = window.__SAUCES_MOBILE__ ? 4 : 6 + ((Math.random() * 3) | 0);
     for (let i = 0; i < n; i++) {
       const head = i === 0;   // el primero es "la cabeza": mas grande y redondo
       const geo = head
-        ? new THREE.SphereGeometry(0.16, 8, 6)
-        : new THREE.BoxGeometry(0.1 + Math.random() * 0.12, 0.08 + Math.random() * 0.1, 0.09);
+        ? new THREE.SphereGeometry(0.3, 8, 6)
+        : new THREE.BoxGeometry(0.16 + Math.random() * 0.2, 0.14 + Math.random() * 0.16, 0.15);
       const mat = new THREE.MeshStandardMaterial({ color: tint.clone().multiplyScalar(0.75 + Math.random() * 0.4), roughness: 0.9 });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(p.x, 0.8 + Math.random() * 0.5, p.z);
       const ang = Math.random() * Math.PI * 2;
-      const v = 2.2 + Math.random() * 2.6;
+      const v = 3.2 + Math.random() * 3.6;
       this.scene.add(mesh);
       this.chunks.push({
         mesh,
-        vel: new THREE.Vector3(Math.cos(ang) * v, 2.6 + Math.random() * 2.4, Math.sin(ang) * v),
+        vel: new THREE.Vector3(Math.cos(ang) * v, 3.4 + Math.random() * 3, Math.sin(ang) * v),
         spin: new THREE.Vector3(Math.random() * 9, Math.random() * 9, Math.random() * 9),
-        life: 2.4, max: 2.4,
+        life: 4.2, max: 4.2,
       });
     }
   }

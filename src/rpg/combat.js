@@ -591,6 +591,8 @@ export class Combat {
       this.effects.dismember({ x: m.x, y: 0.8, z: m.z }, 0x7da364);
       this.effects.shake(0.1 + Math.min(0.12, this.streak * 0.02), 0.18);
     }
+    // kill cuerpo a cuerpo: la sangre SALPICA LA PANTALLA
+    if (m && Math.hypot(m.x - this.player.pos.x, m.z - this.player.pos.z) < 6) this.hud.goreSplat?.();
     // racha alta: micro camara-lenta de 0.15s (el kill se SABOREA)
     if (this.streak >= 5) this.slowMoT = 0.15;
     const leveled = this.prog.gainXp(Math.round((4 + lvl) * mult));
