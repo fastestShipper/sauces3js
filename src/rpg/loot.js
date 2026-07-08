@@ -1,7 +1,7 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260709f';
+import { TIERS } from './fx.js?v=20260709g';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.

@@ -609,9 +609,19 @@ export class Combat {
     if (this.dead || !hit) return;
     // el zombie que te pego se anima (el server manda su id en phit)
     if (this.mobField && hit.id != null) this.mobField.playAttack?.(hit.id);
-    const dmg = Math.max(0, Number(hit.dmg) || 0);
+    let dmg = Math.max(0, Number(hit.dmg) || 0);
     if (!dmg) return;
+    // el ESCUDO de party absorbe la mordida antes que la vida
+    if (this.shieldHp > 0) {
+      const absorbed = Math.min(this.shieldHp, dmg);
+      this.shieldHp -= absorbed;
+      dmg -= absorbed;
+      if (this.effects) this.effects.hitFlash({ x: this.player.pos.x, y: 1.2, z: this.player.pos.z }, 0xffa040);
+      if (dmg <= 0) return;
+    }
     this.hp = Math.max(0, this.hp - dmg);
+    // GRACIA DIVINA: Diosito no muere por mordida — queda a 1 HP holografico
+    this._godGrace();
     this.hud.setHP(this.hp, this.hpMax);
     this.player.playHit();
     if (this.sfx) this.sfx.hurt();
