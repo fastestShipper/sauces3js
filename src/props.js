@@ -56,18 +56,49 @@ export function buildToonLamp() {
   return g;
 }
 
-// bench: ~1.7 m long, seat at 0.45. Faces +z (backrest at -z).
+// banca de parque limena: ~1.7 m de largo, asiento a ~0.47, mira a +z
+// (respaldo en -z). 3 listones de madera en el asiento + 2 en el respaldo
+// (cajas delgadas con separacion) sobre patas de fierro oscuro con montante
+// trasero. Misma huella y altura que la banca de caja anterior.
+// ~64 tris repartidos en 2 meshes fusionados (madera + fierro).
 export function buildToonBench() {
   const g = new THREE.Group();
-  const wood = mat(0x8a5a32), metal = mat(0x33352f, 0.6);
-  const seat = new THREE.BoxGeometry(1.7, 0.1, 0.5); seat.translate(0, 0.45, 0);
-  g.add(new THREE.Mesh(seat, wood));
-  const back = new THREE.BoxGeometry(1.7, 0.45, 0.09); back.translate(0, 0.72, -0.2);
-  g.add(new THREE.Mesh(back, wood));
-  for (const sx of [-0.72, 0.72]) {
-    const leg = new THREE.BoxGeometry(0.1, 0.45, 0.5); leg.translate(sx, 0.225, 0);
-    g.add(new THREE.Mesh(leg, metal));
+  const WOOD = 0x8a5a32, IRON = 0x2b2d2a;
+  // jitter determinista de tono por liston (tabla fija, sin RNG): cada
+  // tabla lee un pelo distinta sin duplicar materiales
+  const JIT = [1.0, 0.9, 1.08, 0.94, 1.04];
+  const madera = [];
+  // 3 listones de asiento separados 2.5 cm; el fondo (ny) nunca se ve y las
+  // caras que miran a las ranuras quedan ocultas, boxSin las elimina
+  const seatZ = [0.175, 0, -0.175];
+  const seatDrop = [['ny', 'nz'], ['ny', 'pz', 'nz'], ['ny', 'pz']];
+  for (let i = 0; i < 3; i++) {
+    const s = boxSin(1.66, 0.05, 0.15, seatDrop[i]);
+    s.translate(0, 0.45, seatZ[i]);
+    madera.push(tinte(s, WOOD, JIT[i]));
   }
+  // 2 listones de respaldo mas cortos (1.5 m) para que los montantes de
+  // fierro tapen los extremos abiertos (px/nx eliminados)
+  const backY = [0.62, 0.84];
+  const backDrop = [['ny', 'py', 'px', 'nx'], ['ny', 'px', 'nx']];
+  for (let i = 0; i < 2; i++) {
+    const b = boxSin(1.5, 0.14, 0.045, backDrop[i]);
+    b.translate(0, backY[i], -0.215);
+    madera.push(tinte(b, WOOD, JIT[3 + i]));
+  }
+  g.add(new THREE.Mesh(mergeGeometries(madera), matVert(0.85)));
+  // patas de fierro oscuro: panel bajo + montante trasero que sube hasta el
+  // respaldo (la tapa del panel muere bajo los listones, se elimina)
+  const fierro = [];
+  for (const sx of [-0.72, 0.72]) {
+    const leg = boxSin(0.07, 0.45, 0.46, ['py', 'ny']);
+    leg.translate(sx, 0.225, -0.02);
+    fierro.push(tinte(leg, IRON, 1));
+    const alto = boxSin(0.05, 0.48, 0.06, ['ny', 'pz']); // pz muere dentro del liston
+    alto.translate(sx, 0.66, -0.245);
+    fierro.push(tinte(alto, IRON, 0.92));
+  }
+  g.add(new THREE.Mesh(mergeGeometries(fierro), matVert(0.55)));
   return g;
 }
 
@@ -130,5 +161,37 @@ export function buildToonBin() {
   g.add(new THREE.Mesh(body, mat(0x2f5d3a)));
   const lid = new THREE.CylinderGeometry(0.23, 0.23, 0.08, 10); lid.translate(0, 0.8, 0);
   g.add(new THREE.Mesh(lid, mat(0x274d30)));
+  return g;
+}
+
+// pergola de parque: 4 postes en los puntos medios de los lados + 2 vigas
+// que se cruzan sobre el centro (la viga z apoya encima de la x, por eso los
+// postes norte/sur son un pelo mas altos). ~3.3 m de lado, 2.5 m de alto,
+// base en y=0. Madera calida con jitter determinista, UN solo mesh (~44
+// tris). NO esta cableada en el mundo: exportada para instanciarla via
+// instancedRoot cuando existan spots.
+export function buildToonPergola() {
+  const g = new THREE.Group();
+  const WOOD = 0x9a6a3c;
+  const JIT = [1.0, 0.92, 1.06, 0.96, 1.04, 0.9];
+  const piezas = [];
+  // postes [x, z, alto]: este/oeste sostienen la viga x, norte/sur la viga z
+  const postes = [[1.4, 0, 2.3], [-1.4, 0, 2.3], [0, 1.4, 2.42], [0, -1.4, 2.42]];
+  for (let i = 0; i < 4; i++) {
+    const [px, pz, h] = postes[i];
+    const p = boxSin(0.14, h, 0.14, ['py', 'ny']); // tapa bajo viga + base en piso
+    p.translate(px, h * 0.5, pz);
+    piezas.push(tinte(p, WOOD, JIT[i]));
+  }
+  // vigas cruzadas: extremos y fondo eliminados (quedan casi al ras del
+  // poste y a 2.4 m del ojo del jugador)
+  const vx = boxSin(3.3, 0.12, 0.16, ['px', 'nx', 'ny']);
+  vx.translate(0, 2.36, 0);
+  piezas.push(tinte(vx, WOOD, JIT[4]));
+  const vz = boxSin(3.3, 0.12, 0.16, ['px', 'nx', 'ny']);
+  vz.rotateY(Math.PI / 2);
+  vz.translate(0, 2.48, 0);
+  piezas.push(tinte(vz, WOOD, JIT[5]));
+  g.add(new THREE.Mesh(mergeGeometries(piezas), matVert(0.85)));
   return g;
 }
