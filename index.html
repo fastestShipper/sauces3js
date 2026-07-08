@@ -20,6 +20,12 @@
     --shadow-panel: 0 12px 32px rgba(10, 8, 24, .38), inset 0 1px 0 rgba(255, 255, 255, .09);
   }
   html, body { margin: 0; padding: 0; overflow: hidden; background: #0e1116; height: 100%; }
+  /* con la escena 3D de fondo (clase intro3d), los fondos pintados se apartan:
+     el parque REAL con sauces GLB es el fondo de login/onboarding/carga */
+  .intro3d .sky-scene, .intro3d .ld-dusk { background: transparent !important; }
+  .intro3d .sky-cloud, .intro3d .sky-skyline, .intro3d .ld-skyline-far,
+  .intro3d .ld-sun, .intro3d .willow { display: none !important; }
+  .intro3d .ld-horde span { filter: brightness(0) opacity(.55); }
   #app { position: fixed; inset: 0; }
   canvas { display: block; }
 
@@ -359,6 +365,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708r"></script>
+<script type="module" src="./src/app.js?v=20260708s"></script>
 </body>
 </html>
