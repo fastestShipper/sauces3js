@@ -337,8 +337,6 @@ export class MobField {
     // todo en movil). Lejos: invisible + congelado. Medio: mixer a mitad.
     const pp = this.net && this.net.player && this.net.player.pos;
     const VIS = window.__SAUCES_MOBILE__ ? 42 : 85;
-    const HALF = window.__SAUCES_MOBILE__ ? 24 : 45;
-    this._lodFlip = !this._lodFlip;
     // gruñido ambiental: un zombie cercano gruñe cada tanto (presion constante)
     this._growlT = (this._growlT || 0) - dt;
     if (this._growlT <= 0 && this.sfx) {
@@ -363,7 +361,6 @@ export class MobField {
         const visible = dLod < VIS;
         if (v.root.visible !== visible) v.root.visible = visible;
         if (!visible) continue;                       // congelado: ni mixer ni barras
-        if (dLod > HALF && this._lodFlip) continue;   // media distancia: mitad de rate
       }
       if (v.busyT > 0) {
         v.busyT -= dt;

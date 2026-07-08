@@ -158,6 +158,15 @@
     font-family: var(--font); font-weight: 600; font-size: 12px;
     letter-spacing: .5px; user-select: text; cursor: text;
   }
+  #daytime {
+    position: fixed; right: 14px; top: 258px; z-index: 30;
+    padding: 5px 12px; border-radius: 10px;
+    background: rgba(255,255,255,.1); backdrop-filter: blur(10px) saturate(1.4);
+    border: 1px solid var(--glass-line);
+    box-shadow: var(--shadow-panel); color: #fff;
+    font-family: var(--font); font-weight: 600; font-size: 12px;
+    letter-spacing: .5px; user-select: none;
+  }
   #chat-log {
     position: fixed; left: 18px; bottom: 68px; width: min(440px, 62vw);
     display: flex; flex-direction: column; gap: 5px; pointer-events: none; z-index: 30;
@@ -392,6 +401,7 @@
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
 <div id="coords">X 0 · Z 0</div>
+<div id="daytime">Día</div>
 <div id="chat-log"></div>
 <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Escribe y Enter para enviar…">
 <div id="loading" class="ld-dusk gscrim">

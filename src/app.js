@@ -974,6 +974,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   window.__game = { player, city, scene, renderer, camera };
   const minimap = new MiniMap(city, document.getElementById('minimap'));
   const coordsEl = document.getElementById('coords');
+  const daytimeEl = document.getElementById('daytime');
   const net = trailerConfig.enabled && trailerConfig.offline ? createTrailerNet() : new Net(scene, player, auth.token);
   window.__game.net = net;
 
@@ -1351,6 +1352,14 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       }
       poiUi.update(player.pos.x, player.pos.z);
       coordsEl.textContent = 'X ' + Math.round(player.pos.x) + ' · Z ' + Math.round(player.pos.z);
+      // reloj del ciclo: dia (60%) / noche (40%), cuenta regresiva al cambio
+      if (daytimeEl) {
+        const ph = (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS;
+        const night = ph >= 0.6;
+        const remain = Math.ceil(((night ? 1 : 0.6) - ph) * DAYNIGHT_MS / 1000);
+        const mm = Math.floor(remain / 60), ss = String(remain % 60).padStart(2, '0');
+        daytimeEl.textContent = (night ? '🌙 Noche ' : '☀️ Día ') + mm + ':' + ss;
+      }
     }
     skills.update(dt);
     {
