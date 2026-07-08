@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Los Sauces · San Borja</title>
+<title>Los Sauces</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏘️%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,8 +14,8 @@
     --panel: rgba(23, 20, 41, .82);
     --panel-line: rgba(255, 255, 255, .14);
     --gold: #ffcf5c;
-    --acc-a: #ffb35c; --acc-b: #ff7a59; --acc-c: #ff5c86;
-    --acc-grad: linear-gradient(135deg, #ffb35c 0%, #ff7a59 55%, #ff5c86 100%);
+    --acc-a: #a8e063; --acc-b: #6cc24a; --acc-c: #2f9e5f;
+    --acc-grad: linear-gradient(135deg, #a8e063 0%, #6cc24a 55%, #2f9e5f 100%);
     --glass: rgba(255,255,255,.09);
     --glass-hi: rgba(255,255,255,.16);
     --glass-line: rgba(255,255,255,.28);
@@ -44,7 +44,7 @@
   }
   .gscrim > * { position: relative; z-index: 1; }
   .gcard {
-    position: relative; background: linear-gradient(180deg, rgba(28,24,48,.92), rgba(18,15,34,.96));
+    position: relative; background: linear-gradient(180deg, rgba(18,36,24,.9), rgba(9,22,13,.95));
     backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25);
     border: 1px solid rgba(255,255,255,.18); border-radius: 24px;
     box-shadow: 0 30px 80px rgba(8,10,30,.6), 0 2px 8px rgba(8,10,30,.4), inset 0 1px 0 rgba(255,255,255,.16);
@@ -53,8 +53,8 @@
     display: block; width: 100%; padding: 14px; border: 0; border-radius: 14px; cursor: pointer;
     font-family: var(--font); font-weight: 700; font-size: 15px; letter-spacing: .4px; color: #fff;
     background: var(--acc-grad); position: relative; overflow: hidden;
-    text-shadow: 0 1px 2px rgba(120,20,40,.4);
-    box-shadow: 0 10px 26px rgba(255,110,110,.4), inset 0 1.5px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(150,30,60,.35);
+    text-shadow: 0 1px 2px rgba(16,70,36,.45);
+    box-shadow: 0 10px 26px rgba(96,190,110,.42), inset 0 1.5px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(24,90,48,.4);
     transition: transform .12s ease, box-shadow .15s ease, filter .12s ease;
   }
   .gbtn::after {
@@ -64,7 +64,7 @@
   }
   @keyframes gshimmer { 0%, 74% { left: -60%; } 92%, 100% { left: 130%; } }
   .gbtn:hover { transform: translateY(-2px); filter: brightness(1.07);
-    box-shadow: 0 16px 36px rgba(255,110,110,.55), inset 0 1.5px 0 rgba(255,255,255,.6); }
+    box-shadow: 0 16px 36px rgba(96,190,110,.58), inset 0 1.5px 0 rgba(255,255,255,.6); }
   .gbtn:active { transform: translateY(0) scale(.98); filter: brightness(.97); }
   .gbtn:focus-visible { outline: 3px solid rgba(255,207,92,.6); outline-offset: 2px; }
   .gbtn:disabled { filter: grayscale(.4) brightness(.75); cursor: not-allowed; transform: none; }
@@ -83,8 +83,8 @@
     background: transparent; transition: all .14s ease; }
   .gtab:hover { color: #fff; }
   .gtab.on { background: var(--acc-grad); color: #fff;
-    text-shadow: 0 1px 2px rgba(120,20,40,.4);
-    box-shadow: 0 4px 16px rgba(255,110,110,.45); font-weight: 700; }
+    text-shadow: 0 1px 2px rgba(16,70,36,.45);
+    box-shadow: 0 4px 16px rgba(96,190,110,.48); font-weight: 700; }
   .ginput {
     width: 100%; box-sizing: border-box; padding: 13px 15px; border-radius: 12px;
     border: 2px solid rgba(255,255,255,.14); background: rgba(8,6,18,.72); color: #fff;
@@ -92,14 +92,14 @@
     transition: border-color .15s ease, box-shadow .15s ease;
   }
   .ginput::placeholder { color: #7d78a0; }
-  .ginput:focus { border-color: rgba(255,122,89,.85); box-shadow: 0 0 0 4px rgba(255,122,89,.18); }
+  .ginput:focus { border-color: rgba(108,194,94,.85); box-shadow: 0 0 0 4px rgba(108,194,94,.2); }
   .glogo { font-size: clamp(46px, 7vw, 82px); font-weight: 700; letter-spacing: 2.5px; line-height: .95;
     color: #fff;
-    text-shadow: 0 2px 0 rgba(20,14,40,.9), 0 5px 0 rgba(20,14,40,.45), 0 18px 50px rgba(8,6,24,.8), 0 0 70px rgba(255,220,140,.3); }
+    text-shadow: 0 2px 0 rgba(20,14,40,.9), 0 5px 0 rgba(20,14,40,.45), 0 18px 50px rgba(8,6,24,.8), 0 0 70px rgba(150,230,150,.35); }
   .gpill { display: inline-block; margin-top: 12px; font-size: 12px; font-weight: 700; letter-spacing: 5px;
-    text-transform: uppercase; color: #fff; background: var(--glass);
+    text-transform: uppercase; color: #b9f0a0; background: rgba(24,52,30,.5);
     border: 1px solid var(--glass-line); padding: 7px 20px; border-radius: 999px;
-    backdrop-filter: blur(12px) saturate(1.4); text-shadow: 0 1px 3px rgba(0,0,0,.55);
+    backdrop-filter: blur(12px) saturate(1.4); text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 0 14px rgba(140,230,130,.55);
     box-shadow: 0 8px 24px rgba(8,6,24,.35), inset 0 1px 0 var(--glass-hi); }
 
   /* ===== atmosphere backdrop shared by loading / login / class pick ===== */
@@ -279,7 +279,7 @@
   }
   .ob-card {
     position: relative; width: min(560px, 92vw); padding: 30px 30px 24px; box-sizing: border-box;
-    background: linear-gradient(180deg, rgba(28,24,48,.92), rgba(18,15,34,.96));
+    background: linear-gradient(180deg, rgba(18,36,24,.9), rgba(9,22,13,.95));
     backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25);
     border: 1px solid rgba(255,255,255,.18); border-radius: 24px;
     box-shadow: 0 30px 80px rgba(8,10,30,.6), inset 0 1px 0 rgba(255,255,255,.16);
@@ -322,8 +322,8 @@
     width: 100%; padding: 15px; border: 0; border-radius: 14px; cursor: pointer;
     font-family: var(--font); font-weight: 700; font-size: 17px; letter-spacing: .4px; color: #fff;
     background: var(--acc-grad); position: relative; overflow: hidden;
-    text-shadow: 0 1px 2px rgba(120,20,40,.4);
-    box-shadow: 0 10px 26px rgba(255,110,110,.4), inset 0 1.5px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(150,30,60,.35);
+    text-shadow: 0 1px 2px rgba(16,70,36,.45);
+    box-shadow: 0 10px 26px rgba(96,190,110,.42), inset 0 1.5px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(24,90,48,.4);
     transition: transform .12s ease, box-shadow .15s ease, filter .12s ease;
   }
   #ob-go::after {
@@ -332,7 +332,7 @@
     transform: skewX(-18deg); animation: gshimmer 5.5s ease-in-out infinite;
   }
   #ob-go:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.07);
-    box-shadow: 0 16px 36px rgba(255,110,110,.55); }
+    box-shadow: 0 16px 36px rgba(96,190,110,.58); }
   #ob-go:active:not(:disabled) { transform: scale(.98); }
   #ob-go:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
   #ob-go:disabled { background: #3a3654; color: #8a86a8; cursor: not-allowed; box-shadow: none; }
@@ -454,6 +454,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708t"></script>
+<script type="module" src="./src/app.js?v=20260708u"></script>
 </body>
 </html>

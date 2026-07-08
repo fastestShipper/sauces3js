@@ -1,7 +1,7 @@
 // Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
 // (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
 // Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
-import { classById, CERNUNNOS } from './classes.js?v=20260708t';
+import { classById, CERNUNNOS } from './classes.js?v=20260708u';
 
 const STYLE_ID = 'rpg-skill-style';
 
@@ -28,7 +28,7 @@ function injectStyle() {
   transition: width 200ms ease; }
 .rpg-skill-row { display: flex; gap: 8px; pointer-events: auto; }
 .rpg-skill-slot { position: relative; width: 60px; height: 60px; border-radius: 14px;
-  background: linear-gradient(135deg, rgba(50,42,80,.72), rgba(20,16,38,.85));
+  background: linear-gradient(135deg, rgba(30,54,36,.72), rgba(10,24,14,.86));
   backdrop-filter: blur(12px) saturate(1.4); -webkit-backdrop-filter: blur(12px) saturate(1.4);
   border: 1px solid rgba(255,255,255,0.22);
   box-shadow: 0 10px 24px rgba(10,8,24,.4), inset 0 1px 0 rgba(255,255,255,.1);
@@ -38,15 +38,15 @@ function injectStyle() {
 .rpg-skill-slot .s-emoji { font-size: 26px; line-height: 1; filter: saturate(0.4) brightness(0.7);
   transition: filter 160ms ease; }
 .rpg-skill-slot.is-ready .s-emoji { filter: none; }
-.rpg-skill-slot.is-ready { border-color: rgba(255,122,110,0.75);
-  box-shadow: 0 10px 24px rgba(10,8,24,.4), 0 0 16px rgba(255,110,110,.45),
+.rpg-skill-slot.is-ready { border-color: rgba(120,210,130,0.8);
+  box-shadow: 0 10px 24px rgba(10,8,24,.4), 0 0 16px rgba(96,190,110,.5),
   inset 0 1px 0 rgba(255,255,255,.18); }
 .rpg-skill-slot .s-key { position: absolute; top: -8px; left: -8px; width: 21px; height: 21px;
   border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700;
-  color: #fff; background: linear-gradient(135deg, #ffb35c, #ff5c86); text-shadow: 0 1px 1px rgba(120,20,40,.35);
+  color: #fff; background: linear-gradient(135deg, #a8e063, #2f9e5f); text-shadow: 0 1px 1px rgba(16,70,36,.4);
   box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .rpg-skill-slot .s-cost { position: absolute; bottom: 3px; right: 6px; font-size: 11px;
-  font-weight: 700; color: #9fc2ff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+  font-weight: 700; color: #b8e6a0; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
 .rpg-skill-slot .s-cd { position: absolute; inset: 0; border-radius: 10px;
   background: rgba(8,6,16,0.78); display: none; place-items: center; font-size: 19px;
   font-weight: 700; color: #ffd9c8; }

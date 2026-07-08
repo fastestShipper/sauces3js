@@ -1,7 +1,7 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260708t';
+import { TIERS } from './fx.js?v=20260708u';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -127,7 +127,7 @@ function injectStyleOnce() {
 .rpg-slot:hover .tip{opacity:1}
 .rpg-slot .tip b{color:var(--tc,#9aa0a6)}
 .rpg-inv-empty{opacity:.5;font-size:12px;text-align:center;padding:14px 0}
-.rpg-slot.selected{border-color:#ffcf5c;box-shadow:0 0 0 2px #ffcf5c,0 0 14px -2px #ffcf5c}
+.rpg-slot.selected{border-color:#a8e063;box-shadow:0 0 0 2px #a8e063,0 0 14px -2px #a8e063}
 .rpg-inv-detail{margin-top:10px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.12);display:none}
 .rpg-inv-detail.on{display:block}
@@ -137,8 +137,8 @@ function injectStyleOnce() {
 .rpg-inv-detail button{flex:1;border:0;border-radius:9px;padding:8px 0;cursor:pointer;
   font-family:inherit;font-weight:700;font-size:12px}
 .rpg-inv-detail button:disabled{opacity:.55;cursor:default}
-.rpg-inv-detail .d-use{background:linear-gradient(180deg,#ffe08a,#ffbe4d);color:#241a04}
-.rpg-inv-detail .d-sell{background:rgba(255,255,255,.1);color:#ffd9b0;border:1px solid rgba(255,207,92,.4)}
+.rpg-inv-detail .d-use{background:linear-gradient(135deg,#a8e063,#2f9e5f);color:#fff;text-shadow:0 1px 1px rgba(16,70,36,.4)}
+.rpg-inv-detail .d-sell{background:rgba(255,255,255,.1);color:#d6f5c8;border:1px solid rgba(150,230,150,.45)}
 .rpg-inv-sub{font-size:10px;opacity:.6;margin:2px 0 8px}
 .rpg-shop{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14);display:none}
 .rpg-shop.is-open{display:block}
