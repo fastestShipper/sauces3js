@@ -1,7 +1,7 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260708s';
+import { TIERS } from './fx.js?v=20260708t';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -127,6 +127,18 @@ function injectStyleOnce() {
 .rpg-slot:hover .tip{opacity:1}
 .rpg-slot .tip b{color:var(--tc,#9aa0a6)}
 .rpg-inv-empty{opacity:.5;font-size:12px;text-align:center;padding:14px 0}
+.rpg-slot.selected{border-color:#ffcf5c;box-shadow:0 0 0 2px #ffcf5c,0 0 14px -2px #ffcf5c}
+.rpg-inv-detail{margin-top:10px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);display:none}
+.rpg-inv-detail.on{display:block}
+.rpg-inv-detail .d-name{font-weight:700;font-size:13px;margin-bottom:2px}
+.rpg-inv-detail .d-meta{font-size:11px;opacity:.75;margin-bottom:8px}
+.rpg-inv-detail .d-row{display:flex;gap:8px}
+.rpg-inv-detail button{flex:1;border:0;border-radius:9px;padding:8px 0;cursor:pointer;
+  font-family:inherit;font-weight:700;font-size:12px}
+.rpg-inv-detail button:disabled{opacity:.55;cursor:default}
+.rpg-inv-detail .d-use{background:linear-gradient(180deg,#ffe08a,#ffbe4d);color:#241a04}
+.rpg-inv-detail .d-sell{background:rgba(255,255,255,.1);color:#ffd9b0;border:1px solid rgba(255,207,92,.4)}
 .rpg-inv-sub{font-size:10px;opacity:.6;margin:2px 0 8px}
 .rpg-shop{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14);display:none}
 .rpg-shop.is-open{display:block}
@@ -218,17 +230,22 @@ export class Inventory {
     grid.className = 'rpg-inv-grid';
     const sub = document.createElement('div');
     sub.className = 'rpg-inv-sub';
-    sub.textContent = 'Clic: equipar / beber \u00b7 Shift+clic: vender';
+    sub.textContent = 'Toca un objeto para ver sus acciones';
+    const detail = document.createElement('div');
+    detail.className = 'rpg-inv-detail';
     const shop = document.createElement('div');
     shop.className = 'rpg-shop';
     panel.appendChild(h);
     panel.appendChild(sub);
     panel.appendChild(grid);
+    panel.appendChild(detail);
     panel.appendChild(shop);
     rootEl.appendChild(panel);
     this._panel = panel;
     this._grid = grid;
     this._shop = shop;
+    this._detail = detail;
+    this.selectedId = null;
     this._render();
     return panel;
   }
@@ -299,12 +316,47 @@ export class Inventory {
         tip.appendChild(document.createTextNode(line));
       }
       slot.appendChild(tip);
+      if (this.selectedId === item.id) slot.classList.add('selected');
       slot.addEventListener('click', (ev) => {
-        if (ev.shiftKey) this.sell(item);   // shift+clic = vender
-        else this.equip(item);              // clic = equipar / beber
+        if (ev.shiftKey) { this.sell(item); return; }   // atajo power-user
+        this.selectedId = this.selectedId === item.id ? null : item.id;
+        this._render();
       });
       grid.appendChild(slot);
     }
+    this._renderDetail();
+  }
+
+  _renderDetail() {
+    const d = this._detail;
+    if (!d) return;
+    const item = this.items.find((i) => i.id === this.selectedId);
+    if (!item) { d.classList.remove('on'); d.textContent = ''; return; }
+    d.classList.add('on');
+    d.textContent = '';
+    const name = document.createElement('div');
+    name.className = 'd-name';
+    name.style.color = tierColor(item.tier);
+    name.textContent = item.name;
+    const meta = document.createElement('div');
+    meta.className = 'd-meta';
+    meta.textContent = item.kind === 'potion'
+      ? ('Cura ' + item.heal + ' HP')
+      : ('ATK ' + item.atk + (item.tier ? ' | ' + item.tier : ''));
+    const row = document.createElement('div');
+    row.className = 'd-row';
+    const use = document.createElement('button');
+    use.className = 'd-use';
+    const isEq = this.equippedWeapon && this.equippedWeapon.id === item.id;
+    use.textContent = item.kind === 'potion' ? 'Beber' : (isEq ? 'Equipada' : 'Equipar');
+    use.disabled = isEq;
+    use.addEventListener('click', () => { this.equip(item); });
+    const sell = document.createElement('button');
+    sell.className = 'd-sell';
+    sell.textContent = 'Vender ' + sellPrice(item) + 'g';
+    sell.addEventListener('click', () => { this.selectedId = null; this.sell(item); });
+    row.append(use, sell);
+    d.append(name, meta, row);
   }
 
   setOpen(bool) {

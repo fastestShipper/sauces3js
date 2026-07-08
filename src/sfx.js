@@ -30,6 +30,13 @@ const SAMPLES = {
   sk_heal: ['gen/skill_heal.mp3'],
   sk_shield: ['gen/skill_shield.mp3'],
   sk_haste: ['gen/skill_haste.mp3'],
+  // ===== Kenney CC0: calidad de juego probada =====
+  slice: ['kenney/knifeSlice.ogg', 'kenney/knifeSlice2.ogg', 'kenney/chop.ogg'],
+  steps: ['kenney/footstep_grass_000.ogg', 'kenney/footstep_grass_001.ogg', 'kenney/footstep_grass_002.ogg', 'kenney/footstep_grass_003.ogg', 'kenney/footstep_grass_004.ogg'],
+  coins: ['kenney/handleCoins.ogg', 'kenney/handleCoins2.ogg'],
+  bell: ['kenney/impactBell_heavy_000.ogg'],
+  jingle: ['kenney/jingles_STEEL02.ogg', 'kenney/jingles_STEEL04.ogg'],
+  equip: ['kenney/drawKnife2.ogg'],
 };
 
 // pool de sample por TIPO de skill: cada skill suena distinto
@@ -190,7 +197,8 @@ class Sfx {
   // impacto de arma en carne: punch + acero + carne sintetica; crit suma sub-bass
   hit(crit = false) {
     this._sample('punch', { gain: crit ? 0.7 : 0.5 });
-    this._sample('blade', { gain: 0.3, rate: 1.05 });
+    this._sample('slice', { gain: 0.45, rate: 1.05 });
+    this._sample('blade', { gain: 0.25, rate: 1.05 });
     // carne: ruido lowpass cayendo 900->200Hz
     this._noise({ dur: 0.13, gain: 0.3, fc: 900, fcEnd: 200, q: 0.8, type: 'lowpass' });
     if (crit) {
@@ -228,7 +236,8 @@ class Sfx {
   // cada skill con su propio sonido (samples MuAPI, fallback al golpe base)
   skill(type) {
     const pool = SKILL_POOL[type];
-    if (!pool || !this._sample(pool, { gain: 0.55, spread: 0.08 })) this.hit(false);
+    if (pool === 'sk_slash' || pool === 'sk_spin') this._sample('slice', { gain: 0.55 });
+    if (!pool || !this._sample(pool, { gain: 0.5, spread: 0.08 })) this.hit(false);
   }
 
   // te mordieron: sample de dolor + thump
@@ -244,13 +253,25 @@ class Sfx {
     this.zombieDeath();
     this._tone({ type: 'triangle', f0: 520, f1: 780, dur: 0.1, gain: 0.22, delay: 0.1 });
   }
-  coin() { this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 }); this._tone({ type: 'square', f0: 1760, f1: 1760, dur: 0.1, gain: 0.12, delay: 0.06 }); }
+  coin() {
+    if (!this._sample('coins', { gain: 0.5 })) {
+      this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 });
+      this._tone({ type: 'square', f0: 1760, f1: 1760, dur: 0.1, gain: 0.12, delay: 0.06 });
+    }
+  }
+  // pasos sobre el pasto del parque (throttle lo pone el caller)
+  step(running = false) {
+    this._sample('steps', { gain: running ? 0.34 : 0.26, spread: 0.12 });
+  }
+  equipSound() { this._sample('equip', { gain: 0.5 }); }
   loot() { this._tone({ type: 'sine', f0: 660, f1: 990, dur: 0.12, gain: 0.24 }); this._tone({ type: 'sine', f0: 990, f1: 1320, dur: 0.16, gain: 0.2, delay: 0.1 }); }
   levelup() {
-    if (this._sample('levelup_real', { gain: 0.7, spread: 0 })) {
-      this._sample('bass', { gain: 0.5, rate: 0.9, delay: 0.1 });
-      return;
-    }
+    // jingle musical + campana + sub-bass: level-up con PESO
+    const j = this._sample('jingle', { gain: 0.75, spread: 0 });
+    this._sample('bell', { gain: 0.5, rate: 1.2 });
+    this._sample('bass', { gain: 0.55, rate: 0.9, delay: 0.1 });
+    if (j) return;
+    if (this._sample('levelup_real', { gain: 0.7, spread: 0 })) return;
     for (let i = 0; i < 4; i++) this._tone({ type: 'triangle', f0: 440 * Math.pow(1.26, i), f1: 440 * Math.pow(1.26, i), dur: 0.14, gain: 0.24, delay: i * 0.09 });
   }
   potion() { this._tone({ type: 'sine', f0: 300, f1: 620, dur: 0.22, gain: 0.24 }); }
@@ -268,6 +289,7 @@ class Sfx {
   }
   // invasion: riser cinematico + sirena
   wave() {
+    this._sample('bell', { gain: 0.6, rate: 0.7 });   // campanada grave de alarma
     this._sample('riser', { gain: 0.5, spread: 0.04 });
     for (let i = 0; i < 2; i++) this._tone({ type: 'sawtooth', f0: 340, f1: 620, dur: 0.34, gain: 0.16, delay: 0.5 + i * 0.38 });
   }

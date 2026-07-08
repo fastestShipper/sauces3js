@@ -5,7 +5,7 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260708s';
+import { createToonSkyTexture } from './worldmat.js?v=20260708t';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -69,11 +69,11 @@ export function createIntroScene(appVersion) {
       g.scene.traverse((o) => { if (/^sauce_[a-d]$/.test(o.name)) protos.push(o); });
       if (!protos.length) return;
       const rng = (() => { let s = 420; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 14; i++) {
         const t = protos[i % protos.length].clone(true);
         // anillo interior + dispersos afuera; ninguno tapando el centro
         const ang = rng() * Math.PI * 2;
-        const r = i < 10 ? 20 + rng() * 12 : 40 + rng() * 45;
+        const r = i < 8 ? 26 + rng() * 12 : 46 + rng() * 50;   // claro central despejado
         const h = 5.2 + rng() * 2.8;
         t.scale.setScalar(h / 20.6);
         t.position.set(Math.sin(ang) * r, 0, Math.cos(ang) * r);
@@ -102,9 +102,10 @@ export function createIntroScene(appVersion) {
     raf = requestAnimationFrame(tick);
     const t = (performance.now() - t0) / 1000;
     if (mode === 'ground') {
-      const a = t * 0.045;
-      camera.position.set(Math.sin(a) * 14, 2.1 + Math.sin(t * 0.3) * 0.25, Math.cos(a) * 14);
-      camera.lookAt(Math.sin(a + 0.9) * 24, 4.2, Math.cos(a + 0.9) * 24);
+      // dolly dentro del CLARO: los sauces enmarcan sin tapar
+      const a = t * 0.04;
+      camera.position.set(Math.sin(a) * 9, 2.3 + Math.sin(t * 0.3) * 0.25, Math.cos(a) * 9);
+      camera.lookAt(Math.sin(a + 1.1) * 30, 5.2, Math.cos(a + 1.1) * 30);
     } else {
       const a = t * 0.03;
       camera.position.set(Math.sin(a) * 46, 52, Math.cos(a) * 46);

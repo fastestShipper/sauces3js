@@ -1,10 +1,10 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708s';
-import { makeNametag } from './nametag.js?v=20260708s';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708s';
-import { composeCharacter } from './rpg/charcustom.js?v=20260708s';
+import { sanitizeImported } from './glbutil.js?v=20260708t';
+import { makeNametag } from './nametag.js?v=20260708t';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708t';
+import { composeCharacter } from './rpg/charcustom.js?v=20260708t';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -37,6 +37,12 @@ export class Player {
     this.grounded = true;
     this.cur = '';
     this.root = new THREE.Group();
+    // pasos: uno cada ~2.1m caminando (el pool de pasto de Kenney)
+    if (this.grounded && this.sfx && this._lastX !== undefined) {
+      this._stepDist += Math.hypot(this.pos.x - this._lastX, this.pos.z - this._lastZ);
+      if (this._stepDist > 2.1) { this._stepDist = 0; this.sfx.step?.(); }
+    }
+    this._lastX = this.pos.x; this._lastZ = this.pos.z;
     this.root.position.copy(this.pos);
     scene.add(this.root);
     this.keys = {};
@@ -228,6 +234,7 @@ export class Player {
     }
     const moving = fwd !== 0 || strafe !== 0;
     if (this.speedBuffT > 0) this.speedBuffT -= dt;
+    this._stepDist = this._stepDist || 0;
     let spd = 9.0 * (this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? 2 : 1)
       * (this.speedBuffT > 0 ? (this.speedBuffMult || 1) : 1);
     if (moving) {

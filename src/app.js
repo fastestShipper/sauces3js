@@ -3,39 +3,39 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708s';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708s';
-import { GrassSystem } from './veg/grass.js?v=20260708s';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708s';
-import { Player } from './player.js?v=20260708s';
-import { MiniMap } from './minimap.js?v=20260708s';
-import { StreetLife } from './npcs.js?v=20260708s';
-import { sanitizeImported } from './glbutil.js?v=20260708s';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708s';
-import { Net } from './net.js?v=20260708s';
-import { ChatUI, showBubble } from './chat.js?v=20260708s';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708s';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708s';
-import { equipWeapon } from './weapons.js?v=20260708s';
-import { authRequest } from './rpg/account.js?v=20260708s';
-import { MobField } from './rpg/mobs.js?v=20260708s';
-import { Inventory } from './rpg/loot.js?v=20260708s';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708s';
-import { Combat } from './rpg/combat.js?v=20260708s';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708s';
-import { Effects } from './rpg/effects.js?v=20260708s';
-import { attachWeaponByName } from './weapons.js?v=20260708s';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708s';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708s';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708s';
-import { SocialPanel } from './social.js?v=20260708s';
-import { SkillSystem } from './rpg/skills.js?v=20260708s';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708s';
-import { createSfx } from './sfx.js?v=20260708s';
-import { installTouchControls } from './touch.js?v=20260708s';
-import { createIntroScene } from './introscene.js?v=20260708s';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708t';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708t';
+import { GrassSystem } from './veg/grass.js?v=20260708t';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708t';
+import { Player } from './player.js?v=20260708t';
+import { MiniMap } from './minimap.js?v=20260708t';
+import { StreetLife } from './npcs.js?v=20260708t';
+import { sanitizeImported } from './glbutil.js?v=20260708t';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708t';
+import { Net } from './net.js?v=20260708t';
+import { ChatUI, showBubble } from './chat.js?v=20260708t';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708t';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708t';
+import { equipWeapon } from './weapons.js?v=20260708t';
+import { authRequest } from './rpg/account.js?v=20260708t';
+import { MobField } from './rpg/mobs.js?v=20260708t';
+import { Inventory } from './rpg/loot.js?v=20260708t';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708t';
+import { Combat } from './rpg/combat.js?v=20260708t';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708t';
+import { Effects } from './rpg/effects.js?v=20260708t';
+import { attachWeaponByName } from './weapons.js?v=20260708t';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708t';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708t';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708t';
+import { SocialPanel } from './social.js?v=20260708t';
+import { SkillSystem } from './rpg/skills.js?v=20260708t';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708t';
+import { createSfx } from './sfx.js?v=20260708t';
+import { installTouchControls } from './touch.js?v=20260708t';
+import { createIntroScene } from './introscene.js?v=20260708t';
 
-const APP_VERSION = '20260708s';
+const APP_VERSION = '20260708t';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -176,14 +176,16 @@ function showAuth() {
       w.style.cssText += st;
       ov.appendChild(w);
     }
+    ov.classList.add('gscrim');
     const logo = document.createElement('div');
     logo.style.cssText = 'position:relative;text-align:center;line-height:.95';
-    logo.innerHTML = '<div style="font-size:clamp(40px,6.4vw,66px);font-weight:700;letter-spacing:1px;color:#fff;text-shadow:0 3px 0 rgba(29,66,84,.55),0 14px 42px rgba(19,46,80,.5)">LOS SAUCES</div>' +
-      '<div style="display:inline-block;margin-top:10px;font-size:13px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#16456b;background:rgba(255,255,255,.66);padding:5px 16px;border-radius:999px">San Borja · Lima · RPG</div>';
+    logo.innerHTML = '<div class="glogo">LOS SAUCES</div>' +
+      '<div class="gpill">San Borja · Lima · RPG</div>';
     const card = document.createElement('div');
-    card.style.cssText = 'position:relative;background:linear-gradient(180deg,rgba(30,26,52,.94),rgba(20,17,38,.96));border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:26px 30px;width:330px;color:#f2f0fa;box-shadow:0 40px 100px rgba(8,10,30,.6),inset 0 1px 0 rgba(255,255,255,.12);text-align:center';
+    card.className = 'gcard';
+    card.style.cssText = 'padding:26px 30px;width:340px;color:#f2f0fa;text-align:center';
     const sub = document.createElement('div'); sub.textContent = 'Crea tu cuenta y guarda tu progreso'; sub.style.cssText = 'font-size:13px;font-weight:500;color:#a9a4c4;margin:0 0 14px';
-    const tabs = document.createElement('div'); tabs.style.cssText = 'display:flex;gap:6px;margin-bottom:14px';
+    const tabs = document.createElement('div'); tabs.className = 'gtabs'; tabs.style.cssText = 'margin-bottom:14px';
     const tabLogin = document.createElement('button');
     const tabReg = document.createElement('button');
     const err = document.createElement('div'); err.style.cssText = 'min-height:16px;font-size:11.5px;font-weight:500;color:#ff8a7a;margin:4px 0 2px';
@@ -191,8 +193,7 @@ function showAuth() {
     const styleTabs = () => {
       for (const [b, m, label] of [[tabLogin, 'login', 'Entrar'], [tabReg, 'register', 'Crear cuenta']]) {
         b.textContent = label;
-        b.style.cssText = 'flex:1;padding:10px;border:0;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;font-family:' + FONT + ';transition:all .12s;' +
-          (mode === m ? 'background:linear-gradient(180deg,#ffe08a,#ffbe4d);color:#241a04;box-shadow:0 4px 14px rgba(255,190,77,.3)' : 'background:rgba(255,255,255,.07);color:#a9a4c4');
+        b.className = 'gtab' + (mode === m ? ' on' : '');
       }
     };
     tabLogin.onclick = () => { mode = 'login'; styleTabs(); err.textContent = ''; };
@@ -200,13 +201,15 @@ function showAuth() {
     tabs.append(tabLogin, tabReg);
     const u = document.createElement('input'); u.placeholder = 'Usuario'; u.autocomplete = 'off'; u.maxLength = 16;
     const p = document.createElement('input'); p.placeholder = 'Contraseña'; p.type = 'password'; p.maxLength = 64;
-    for (const i of [u, p]) i.style.cssText = 'width:100%;box-sizing:border-box;margin:6px 0;padding:12px 14px;border-radius:11px;border:2px solid rgba(255,255,255,.14);background:rgba(12,10,26,.7);color:#fff;font-size:14px;font-weight:500;outline:none;font-family:' + FONT;
+    for (const i of [u, p]) { i.className = 'ginput'; i.style.cssText = 'margin:6px 0'; }
     const btn = document.createElement('button'); btn.textContent = 'Continuar';
-    btn.style.cssText = 'margin-top:10px;width:100%;padding:13px;border:0;border-radius:12px;background:linear-gradient(180deg,#ffe08a,#ffbe4d);color:#241a04;font-weight:700;font-size:15px;letter-spacing:.3px;cursor:pointer;font-family:' + FONT + ';box-shadow:0 8px 22px rgba(255,190,77,.35),inset 0 1px 0 rgba(255,255,255,.6)';
+    btn.className = 'gbtn';
+    btn.style.cssText = 'margin-top:10px';
     const hint = document.createElement('div'); hint.textContent = 'Tu progreso (clase, nivel, inventario) se guarda en tu cuenta.'; hint.style.cssText = 'font-size:10.5px;font-weight:500;color:#77729a;margin-top:11px;line-height:1.4';
     const guestBtn = document.createElement('button');
     guestBtn.textContent = 'Explorar sin guardar';
-    guestBtn.style.cssText = 'margin-top:12px;width:100%;padding:11px;border:2px solid rgba(255,255,255,.18);border-radius:12px;background:transparent;color:#cfcbe6;font-weight:600;font-size:13px;cursor:pointer;font-family:' + FONT;
+    guestBtn.className = 'gbtn-ghost';
+    guestBtn.style.cssText = 'margin-top:12px';
     card.append(sub, tabs, u, p, err, btn, guestBtn, hint);
     ov.append(logo, card); document.body.appendChild(ov);
     styleTabs();
@@ -993,6 +996,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     lastEquipId = it.id;
     const w = await attachWeaponByName(loader, player.char, it.weaponName);
     if (w) applyWeaponTier(w, it.tier);
+    sfx.equipSound?.();
   };
   inventory = new Inventory(() => { applyEquip(); saveChar(); });
   inventory.buildUI(document.body);

@@ -14,7 +14,7 @@ function injectStyle() {
 .rpg-hud-root { position: fixed; inset: 0; pointer-events: none; z-index: 40;
   font-family: 'Fredoka', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #f4f4f8; }
 .rpg-hud-root * { box-sizing: border-box; }
-.rpg-hud-panel { position: fixed; background: rgba(23,20,41,0.82);
+.rpg-hud-panel { position: fixed; background: linear-gradient(135deg, rgba(40,34,66,.72), rgba(18,15,34,.82));
   border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 10px 12px;
   backdrop-filter: blur(4px); text-shadow: 0 1px 3px rgba(0,0,0,0.85);
   box-shadow: 0 12px 32px rgba(10,8,24,.38), inset 0 1px 0 rgba(255,255,255,.09); }
@@ -23,7 +23,7 @@ function injectStyle() {
   padding: 11px 15px 11px 66px; }
 .rpg-hud-lvl-badge { position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
   width: 45px; height: 45px; border-radius: 999px; display: grid; place-items: center;
-  background: linear-gradient(180deg, #ffe08a, #ffbe4d); color: #241a04;
+  background: linear-gradient(135deg, #ffb35c, #ff5c86); color: #fff; text-shadow: 0 1px 2px rgba(120,20,40,.4);
   font-size: 20px; font-weight: 700; text-shadow: none;
   box-shadow: 0 4px 14px rgba(255,190,77,.4), inset 0 1px 0 rgba(255,255,255,.65),
     0 0 0 3px rgba(23,20,41,.9); }
