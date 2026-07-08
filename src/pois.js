@@ -172,9 +172,9 @@ function ensurePoiStyles() {
   const style = document.createElement('style');
   style.id = 'poi-ui-style';
   style.textContent = `
-    .poi-ui { position:fixed; left:50%; bottom:118px; transform:translateX(-50%); z-index:38; display:flex; flex-direction:column; align-items:center; font-family:'Fredoka',system-ui,sans-serif; pointer-events:none; color:#f7f4eb; text-shadow:0 1px 3px rgba(0,0,0,.7); }
+    .poi-ui { position:fixed; left:50%; bottom:172px; transform:translateX(-50%); z-index:38; display:flex; flex-direction:column; align-items:center; font-family:'Fredoka',system-ui,sans-serif; pointer-events:none; color:#f7f4eb; text-shadow:0 1px 3px rgba(0,0,0,.7); }
     .poi-prompt { display:none; width:max-content; max-width:min(360px,72vw); padding:8px 14px; border:1px solid rgba(255,207,92,.8); border-radius:12px; background:rgba(23,20,41,.86); font-size:13px; font-weight:600; box-shadow:0 10px 26px rgba(10,8,24,.4); }
-    .poi-card { display:none; width:min(340px,74vw); margin-top:8px; padding:13px 16px; border:1px solid rgba(255,255,255,.16); border-radius:16px; background:rgba(23,20,41,.92); box-shadow:0 16px 44px rgba(10,8,24,.5), inset 0 1px 0 rgba(255,255,255,.1); text-align:center; }
+    .poi-card { display:none; width:min(280px,64vw); margin-top:8px; padding:9px 13px; opacity:.94; border:1px solid rgba(255,255,255,.16); border-radius:16px; background:rgba(23,20,41,.92); box-shadow:0 16px 44px rgba(10,8,24,.5), inset 0 1px 0 rgba(255,255,255,.1); text-align:center; }
     .poi-card h3 { margin:0 0 4px; font-size:16px; line-height:1.15; font-weight:700; }
     .poi-card .kind { color:#ffcf5c; font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
     .poi-card p { margin:8px 0 0; color:#d9d5ec; font-size:12px; line-height:1.4; font-weight:500; }
@@ -201,39 +201,26 @@ export function installPoiInteractions({ pois, city, player, rootEl = document.b
   root.append(prompt, card);
   rootEl.appendChild(root);
 
+  // SIN tecla: la E ahora es una skill (bloqueaba en plena pelea y la tarjeta
+  // no se iba). El lugar se muestra como tooltip informativo auto-visible al
+  // acercarse y desaparece solo al alejarse. Cero bloqueo, cero interaccion.
   let active = null;
-  const showCard = (poi) => {
-    const streetName = nearestStreetName(city, poi.x, poi.z);
-    kind.textContent = KIND_LABELS[poi.category] || 'Referencia';
-    title.textContent = poi.title;
-    desc.textContent = poi.description;
-    street.textContent = streetName ? `Cerca de ${streetName}` : 'Los Sauces, San Borja';
-    card.style.display = 'block';
-  };
-
-  const onKey = (event) => {
-    if (event.code === 'Escape') {
-      card.style.display = 'none';
-      return;
-    }
-    if (event.code !== 'KeyE' || player.locked || !active) return;
-    event.preventDefault();
-    showCard(active);
-  };
-  addEventListener('keydown', onKey);
-
   return {
     update(x, z) {
       active = nearestPoi(pois, x, z);
       if (!active || player.locked) {
+        card.style.display = 'none';
         prompt.style.display = 'none';
         return;
       }
-      prompt.textContent = `E · Ver lugar: ${active.title}`;
-      prompt.style.display = 'block';
+      kind.textContent = KIND_LABELS[active.category] || 'Referencia';
+      title.textContent = active.title;
+      desc.textContent = active.description;
+      street.textContent = '';
+      card.style.display = 'block';
+      prompt.style.display = 'none';
     },
     dispose() {
-      removeEventListener('keydown', onKey);
       root.remove();
     },
   };
