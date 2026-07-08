@@ -1,12 +1,26 @@
-// SFX procedurales con WebAudio: cero assets, todo sintetizado (osciladores +
-// ruido). El AudioContext se crea perezoso en el primer gesto del usuario
-// (politica de autoplay). Tecla M silencia; el estado persiste en localStorage.
+// SFX hibrido: SAMPLES reales (assets/sfx, licencia Pixabay/CC0) en capas con
+// sintesis WebAudio (osciladores + ruido + waveshaper). Cada golpe = whoosh de
+// anticipacion + impacto + consecuencia, con pitch aleatorio para no sonar a
+// metralleta. El AudioContext nace perezoso en el primer gesto (autoplay).
+// Tecla M silencia; persiste en localStorage.
 const LS_MUTE = 'sauces_muted';
+
+// pools de variantes: se elige una al azar por disparo
+const SAMPLES = {
+  whoosh: ['whoosh.wav', 'whoosh2.wav', 'whoosh3.wav', 'whoosh-short.mp3'],
+  punch: ['punch.ogg', 'punch2.ogg', 'punch3.ogg'],
+  blade: ['sword_hit.ogg', 'sword_hit2.ogg', 'sword_hit3.ogg'],
+  bass: ['impact-bass-1.mp3', 'impact-bass-2.mp3'],
+  hurt: ['hurt.wav'],
+  riser: ['riser.mp3'],
+};
 
 class Sfx {
   constructor() {
     this.ctx = null;
     this.master = null;
+    this.buffers = new Map();   // nombre de archivo -> AudioBuffer
+    this._loading = false;
     this.muted = localStorage.getItem(LS_MUTE) === '1';
     const boot = () => { this._ensure(); removeEventListener('mousedown', boot); removeEventListener('keydown', boot); };
     addEventListener('mousedown', boot);
@@ -22,17 +36,52 @@ class Sfx {
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.32;
+      this.master.gain.value = this.muted ? 0 : 0.34;
       this.master.connect(this.ctx.destination);
+      this._loadSamples();
       return true;
     } catch { return false; }
+  }
+
+  // carga perezosa de TODOS los samples tras el primer gesto; los golpes
+  // sintetizados suenan desde el frame 1, los samples se suman al llegar
+  async _loadSamples() {
+    if (this._loading) return;
+    this._loading = true;
+    const files = [...new Set(Object.values(SAMPLES).flat())];
+    await Promise.all(files.map(async (f) => {
+      try {
+        const r = await fetch('./assets/sfx/' + f);
+        if (!r.ok) return;
+        const ab = await r.arrayBuffer();
+        this.buffers.set(f, await this.ctx.decodeAudioData(ab));
+      } catch { /* sin sample: la sintesis cubre */ }
+    }));
   }
 
   toggleMute() {
     this.muted = !this.muted;
     localStorage.setItem(LS_MUTE, this.muted ? '1' : '0');
-    if (this.master) this.master.gain.value = this.muted ? 0 : 0.32;
+    if (this.master) this.master.gain.value = this.muted ? 0 : 0.34;
     if (this.onMuteChange) this.onMuteChange(this.muted);
+  }
+
+  // dispara un sample del pool con pitch aleatorio (rate ±spread) y gain
+  _sample(pool, { gain = 0.5, rate = 1, spread = 0.15, delay = 0 } = {}) {
+    if (!this._ensure() || this.muted) return false;
+    const names = SAMPLES[pool] || [];
+    const name = names[(Math.random() * names.length) | 0];
+    const buf = this.buffers.get(name);
+    if (!buf) return false;
+    const t = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * spread);
+    const g = this.ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g); g.connect(this.master);
+    src.start(t);
+    return true;
   }
 
   // tono simple: onda + freq inicial->final + envolvente exponencial corta
@@ -51,7 +100,7 @@ class Sfx {
   }
 
   // rafaga de ruido filtrado (golpes, whoosh)
-  _noise({ dur = 0.12, gain = 0.4, fc = 1200, q = 1, delay = 0 }) {
+  _noise({ dur = 0.12, gain = 0.4, fc = 1200, q = 1, delay = 0, type = 'bandpass', fcEnd = 0 }) {
     if (!this._ensure() || this.muted) return;
     const t = this.ctx.currentTime + delay;
     const n = Math.floor(this.ctx.sampleRate * dur);
@@ -61,7 +110,8 @@ class Sfx {
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const bp = this.ctx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = fc; bp.Q.value = q;
+    bp.type = type; bp.frequency.setValueAtTime(fc, t); bp.Q.value = q;
+    if (fcEnd > 0) bp.frequency.exponentialRampToValueAtTime(fcEnd, t + dur);
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
@@ -69,24 +119,106 @@ class Sfx {
     src.start(t);
   }
 
+  // gruñido zombie: dos sierras desafinadas + LFO de garganta + distorsion
+  _growl({ f = 90, dur = 0.5, gain = 0.2, delay = 0 }) {
+    if (!this._ensure() || this.muted) return;
+    const t = this.ctx.currentTime + delay;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    const shaper = this.ctx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 3); }
+    shaper.curve = curve;
+    const lfo = this.ctx.createOscillator();
+    const lfoG = this.ctx.createGain();
+    lfo.frequency.value = 11 + Math.random() * 7;
+    lfoG.gain.value = f * 0.28;
+    lfo.connect(lfoG);
+    for (const det of [0, 9]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f * (1 + (Math.random() * 2 - 1) * 0.08);
+      o.detune.value = det;
+      lfoG.connect(o.frequency);
+      o.connect(shaper);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+    shaper.connect(g); g.connect(this.master);
+    lfo.start(t); lfo.stop(t + dur + 0.05);
+  }
+
   // === vocabulario del juego ===
-  swing() { this._noise({ dur: 0.09, gain: 0.22, fc: 2400, q: 0.8 }); }
-  hit() { this._noise({ dur: 0.08, gain: 0.4, fc: 700, q: 1.4 }); this._tone({ type: 'triangle', f0: 160, f1: 90, dur: 0.09, gain: 0.3 }); }
-  hurt() { this._tone({ type: 'sawtooth', f0: 200, f1: 90, dur: 0.16, gain: 0.28 }); this._noise({ dur: 0.1, gain: 0.2, fc: 500 }); }
-  kill() { this._tone({ type: 'triangle', f0: 520, f1: 780, dur: 0.1, gain: 0.3 }); this._tone({ type: 'triangle', f0: 780, f1: 1040, dur: 0.14, gain: 0.26, delay: 0.09 }); }
+  // tajo al aire: sample de whoosh (fallback: ruido)
+  swing() {
+    if (!this._sample('whoosh', { gain: 0.3, rate: 1.15, spread: 0.18 })) {
+      this._noise({ dur: 0.09, gain: 0.22, fc: 2400, q: 0.8 });
+    }
+  }
+
+  // impacto de arma en carne: punch + acero + carne sintetica; crit suma sub-bass
+  hit(crit = false) {
+    this._sample('punch', { gain: crit ? 0.7 : 0.5 });
+    this._sample('blade', { gain: 0.3, rate: 1.05 });
+    // carne: ruido lowpass cayendo 900->200Hz
+    this._noise({ dur: 0.13, gain: 0.3, fc: 900, fcEnd: 200, q: 0.8, type: 'lowpass' });
+    if (crit) {
+      this._sample('bass', { gain: 0.8, rate: 0.9, spread: 0.06 });
+      this._tone({ type: 'triangle', f0: 90, f1: 45, dur: 0.18, gain: 0.4 });
+    }
+  }
+
+  // huesos quebrandose: 3-4 clicks resonantes secos
+  bones() {
+    const n = 3 + ((Math.random() * 2) | 0);
+    for (let i = 0; i < n; i++) {
+      this._noise({ dur: 0.045, gain: 0.34, fc: 1900 + Math.random() * 1400, q: 9, delay: i * (0.03 + Math.random() * 0.025) });
+    }
+  }
+
+  zombieGrowl() { this._growl({ f: 75 + Math.random() * 40, dur: 0.55, gain: 0.16 }); }
+  zombieHurt() { this._growl({ f: 130 + Math.random() * 60, dur: 0.22, gain: 0.18 }); }
+  zombieDeath() {
+    this._growl({ f: 110, dur: 0.5, gain: 0.2 });
+    this.bones();
+    this._sample('bass', { gain: 0.5, rate: 0.8, delay: 0.05 });
+  }
+
+  // te mordieron: sample de dolor + thump
+  hurt() {
+    if (!this._sample('hurt', { gain: 0.55 })) {
+      this._tone({ type: 'sawtooth', f0: 200, f1: 90, dur: 0.16, gain: 0.28 });
+    }
+    this._sample('bass', { gain: 0.4, rate: 1.1 });
+    this._noise({ dur: 0.1, gain: 0.2, fc: 500 });
+  }
+
+  kill() {
+    this.zombieDeath();
+    this._tone({ type: 'triangle', f0: 520, f1: 780, dur: 0.1, gain: 0.22, delay: 0.1 });
+  }
   coin() { this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 }); this._tone({ type: 'square', f0: 1760, f1: 1760, dur: 0.1, gain: 0.12, delay: 0.06 }); }
   loot() { this._tone({ type: 'sine', f0: 660, f1: 990, dur: 0.12, gain: 0.24 }); this._tone({ type: 'sine', f0: 990, f1: 1320, dur: 0.16, gain: 0.2, delay: 0.1 }); }
   levelup() { for (let i = 0; i < 4; i++) this._tone({ type: 'triangle', f0: 440 * Math.pow(1.26, i), f1: 440 * Math.pow(1.26, i), dur: 0.14, gain: 0.24, delay: i * 0.09 }); }
   potion() { this._tone({ type: 'sine', f0: 300, f1: 620, dur: 0.22, gain: 0.24 }); }
-  death() { this._tone({ type: 'sawtooth', f0: 300, f1: 60, dur: 0.7, gain: 0.3 }); }
+  death() { this._tone({ type: 'sawtooth', f0: 300, f1: 60, dur: 0.7, gain: 0.3 }); this._sample('bass', { gain: 0.7, rate: 0.7 }); }
   teleport() { this._tone({ type: 'sine', f0: 220, f1: 1400, dur: 0.5, gain: 0.2 }); this._noise({ dur: 0.4, gain: 0.1, fc: 2000, q: 0.6 }); }
   heal() { this._tone({ type: 'sine', f0: 520, f1: 660, dur: 0.25, gain: 0.14 }); }
   click() { this._tone({ type: 'square', f0: 900, f1: 900, dur: 0.03, gain: 0.1 }); }
   pvpkill() { this._tone({ type: 'sawtooth', f0: 200, f1: 400, dur: 0.18, gain: 0.24 }); this._tone({ type: 'sawtooth', f0: 400, f1: 300, dur: 0.22, gain: 0.2, delay: 0.16 }); }
-  // la racha sube de tono con cada kill encadenado (feedback adictivo)
-  streak(n) { if (n < 2) return; const f = 660 * Math.pow(1.06, Math.min(20, n)); this._tone({ type: 'square', f0: f, f1: f * 1.5, dur: 0.09, gain: 0.16, delay: 0.12 }); }
-  // sirena corta de invasion (oleada zombie)
-  wave() { for (let i = 0; i < 2; i++) this._tone({ type: 'sawtooth', f0: 340, f1: 620, dur: 0.34, gain: 0.2, delay: i * 0.38 }); }
+  // la racha sube de tono con cada kill encadenado (feedback adictivo) + punch fisico
+  streak(n) {
+    if (n < 2) return;
+    const f = 660 * Math.pow(1.06, Math.min(20, n));
+    this._tone({ type: 'square', f0: f, f1: f * 1.5, dur: 0.09, gain: 0.16, delay: 0.12 });
+    if (n >= 5) this._sample('bass', { gain: 0.6, rate: 1 + n * 0.02, delay: 0.1 });
+  }
+  // invasion: riser cinematico + sirena
+  wave() {
+    this._sample('riser', { gain: 0.5, spread: 0.04 });
+    for (let i = 0; i < 2; i++) this._tone({ type: 'sawtooth', f0: 340, f1: 620, dur: 0.34, gain: 0.16, delay: 0.5 + i * 0.38 });
+  }
 }
 
 export function createSfx() { return new Sfx(); }

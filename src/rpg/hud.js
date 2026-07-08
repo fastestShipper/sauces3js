@@ -65,6 +65,11 @@ function injectStyle() {
   display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #7a4e0a;
   background: radial-gradient(circle at 35% 30%, #fff3c4, #f3c54a 50%, #c98a18);
   border: 1px solid #8a5a10; }
+.rpg-hud-hurt { position: fixed; inset: 0; z-index: 39; pointer-events: none;
+  opacity: 0; background: radial-gradient(ellipse at center,
+  rgba(0,0,0,0) 55%, rgba(190,20,20,0.45) 100%);
+  transition: opacity 90ms ease-out; }
+.rpg-hud-hurt.is-on { opacity: 1; }
 .rpg-hud-death { position: fixed; inset: 0; z-index: 48; display: none;
   align-items: center; justify-content: center; flex-direction: column; gap: 10px;
   background: radial-gradient(circle at 50% 45%, rgba(60,8,10,0.42), rgba(16,4,8,0.78));
@@ -134,6 +139,7 @@ export class HUD {
         <div class="s-mult"></div>
       </div>
       <div class="rpg-hud-panel rpg-hud-banner"></div>
+      <div class="rpg-hud-hurt"></div>
       <div class="rpg-hud-death"><div class="d-title">HAS CAÍDO</div>
         <div class="d-sub">La Virgen de la gruta te levanta…</div>
         <div class="d-count">3</div></div>`;
@@ -227,6 +233,15 @@ export class HUD {
     this.elBanner.classList.add('is-on');
     if (this._bannerTimer) clearTimeout(this._bannerTimer);
     this._bannerTimer = setTimeout(() => this.elBanner.classList.remove('is-on'), 4000);
+  }
+
+  // vignette roja de 160ms cuando el jugador RECIBE dano
+  hurtFlash() {
+    const el = this.root.querySelector('.rpg-hud-hurt');
+    if (!el) return;
+    el.classList.add('is-on');
+    clearTimeout(this._hurtT);
+    this._hurtT = setTimeout(() => el.classList.remove('is-on'), 160);
   }
 
   toast(text) {

@@ -11,13 +11,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260708g';
+import { sanitizeImported } from '../glbutil.js?v=20260708h';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
 const HP_H = 0.16;                 // alto de la barra de vida (u)
 const HP_Y = 2.5;                  // altura de la barra sobre el piso (u)
-const DEATH_HOLD = 1.2;            // s que dura la pose de muerte antes de quitar el visual
+const DEATH_HOLD = 5.0;            // s de cadaver en el piso (se hunde al final)
 const HIT_SPEED = 1.4;             // acelera el clip de impacto para que sea snappy
 
 // kind % 4 -> tipo de esqueleto. El server manda kind; el cliente solo lo mapea a un look.
@@ -226,6 +226,20 @@ export class MobField {
     if (!v.dead) {
       this._playOnce(v, 'Hit', HIT_SPEED);
       v.flashT = 0.14;
+      // KNOCKBACK visual: el zombie retrocede alejandose del jugador local
+      const pp = this.net && this.net.player && this.net.player.pos;
+      if (pp) {
+        const dx = v.root.position.x - pp.x, dz = v.root.position.z - pp.z;
+        const dd = Math.hypot(dx, dz) || 1;
+        v.root.position.x += (dx / dd) * 0.45;
+        v.root.position.z += (dz / dd) * 0.45;
+      }
+      // herido visible: bajo el 50% la piel se oscurece (una sola vez)
+      if (!v.wounded && v.hpMax && hp / v.hpMax < 0.5) {
+        v.wounded = true;
+        for (const m of v.mats) if (m.color) m.color.multiplyScalar(0.72);
+      }
+      if (this.sfx) this.sfx.zombieHurt();
     }
   }
 
@@ -279,6 +293,20 @@ export class MobField {
 
   update(dt) {
     const cam = this.getCamera ? this.getCamera() : null;
+    // gruñido ambiental: un zombie cercano gruñe cada tanto (presion constante)
+    this._growlT = (this._growlT || 0) - dt;
+    if (this._growlT <= 0 && this.sfx) {
+      this._growlT = 3 + Math.random() * 4;
+      const pp = this.net && this.net.player && this.net.player.pos;
+      if (pp) {
+        for (const v of this.mobs.values()) {
+          if (Math.hypot(v.root.position.x - pp.x, v.root.position.z - pp.z) < 16) {
+            this.sfx.zombieGrowl();
+            break;
+          }
+        }
+      }
+    }
     // mobs vivos: avanzar mixer, billboardear barra, volver a Idle al terminar one-shots
     for (const v of this.mobs.values()) {
       v.root.position.x += (v.tx - v.root.position.x) * Math.min(1, dt * 9);
@@ -311,6 +339,7 @@ export class MobField {
       const d = this.dying[i];
       if (d.v.mixer) { try { d.v.mixer.update(dt); } catch {} }
       d.t -= dt;
+      if (d.t < 1.0) d.v.root.position.y -= dt * 0.9;   // se hunde en la tierra
       if (d.t <= 0) {
         this.scene.remove(d.v.root);
         this.dying.splice(i, 1);

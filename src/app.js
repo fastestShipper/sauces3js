@@ -3,36 +3,36 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708g';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708g';
-import { GrassSystem } from './veg/grass.js?v=20260708g';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708g';
-import { Player } from './player.js?v=20260708g';
-import { MiniMap } from './minimap.js?v=20260708g';
-import { StreetLife } from './npcs.js?v=20260708g';
-import { sanitizeImported } from './glbutil.js?v=20260708g';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708g';
-import { Net } from './net.js?v=20260708g';
-import { ChatUI, showBubble } from './chat.js?v=20260708g';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708g';
-import { authRequest } from './rpg/account.js?v=20260708g';
-import { MobField } from './rpg/mobs.js?v=20260708g';
-import { Inventory } from './rpg/loot.js?v=20260708g';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708g';
-import { Combat } from './rpg/combat.js?v=20260708g';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708g';
-import { Effects } from './rpg/effects.js?v=20260708g';
-import { attachWeaponByName } from './weapons.js?v=20260708g';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708g';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708g';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708g';
-import { SocialPanel } from './social.js?v=20260708g';
-import { SkillSystem } from './rpg/skills.js?v=20260708g';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708g';
-import { createSfx } from './sfx.js?v=20260708g';
-import { installTouchControls } from './touch.js?v=20260708g';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708h';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708h';
+import { GrassSystem } from './veg/grass.js?v=20260708h';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708h';
+import { Player } from './player.js?v=20260708h';
+import { MiniMap } from './minimap.js?v=20260708h';
+import { StreetLife } from './npcs.js?v=20260708h';
+import { sanitizeImported } from './glbutil.js?v=20260708h';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708h';
+import { Net } from './net.js?v=20260708h';
+import { ChatUI, showBubble } from './chat.js?v=20260708h';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708h';
+import { authRequest } from './rpg/account.js?v=20260708h';
+import { MobField } from './rpg/mobs.js?v=20260708h';
+import { Inventory } from './rpg/loot.js?v=20260708h';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708h';
+import { Combat } from './rpg/combat.js?v=20260708h';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708h';
+import { Effects } from './rpg/effects.js?v=20260708h';
+import { attachWeaponByName } from './weapons.js?v=20260708h';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708h';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708h';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708h';
+import { SocialPanel } from './social.js?v=20260708h';
+import { SkillSystem } from './rpg/skills.js?v=20260708h';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708h';
+import { createSfx } from './sfx.js?v=20260708h';
+import { installTouchControls } from './touch.js?v=20260708h';
 
-const APP_VERSION = '20260708g';
+const APP_VERSION = '20260708h';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -815,6 +815,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   // ===== sonido procedural (M silencia) + recurso/skill de clase (Q) + monedero =====
   const sfx = createSfx();
   player.sfx = sfx;
+  mobField.sfx = sfx;   // gruñidos, quejidos y estertores zombie
   sfx.onMuteChange = (muted) => hud.toast(muted ? '🔇 Sonido apagado (M)' : '🔊 Sonido encendido');
   const skills = new SkillSystem(choice.god ? 'cernunnos' : (choice.className || 'verdugo'));
   const wallet = new Wallet(document.body, 0);
@@ -1033,7 +1034,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   const clock = new THREE.Clock();
   let firstPlayable = true;
   renderer.setAnimationLoop(() => {
-    const dt = Math.min(clock.getDelta(), 0.05);
+    const rawDt = Math.min(clock.getDelta(), 0.05);
+    // GAME FEEL: hit-stop congela el mundo ~50ms al conectar; racha alta = slow-mo.
+    // El factor decae con el dt REAL (si no, el freeze seria eterno).
+    const dt = rawDt * (combat.timeFactor ? combat.timeFactor(rawDt) : 1);
     if (firstPlayable) {
       firstPlayable = false;
       hideBootOverlay();
@@ -1081,6 +1085,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes,
       { mobs: net.mobs, pois: publicPois, partyIds: partyIdSet });
     if (trailer) trailer.afterFrame(dt);
+    {
+      const sh = effects.shakeOffset && effects.shakeOffset();
+      if (sh) { camera.position.x += sh.x; camera.position.y += sh.y; camera.position.z += sh.z; }
+    }
     renderer.render(scene, camera);
   });
 }

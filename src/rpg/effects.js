@@ -8,7 +8,7 @@ const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre haci
 const MAX_PARTICLES = 300;       // cap duro de particulas de sangre vivas
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
 const DEATH_LIFE = 0.6;          // vida de las particulas del estallido de muerte (s)
-const POOL_LIFE = 7.0;           // vida de la mancha en el piso (s) — gore persistente
+const POOL_LIFE = 20.0;          // vida de la mancha en el piso (s) — gore persistente
 const NUMBER_LIFE = 0.9;         // vida del numero de dano (s)
 const NUMBER_RISE = 1.2;         // cuanto sube el numero en su vida (u)
 const FLASH_LIFE = 0.15;         // vida del fogonazo de impacto (s)
@@ -76,6 +76,9 @@ export class Effects {
     this.flashes = [];    // { sprite, life, max }
     this.projectiles = []; // { group, dir, speed, dist, traveled, color, type, to, trail }
     this.rings = [];      // { mesh, life, max, radius } anillos de nova expansivos
+    this.chunks = [];     // { mesh, vel, spin, life, max } pedazos de zombie volando
+    this.shakeT = 0;      // screen shake restante (s)
+    this.shakeAmp = 0;    // amplitud actual del shake (unidades de mundo)
   }
 
   // Chorro de sangre generoso: cada golpe SE SIENTE (gore ARPG).
@@ -206,6 +209,49 @@ export class Effects {
     const p = readPos(pos);
     this._spurt({ x: p.x, y: p.y + 0.5, z: p.z }, 12, 2.4, 0.7, 0x7be07b);
     this.hitFlash({ x: p.x, y: p.y + 0.8, z: p.z }, 0x7be07b);
+  }
+
+  // SCREEN SHAKE: pide una sacudida; el loop la aplica a la camara via shakeOffset()
+  shake(amp = 0.1, dur = 0.14) {
+    this.shakeAmp = Math.max(this.shakeAmp, amp);
+    this.shakeT = Math.max(this.shakeT, dur);
+  }
+
+  // offset de camara del frame (decae solo). Sumar a camera.position tras calcularla.
+  shakeOffset() {
+    if (this.shakeT <= 0) return null;
+    const k = this.shakeAmp * Math.min(1, this.shakeT / 0.1);
+    return {
+      x: (Math.random() * 2 - 1) * k,
+      y: (Math.random() * 2 - 1) * k * 0.6,
+      z: (Math.random() * 2 - 1) * k,
+    };
+  }
+
+  // DESMEMBRAMIENTO fake: pedazos del zombie (tintados) salen volando con
+  // fisica simple y se hunden. Violencia visual del kill.
+  dismember(pos, tintHex) {
+    const p = readPos(pos);
+    const tint = new THREE.Color(tintHex != null ? tintHex : 0x7da364);
+    const n = 4 + ((Math.random() * 3) | 0);
+    for (let i = 0; i < n; i++) {
+      const head = i === 0;   // el primero es "la cabeza": mas grande y redondo
+      const geo = head
+        ? new THREE.SphereGeometry(0.16, 8, 6)
+        : new THREE.BoxGeometry(0.1 + Math.random() * 0.12, 0.08 + Math.random() * 0.1, 0.09);
+      const mat = new THREE.MeshStandardMaterial({ color: tint.clone().multiplyScalar(0.75 + Math.random() * 0.4), roughness: 0.9 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(p.x, 0.8 + Math.random() * 0.5, p.z);
+      const ang = Math.random() * Math.PI * 2;
+      const v = 2.2 + Math.random() * 2.6;
+      this.scene.add(mesh);
+      this.chunks.push({
+        mesh,
+        vel: new THREE.Vector3(Math.cos(ang) * v, 2.6 + Math.random() * 2.4, Math.sin(ang) * v),
+        spin: new THREE.Vector3(Math.random() * 9, Math.random() * 9, Math.random() * 9),
+        life: 2.4, max: 2.4,
+      });
+    }
   }
 
   // Fogonazo blanco additive corto para feedback de impacto. colorHex opcional.
@@ -366,6 +412,32 @@ export class Effects {
       const k = e.life / e.max;
       e.sprite.material.opacity = 0.9 * k;
       e.sprite.scale.setScalar(0.8 + (1 - k) * 0.6);
+    }
+
+    // shake de camara decae solo
+    if (this.shakeT > 0) this.shakeT -= d;
+
+    // pedazos de zombie: parabola + rebote seco + fade hundiendose
+    for (let i = this.chunks.length - 1; i >= 0; i--) {
+      const c = this.chunks[i];
+      c.life -= d;
+      if (c.life <= 0) {
+        this._kill(c.mesh, true);
+        this.chunks.splice(i, 1);
+        continue;
+      }
+      c.vel.y -= 12 * d;
+      c.mesh.position.addScaledVector(c.vel, d);
+      c.mesh.rotation.x += c.spin.x * d;
+      c.mesh.rotation.y += c.spin.y * d;
+      if (c.mesh.position.y < 0.06) {
+        c.mesh.position.y = 0.06;
+        c.vel.y = Math.abs(c.vel.y) * 0.3;
+        c.vel.x *= 0.6; c.vel.z *= 0.6;
+        c.spin.multiplyScalar(0.5);
+      }
+      const t = c.life / c.max;
+      if (t < 0.3) { c.mesh.material.transparent = true; c.mesh.material.opacity = t / 0.3; }
     }
 
     // Anillos de nova: expanden hasta su radio y se desvanecen.

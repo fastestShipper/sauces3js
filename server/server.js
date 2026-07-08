@@ -401,7 +401,9 @@ function mobTick() {
         mob.targetId = tid;
         clearMobWander(mob);
         if (d > MOB_ATTACK_RANGE) {
-          if (stepToward(mob, c.x, c.z, MOB_SPEED * dt)) state = 'walk';
+          // PANICO: al verte cerca CORREN (x1.7), y en el ultimo tramo EMBISTEN
+          const rush = d < 4 ? 2.3 : (d < 11 ? 1.7 : 1);
+          if (stepToward(mob, c.x, c.z, MOB_SPEED * rush * dt)) state = 'walk';
         } else {
           mob.h = Math.atan2(c.x - mob.x, c.z - mob.z);
           state = 'attack';

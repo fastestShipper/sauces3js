@@ -45,6 +45,8 @@ export class Combat {
     this.streakT = 0;
     this.dmgBuffT = 0;       // buff de dano temporal (Grito de Guerra)
     this.dmgBuffMult = 1;
+    this.hitStopT = 0;       // congela el mundo unos ms al conectar (game feel)
+    this.slowMoT = 0;        // micro camara-lenta en kills con racha alta
     this.classSpec = opts.classSpec || null;   // heroe: aura/proyectil/estilo
     this.dead = false;
     this.respawnT = 0;
@@ -132,6 +134,14 @@ export class Combat {
     this.hud.showTarget('⚔ ' + ((r && r.name) || 'Jugador'), 1, 1);
   }
 
+  // factor de tiempo del mundo: hit-stop (freeze corto) > slow-mo (racha) > 1.
+  // Se llama con el dt REAL del frame; decae los timers aqui mismo.
+  timeFactor(rawDt) {
+    if (this.hitStopT > 0) { this.hitStopT -= rawDt; return 0.12; }
+    if (this.slowMoT > 0) { this.slowMoT -= rawDt; return 0.3; }
+    return 1;
+  }
+
   _playerAtk() {
     const w = this.inv.equippedWeapon;
     const buff = this.dmgBuffT > 0 ? (this.dmgBuffMult || 1) : 1;
@@ -208,9 +218,12 @@ export class Combat {
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
         this.player.attack();
-        if (this.sfx) this.sfx.hit();
         // crit + finisher: el 3er golpe del combo pega mas fuerte
         const crit = Math.random() < CRIT_CHANCE;
+        if (this.sfx) { this.sfx.swing(); this.sfx.hit(crit); }
+        // GAME FEEL: micro-freeze al conectar; crit ademas sacude la camara
+        this.hitStopT = crit ? 0.09 : 0.045;
+        if (crit && this.effects) this.effects.shake(0.12, 0.16);
         const finisher = this.player.comboStep === 2;
         const atk = Math.round(this._playerAtk() * (crit ? 2 : 1) * (finisher ? 1.35 : 1));
         const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
@@ -239,7 +252,8 @@ export class Combat {
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
         this.player.attack();
-        if (this.sfx) this.sfx.hit();
+        if (this.sfx) { this.sfx.swing(); this.sfx.hit(false); }
+        this.hitStopT = 0.045;
         const atk = this._playerAtk();
         if (this.effects) {
           const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
@@ -422,7 +436,10 @@ export class Combat {
     if (this.effects) {
       this.effects.bloodHit({ x: this.player.pos.x, y: 1.1, z: this.player.pos.z });
       this.effects.damageNumber({ x: this.player.pos.x, y: 2.2, z: this.player.pos.z }, dmg, { toPlayer: true });
+      this.effects.shake(0.07, 0.12);
     }
+    // vignette roja: la pantalla ACUSA la mordida
+    this.hud.hurtFlash?.();
     if (this.hp <= 0) this._die();
   }
 
@@ -440,7 +457,14 @@ export class Combat {
     if (this.streak >= 2) this.hud.showStreak?.(this.streak, mult);
     if (this.sfx) { this.sfx.kill(); this.sfx.streak?.(this.streak); }
     // GORE de kill (escala con la racha)
-    if (this.effects && m) this.effects.goreBurst({ x: m.x, y: 0.7, z: m.z }, 1 + Math.min(1, this.streak * 0.1));
+    if (this.effects && m) {
+      this.effects.goreBurst({ x: m.x, y: 0.7, z: m.z }, 1 + Math.min(1, this.streak * 0.1));
+      // VIOLENCIA: el zombie se parte en pedazos que vuelan y rebotan
+      this.effects.dismember({ x: m.x, y: 0.8, z: m.z }, 0x7da364);
+      this.effects.shake(0.1 + Math.min(0.12, this.streak * 0.02), 0.18);
+    }
+    // racha alta: micro camara-lenta de 0.15s (el kill se SABOREA)
+    if (this.streak >= 5) this.slowMoT = 0.15;
     const leveled = this.prog.gainXp(Math.round((4 + lvl) * mult));
     this.hpMax = this.prog.hpMax;
     if (leveled) {
