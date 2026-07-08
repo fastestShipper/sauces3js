@@ -3,20 +3,20 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260709e';
-import { composeCharacter } from './rpg/charcustom.js?v=20260709e';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260709e';
+import { sanitizeImported } from './glbutil.js?v=20260709f';
+import { composeCharacter } from './rpg/charcustom.js?v=20260709f';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260709f';
 
 // spec de heroe a partir del charFile del remoto (para paleta/piezas)
 function classByChar(charFile) {
   if (charFile === CERNUNNOS.char) return CERNUNNOS;
   return CLASS_LIST.find((c) => c.char === charFile) || CLASS_LIST[0];
 }
-import { makeNametag } from './nametag.js?v=20260709e';
-import { cloneSkinned } from './npcs.js?v=20260709e';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260709e';
-import { showBubble } from './chat.js?v=20260709e';
-import { WS_URL } from './rpg/account.js?v=20260709e';
+import { makeNametag } from './nametag.js?v=20260709f';
+import { cloneSkinned } from './npcs.js?v=20260709f';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260709f';
+import { showBubble } from './chat.js?v=20260709f';
+import { WS_URL } from './rpg/account.js?v=20260709f';
 
 const SCALE = 1.9 / 2.54;
 

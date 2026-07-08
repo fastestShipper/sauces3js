@@ -2,9 +2,9 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260709e';
-import { sanitizeImported } from './glbutil.js?v=20260709e';
-import { equipWeapon } from './weapons.js?v=20260709e';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260709f';
+import { sanitizeImported } from './glbutil.js?v=20260709f';
+import { equipWeapon } from './weapons.js?v=20260709f';
 
 const ADV_SCALE = 1.9 / 2.54;   // personajes KayKit (rig Medium ~2.54u) a ~1.9m
 const ADV_FILES = ['char_knight.glb', 'char_barbarian.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue.glb', 'char_rogue_hooded.glb'];

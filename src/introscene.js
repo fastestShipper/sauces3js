@@ -5,7 +5,7 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260709e';
+import { createToonSkyTexture } from './worldmat.js?v=20260709f';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -14,6 +14,7 @@ export function createIntroScene(appVersion) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.8;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none';
   document.body.appendChild(renderer.domElement);
@@ -23,12 +24,12 @@ export function createIntroScene(appVersion) {
   const sky = createToonSkyTexture();
   scene.background = sky;
   scene.environment = sky;
-  scene.environmentIntensity = 0.45;
+  scene.environmentIntensity = 0.28;
   scene.fog = new THREE.Fog(0xdceefa, 60, 260);
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 500);
 
-  scene.add(new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 0.6));
-  const sun = new THREE.DirectionalLight(0xfff1d0, 2.3);
+  scene.add(new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 0.42));
+  const sun = new THREE.DirectionalLight(0xffe9c0, 1.75);
   sun.position.set(40, 60, -30);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -39,7 +40,7 @@ export function createIntroScene(appVersion) {
   // el parque: cesped + anillo de camino + senderos radiales (vista aerea legible)
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(220, 48),
-    new THREE.MeshStandardMaterial({ color: 0x7cb85c, roughness: 1 }),
+    new THREE.MeshStandardMaterial({ color: 0x69a94e, roughness: 1 }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
