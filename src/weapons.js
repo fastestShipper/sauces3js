@@ -1,7 +1,7 @@
 // Cosmetic weapons: attach each class's weapon to the KayKit hand slot bones
 // (handslot.r / handslot.l). Shared by player, NPCs and remote players. The
 // attack uses a REAL animator-made clip (not a hand-rolled bone rotation).
-import { sanitizeImported } from './glbutil.js?v=20260708b';
+import { sanitizeImported } from './glbutil.js?v=20260708c';
 
 const WEAPON_BY_CHAR = {
   'char_knight.glb': { r: 'sword_1handed', l: 'shield_round' },
@@ -32,8 +32,10 @@ function findInScenes(gltf, name) {
 }
 
 // Attach the class weapon(s) to charScene's hand slots. Returns upperarm.r (or null).
-export async function equipWeapon(loader, charScene, charFile) {
-  const spec = WEAPON_BY_CHAR[charFile] || WEAPON_BY_CHAR['char_knight.glb'];
+// weaponSpec opcional ({r, l}) pisa el default por charFile: los HEROES definen
+// su arma en classes.js (Verdugo = hacha 2H aunque el rig sea el del knight).
+export async function equipWeapon(loader, charScene, charFile, weaponSpec) {
+  const spec = weaponSpec || WEAPON_BY_CHAR[charFile] || WEAPON_BY_CHAR['char_knight.glb'];
   const wg = await loadWeapons(loader);
   // three.js GLTFLoader sanitiza nombres de nodo QUITANDO el punto: 'handslot.r'
   // -> 'handslotr'. Match normalizado (ignora puntos/guiones) por robustez.
@@ -95,33 +97,38 @@ export function attackClipName(charFile) {
   return ATTACK_BY_CHAR[charFile] || 'Throw';
 }
 
-// COMBO ARPG: cadena de clips reales por clase; el ultimo golpe es el finisher.
-// Las clases a distancia repiten su cast/disparo (el combo alli es la cadencia).
-const COMBO_BY_CHAR = {
-  'char_knight.glb': ['Melee_1H_Attack_Slice_Horizontal', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
-  'char_barbarian.glb': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spin'],
-  'char_rogue.glb': ['Melee_1H_Attack_Stab', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
-  'char_rogue_hooded.glb': ['Melee_1H_Attack_Stab', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
-  'char_mage.glb': ['Ranged_Magic_Shoot'],
-  'char_ranger.glb': ['Ranged_Bow_Release'],
-  'char_cernunnos.glb': ['Ranged_Magic_Shoot'],
+// COMBO ARPG por ESTILO de combate (los heroes de classes.js declaran el suyo).
+// El ultimo golpe de cada cadena es el finisher; los ranged repiten su cast.
+const COMBO_BY_STYLE = {
+  '1h': ['Melee_1H_Attack_Slice_Horizontal', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
+  '2h': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spin'],
+  'dual': ['Melee_Dualwield_Attack_Stab', 'Melee_Dualwield_Attack_Slice', 'Melee_Dualwield_Attack_Chop'],
+  'magic': ['Ranged_Magic_Shoot'],
+  'bow': ['Ranged_Bow_Release'],
 };
-export function comboClips(charFile) {
-  return COMBO_BY_CHAR[charFile] || [attackClipName(charFile)];
+const STYLE_BY_CHAR = {
+  'char_knight.glb': '1h',
+  'char_barbarian.glb': '2h',
+  'char_rogue.glb': 'dual',
+  'char_rogue_hooded.glb': 'dual',
+  'char_mage.glb': 'magic',
+  'char_ranger.glb': 'bow',
+  'char_cernunnos.glb': 'magic',
+};
+export function comboClips(charFile, style) {
+  return COMBO_BY_STYLE[style || STYLE_BY_CHAR[charFile]] || [attackClipName(charFile)];
 }
 
-// clip dramatico para la skill Q de las clases melee (los ranged castean)
-const SPECIAL_BY_CHAR = {
-  'char_knight.glb': 'Melee_1H_Attack_Jump_Chop',
-  'char_barbarian.glb': 'Melee_2H_Attack_Spinning',
-  'char_rogue.glb': 'Melee_Dualwield_Attack_Slice',
-  'char_rogue_hooded.glb': 'Melee_Dualwield_Attack_Slice',
-  'char_mage.glb': 'Ranged_Magic_Spellcasting',
-  'char_ranger.glb': 'Ranged_Bow_Release_Up',
-  'char_cernunnos.glb': 'Ranged_Magic_Summon',
+// clip dramatico para las skills con peso (spin / leap / cast largo)
+const SPECIAL_BY_STYLE = {
+  '1h': 'Melee_1H_Attack_Jump_Chop',
+  '2h': 'Melee_2H_Attack_Spinning',
+  'dual': 'Melee_Dualwield_Attack_Slice',
+  'magic': 'Ranged_Magic_Spellcasting',
+  'bow': 'Ranged_Bow_Release_Up',
 };
-export function specialClipName(charFile) {
-  return SPECIAL_BY_CHAR[charFile] || attackClipName(charFile);
+export function specialClipName(charFile, style) {
+  return SPECIAL_BY_STYLE[style || STYLE_BY_CHAR[charFile]] || attackClipName(charFile);
 }
 
 // cadencia ARPG: clips acelerados para que el combo se sienta snappy

@@ -1,209 +1,182 @@
-// Skills de clase + sistema de recurso (mana / energia / furia), estilo MU/WoW.
-// El guerrero usa FURIA (no regenera; sube al pegar y al recibir daño). El resto
-// usa MANA o ENERGIA, que regeneran solos con el tiempo. Cada clase tiene UNA
-// skill activa en la tecla Q con su costo y su cooldown.
-//
-// UI: barra de recurso (color por tipo) justo encima de la barra de vida del HUD,
-// + un boton/icono con la letra Q, el nombre de la skill, y un overlay de cooldown
-// que oscurece y cuenta atras. Estetica toon oscuro translucido, fixed, z-index
-// < 50, pointer-events solo en el boton. Inyecta su <style> una sola vez.
+// Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
+// (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
+// Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
+import { classById, CERNUNNOS } from './classes.js?v=20260708c';
 
 const STYLE_ID = 'rpg-skill-style';
 
-// Colores de la barra por tipo de recurso.
 const RES_COLOR = {
-  rage:   '#d24b3a', // furia roja
-  mana:   '#3f7fd4', // mana azul
-  energy: '#e0a83a', // energia ambar
+  furia: 'linear-gradient(180deg, #ff8a5c, #e33d28)',
+  mana: 'linear-gradient(180deg, #7ab8ff, #2f6fe0)',
+  energia: 'linear-gradient(180deg, #ffe08a, #f5a623)',
 };
+const RES_LABEL = { furia: 'Furia', mana: 'Maná', energia: 'Energía' };
 
-// Recurso por clase + definicion de la skill activa (tecla Q). Lo consume el
-// combate via el descriptor que pasa onCast: { type, dmgMult, aoe, heal, name }.
-export const CLASS_KIT = {
-  guerrero:    { resource:'rage',   resMax:100, regen:0,   buildOnHit:14, name:'Furia',
-                 skill:{ key:'Q', name:'Tajo Brutal', cost:50, cd:6, type:'melee_burst', dmgMult:2.6, desc:'Golpe que gasta toda la furia acumulada' } },
-  mago:        { resource:'mana',   resMax:120, regen:9,   buildOnHit:0,  name:'Mana',
-                 skill:{ key:'Q', name:'Bola de Fuego+', cost:35, cd:4, type:'fireball_big', dmgMult:2.2, aoe:3.5, desc:'Fireball mayor con daño de area' } },
-  arquero:     { resource:'energy', resMax:100, regen:12,  buildOnHit:0,  name:'Energia',
-                 skill:{ key:'Q', name:'Lluvia de Flechas', cost:40, cd:5, type:'multishot', dmgMult:1.6, aoe:4, desc:'Varias flechas a los enemigos cercanos' } },
-  encapuchado: { resource:'mana',   resMax:130, regen:10,  buildOnHit:0,  name:'Mana',
-                 skill:{ key:'Q', name:'Sanar', cost:45, cd:7, type:'heal', heal:0.45, desc:'Restaura 45% de tu vida' } },
-  cernunnos:   { resource:'mana',   resMax:999, regen:60,  buildOnHit:0,  name:'Poder',
-                 skill:{ key:'Q', name:'Ira de la Naturaleza', cost:0, cd:2, type:'fireball_big', dmgMult:4, aoe:6, desc:'GOD: devastacion verde' } },
-};
-
-// Kit por defecto si llega una clase desconocida: mana basico sin skill util.
-const FALLBACK_KIT = {
-  resource:'mana', resMax:100, regen:8, buildOnHit:0, name:'Mana',
-  skill:{ key:'Q', name:'Skill', cost:30, cd:5, type:'fireball_big', dmgMult:1.5, aoe:2, desc:'' },
-};
-
-function clamp01(n) {
-  if (!isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
-
-// Inyecta el bloque de estilos una sola vez por documento. La barra de recurso se
-// ancla en bottom:90px (encima de la barra de vida del HUD que vive en bottom:16),
-// centrada. El boton de skill queda a la derecha de la barra y es lo unico
-// clickeable (pointer-events: auto) para no robar input al mundo.
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
   const css = `
-.rpg-skill-root { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
-  z-index: 45; pointer-events: none; display: flex; align-items: flex-end; gap: 10px;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #f4f4f8;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
-.rpg-skill-root * { box-sizing: border-box; }
-.rpg-skill-resbox { width: 280px; }
-.rpg-skill-label { font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
-  display: flex; justify-content: space-between; margin-bottom: 3px; opacity: 0.92; }
-.rpg-skill-bar { position: relative; height: 11px; border-radius: 6px;
-  background: rgba(0,0,0,0.5); overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
-  border: 1px solid rgba(255,255,255,0.1); }
-.rpg-skill-fill { position: absolute; inset: 0; width: 0%; border-radius: 6px;
-  transition: width 220ms cubic-bezier(0.16,1,0.3,1); }
-.rpg-skill-btn { position: relative; width: 54px; height: 54px; border-radius: 11px;
-  pointer-events: auto; cursor: pointer; user-select: none;
-  background: rgba(14,16,24,0.72); border: 1px solid rgba(255,255,255,0.18);
-  backdrop-filter: blur(3px); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; overflow: hidden;
-  transition: transform 120ms ease, box-shadow 120ms ease; }
-.rpg-skill-btn:hover { box-shadow: 0 0 0 1px rgba(255,224,138,0.45); }
-.rpg-skill-btn:active { transform: scale(0.94); }
-.rpg-skill-btn.is-ready { box-shadow: 0 0 10px rgba(255,224,138,0.35); }
-.rpg-skill-key { font-size: 18px; font-weight: 900; line-height: 1; }
-.rpg-skill-name { font-size: 7.5px; font-weight: 700; letter-spacing: 0.2px;
-  margin-top: 3px; text-align: center; max-width: 50px; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
-.rpg-skill-cd { position: absolute; inset: 0; background: rgba(2,4,10,0.7);
-  display: none; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 900; color: #fff; }
-.rpg-skill-cd.is-on { display: flex; }`;
+.rpg-skill-root { position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%);
+  z-index: 41; pointer-events: none; display: flex; flex-direction: column; gap: 6px;
+  align-items: center; font-family: 'Fredoka', system-ui, sans-serif; }
+.rpg-skill-resbox { width: 300px; pointer-events: none; }
+.rpg-skill-label { display: flex; justify-content: space-between; font-size: 10px;
+  font-weight: 700; letter-spacing: 0.6px; color: #f4f4f8; opacity: 0.95;
+  text-shadow: 0 1px 3px rgba(0,0,0,.85); margin-bottom: 2px; }
+.rpg-skill-bar { height: 9px; border-radius: 999px; background: rgba(8,6,18,0.75);
+  overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6); }
+.rpg-skill-fill { height: 100%; width: 0%; border-radius: 999px;
+  transition: width 200ms ease; }
+.rpg-skill-row { display: flex; gap: 8px; pointer-events: auto; }
+.rpg-skill-slot { position: relative; width: 58px; height: 58px; border-radius: 13px;
+  background: rgba(23,20,41,0.9); border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 10px 24px rgba(10,8,24,.4), inset 0 1px 0 rgba(255,255,255,.1);
+  cursor: pointer; display: grid; place-items: center; transition: transform 120ms ease,
+  border-color 160ms ease, box-shadow 160ms ease; }
+.rpg-skill-slot:hover { transform: translateY(-3px); }
+.rpg-skill-slot .s-emoji { font-size: 24px; line-height: 1; filter: saturate(0.4) brightness(0.7);
+  transition: filter 160ms ease; }
+.rpg-skill-slot.is-ready .s-emoji { filter: none; }
+.rpg-skill-slot.is-ready { border-color: rgba(255,224,138,0.65);
+  box-shadow: 0 10px 24px rgba(10,8,24,.4), 0 0 14px rgba(255,205,92,.35),
+  inset 0 1px 0 rgba(255,255,255,.12); }
+.rpg-skill-slot .s-key { position: absolute; top: -7px; left: -7px; width: 20px; height: 20px;
+  border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  color: #241a04; background: linear-gradient(180deg, #ffe08a, #ffbe4d);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.rpg-skill-slot .s-cost { position: absolute; bottom: 2px; right: 5px; font-size: 10px;
+  font-weight: 700; color: #9fc2ff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+.rpg-skill-slot .s-cd { position: absolute; inset: 0; border-radius: 13px;
+  background: rgba(8,6,16,0.78); display: none; place-items: center; font-size: 17px;
+  font-weight: 700; color: #ffd9c8; }
+.rpg-skill-slot .s-cd.is-on { display: grid; }
+.rpg-skill-slot .s-tip { position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); white-space: nowrap; background: rgba(23,20,41,0.95);
+  border: 1px solid rgba(255,255,255,0.18); border-radius: 9px; padding: 5px 10px;
+  font-size: 12px; font-weight: 600; color: #f4f4f8; opacity: 0; pointer-events: none;
+  transition: opacity 140ms ease; }
+.rpg-skill-slot:hover .s-tip { opacity: 1; }`;
   const el = document.createElement('style');
   el.id = STYLE_ID;
   el.textContent = css;
   document.head.appendChild(el);
 }
 
-// Sistema de skill + recurso de UNA clase. Crea su propia UI dentro de rootEl
-// (o document.body), engancha la tecla Q + click en el boton, y se actualiza por
-// frame via update(dt).
+function clamp01(n) {
+  if (!isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+// Q/E/R/F: pegadas a WASD sin robarle teclas al movimiento
+const KEY_TO_CODE = { Q: 'KeyQ', E: 'KeyE', R: 'KeyR', F: 'KeyF' };
+
+// recursos por tipo: furia se construye peleando, mana/energia regeneran
+const RES_SPEC = {
+  furia: { max: 100, regen: 0, buildOnHit: 9 },
+  mana: { max: 100, regen: 6 },
+  energia: { max: 100, regen: 8 },
+};
+
 export class SkillSystem {
   constructor(className, rootEl) {
     injectStyle();
-    const kit = CLASS_KIT[className] || FALLBACK_KIT;
-    this.kit = kit;
-    this.skill = kit.skill;
-    this.resType = kit.resource;
-    this.resMax = Math.max(1, kit.resMax | 0);
-    // La furia arranca vacia (se construye peleando); mana/energia arrancan llenos.
-    this.res = this.resType === 'rage' ? 0 : this.resMax;
-    this.cd = 0;        // cooldown restante en segundos
-    this.cdMax = Math.max(0.01, this.skill.cd || 0.01);
-    this._onCast = null; // se setea cuando se llama tryCast (ultimo callback valido)
+    const spec = className === 'cernunnos' ? CERNUNNOS : classById(className);
+    this.spec = spec;
+    this.skills = spec.skills || [];
+    this.resType = spec.resource || 'mana';
+    const rs = RES_SPEC[this.resType] || RES_SPEC.mana;
+    this.resMax = rs.max;
+    this.regen = rs.regen || 0;
+    this.buildOnHit = rs.buildOnHit || 0;
+    this.res = this.resType === 'furia' ? 0 : this.resMax;
+    this.cds = this.skills.map(() => 0);
+    this._onCast = null;
 
     const root = document.createElement('div');
     root.className = 'rpg-skill-root';
-    const color = RES_COLOR[this.resType] || RES_COLOR.mana;
+    const slots = this.skills.map((s, i) => `
+      <div class="rpg-skill-slot" data-i="${i}">
+        <div class="s-key">${s.key}</div>
+        <div class="s-emoji">${s.emoji || '✦'}</div>
+        <div class="s-cost">${s.cost || ''}</div>
+        <div class="s-cd"></div>
+        <div class="s-tip">${s.name}</div>
+      </div>`).join('');
     root.innerHTML = `
       <div class="rpg-skill-resbox">
-        <div class="rpg-skill-label"><span class="rpg-skill-rname">${kit.name}</span><span class="rpg-skill-rnum">0/0</span></div>
+        <div class="rpg-skill-label"><span>${RES_LABEL[this.resType] || 'Recurso'}</span><span class="rpg-skill-rnum">0/0</span></div>
         <div class="rpg-skill-bar"><div class="rpg-skill-fill"></div></div>
       </div>
-      <div class="rpg-skill-btn" title="${this.skill.name} (${this.skill.desc || ''})">
-        <div class="rpg-skill-key">${this.skill.key || 'Q'}</div>
-        <div class="rpg-skill-name">${this.skill.name}</div>
-        <div class="rpg-skill-cd"></div>
-      </div>`;
+      <div class="rpg-skill-row">${slots}</div>`;
     (rootEl || document.body).appendChild(root);
 
     this.root = root;
     this.elFill = root.querySelector('.rpg-skill-fill');
     this.elNum = root.querySelector('.rpg-skill-rnum');
-    this.elBtn = root.querySelector('.rpg-skill-btn');
-    this.elCd = root.querySelector('.rpg-skill-cd');
-    if (this.elFill) this.elFill.style.background = color;
+    this.elSlots = [...root.querySelectorAll('.rpg-skill-slot')];
+    if (this.elFill) this.elFill.style.background = RES_COLOR[this.resType] || RES_COLOR.mana;
 
-    // Click en el boton lanza la skill con el ultimo callback registrado.
-    this._onBtnClick = () => { if (this._onCast) this.tryCast(this._onCast); };
-    if (this.elBtn) this.elBtn.addEventListener('click', this._onBtnClick);
+    this._onSlotClick = (e) => {
+      const slot = e.target.closest('.rpg-skill-slot');
+      if (slot) this.tryCast(Number(slot.dataset.i));
+    };
+    root.addEventListener('click', this._onSlotClick);
 
-    // Tecla Q. Si no hay callback registrado todavia, no hace nada (defensivo).
+    // teclas Q/W/E/R (con el chat abierto el player esta locked: lo valida combat)
     this._onKeyDown = (e) => {
       if (!e || e.repeat) return;
-      const code = e.code;
-      const isQ = code === 'KeyQ' || (e.key && e.key.toLowerCase() === 'q');
-      if (!isQ) return;
-      if (this._onCast) this.tryCast(this._onCast);
+      const i = this.skills.findIndex((s) => KEY_TO_CODE[s.key] === e.code);
+      if (i >= 0) this.tryCast(i);
     };
     addEventListener('keydown', this._onKeyDown);
 
     this._refreshUI();
   }
 
-  // true si hay recurso suficiente y la skill no esta en cooldown.
-  canCast() {
-    return this.cd <= 0 && this.res >= (this.skill.cost || 0);
+  canCast(i) {
+    const s = this.skills[i];
+    return !!s && this.cds[i] <= 0 && this.res >= (s.cost || 0);
   }
 
-  // Intenta lanzar la skill. onCast(effect) recibe el descriptor del efecto para
-  // que el combate lo aplique. Devuelve true si lanzo (gasto recurso + activo cd),
-  // false si no se pudo. Registra el callback para que la tecla Q / el click lo
-  // reusen en el siguiente intento.
-  tryCast(onCast) {
-    if (typeof onCast === 'function') this._onCast = onCast;
-    if (!this.canCast()) return false;
-
-    this.res = Math.max(0, this.res - (this.skill.cost || 0));
-    this.cd = this.cdMax;
-
-    const effect = {
-      type: this.skill.type,
-      dmgMult: this.skill.dmgMult,
-      aoe: this.skill.aoe,
-      heal: this.skill.heal,
-      name: this.skill.name,
-    };
-    try {
-      if (this._onCast) this._onCast(effect);
-    } catch (err) {
-      // No dejamos que un error del consumidor reviente el frame del juego.
-    }
+  // lanza el slot i: gasta recurso, activa cd y entrega el spec COMPLETO al combate
+  tryCast(i) {
+    const s = this.skills[i];
+    if (!s || !this.canCast(i) || !this._onCast) return false;
+    this.res = Math.max(0, this.res - (s.cost || 0));
+    this.cds[i] = Math.max(0.01, s.cd || 0.01);
+    try { this._onCast(s); } catch { /* un error del consumidor no revienta el frame */ }
     this._refreshUI();
     return true;
   }
 
-  // El guerrero construye furia al pegar. Para el resto no hace nada.
+  // la furia se construye al pegar
   onHit() {
-    const build = this.kit.buildOnHit || 0;
-    if (build <= 0) return;
-    this.res = Math.min(this.resMax, this.res + build);
+    if (this.buildOnHit <= 0) return;
+    this.res = Math.min(this.resMax, this.res + this.buildOnHit);
     this._refreshUI();
   }
 
-  // El guerrero gana algo de furia al recibir daño (la mitad de buildOnHit por
-  // golpe recibido, escalado por el daño). Inofensivo para clases sin furia.
+  // y tambien al recibir dano (solo furia)
   gainRageFromDamage(amount) {
-    if (this.resType !== 'rage') return;
+    if (this.resType !== 'furia') return;
     const a = Math.max(0, Number(amount) || 0);
     if (a <= 0) return;
-    const gain = Math.min(this.kit.buildOnHit || 8, 4 + a * 0.5);
-    this.res = Math.min(this.resMax, this.res + gain);
+    this.res = Math.min(this.resMax, this.res + Math.min(this.buildOnHit || 8, 4 + a * 0.5));
     this._refreshUI();
   }
 
-  // Regenera mana/energia, baja el cooldown y refresca la UI. dt en segundos.
   update(dt) {
     const d = Math.max(0, Number(dt) || 0);
-    if (this.cd > 0) this.cd = Math.max(0, this.cd - d);
-    if (this.kit.regen > 0 && this.res < this.resMax) {
-      this.res = Math.min(this.resMax, this.res + this.kit.regen * d);
+    let dirty = false;
+    for (let i = 0; i < this.cds.length; i++) {
+      if (this.cds[i] > 0) { this.cds[i] = Math.max(0, this.cds[i] - d); dirty = true; }
     }
-    this._refreshUI();
+    if (this.regen > 0 && this.res < this.resMax) {
+      this.res = Math.min(this.resMax, this.res + this.regen * d);
+      dirty = true;
+    }
+    if (dirty) this._refreshUI();
   }
 
-  // Setea el recurso (para restaurar de un save). Lo clampa al rango valido.
   setResource(v) {
     const n = Number(v);
     this.res = isFinite(n) ? Math.max(0, Math.min(this.resMax, n)) : this.res;
@@ -214,24 +187,27 @@ export class SkillSystem {
     if (!this.root) return;
     if (this.elFill) this.elFill.style.width = (clamp01(this.res / this.resMax) * 100).toFixed(1) + '%';
     if (this.elNum) this.elNum.textContent = `${Math.round(this.res)}/${this.resMax}`;
-    const ready = this.canCast();
-    if (this.elBtn) this.elBtn.classList.toggle('is-ready', ready);
-    if (this.elCd) {
-      if (this.cd > 0.05) {
-        this.elCd.classList.add('is-on');
-        this.elCd.textContent = this.cd >= 1 ? Math.ceil(this.cd) : this.cd.toFixed(1);
-      } else {
-        this.elCd.classList.remove('is-on');
-        this.elCd.textContent = '';
+    for (let i = 0; i < this.elSlots.length; i++) {
+      const el = this.elSlots[i];
+      el.classList.toggle('is-ready', this.canCast(i));
+      const cdEl = el.querySelector('.s-cd');
+      if (cdEl) {
+        if (this.cds[i] > 0.05) {
+          cdEl.classList.add('is-on');
+          cdEl.textContent = this.cds[i] >= 1 ? Math.ceil(this.cds[i]) : this.cds[i].toFixed(1);
+        } else {
+          cdEl.classList.remove('is-on');
+          cdEl.textContent = '';
+        }
       }
     }
   }
 
-  // Quita listeners y la UI. Util si se reinicia la sesion de juego.
   destroy() {
     removeEventListener('keydown', this._onKeyDown);
-    if (this.elBtn) this.elBtn.removeEventListener('click', this._onBtnClick);
-    if (this.root && this.root.parentNode) this.root.parentNode.removeChild(this.root);
-    this.root = null;
+    if (this.root) {
+      this.root.removeEventListener('click', this._onSlotClick);
+      if (this.root.parentNode) this.root.parentNode.removeChild(this.root);
+    }
   }
 }

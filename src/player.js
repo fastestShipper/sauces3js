@@ -1,9 +1,9 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708b';
-import { makeNametag } from './nametag.js?v=20260708b';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708b';
+import { sanitizeImported } from './glbutil.js?v=20260708c';
+import { makeNametag } from './nametag.js?v=20260708c';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708c';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -21,6 +21,10 @@ export class Player {
     this.city = city;
     this.charFile = opts.char || 'char_knight.glb';
     this.name = opts.name || '';
+    // identidad del HEROE (classes.js): tinte, arma custom y estilo de combo
+    this.heroTint = opts.tint || 0;
+    this.heroWeapon = opts.weapon || null;
+    this.combatStyle = opts.combatStyle || '';
     this.pos = new THREE.Vector3(spawn[0], 0, spawn[1]);
     this.heading = 0;
     this.yaw = 0.6;
@@ -68,12 +72,21 @@ export class Player {
     const sc = 1.9 / 2.54;
     ch.scale.setScalar(sc);
     ch.position.y = 0;
-    ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    const tint = this.heroTint ? new THREE.Color(this.heroTint) : null;
+    ch.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      // tinte del heroe: material propio para no pintar caches compartidos
+      if (tint && o.material && o.material.color) {
+        o.material = o.material.clone();
+        o.material.color.multiply(tint);
+      }
+    });
     sanitizeImported(ch);
     this.char = ch;
     this.root.add(ch);
     if (this.name) this.root.add(makeNametag(this.name));
-    await equipWeapon(loader, ch, this.charFile);
+    await equipWeapon(loader, ch, this.charFile, this.heroWeapon);
     this.mixer = new THREE.AnimationMixer(ch);
     // las animaciones del rig KayKit viven en archivos aparte (mismo Rig_Medium,
     // se enlazan por nombre de hueso). General trae los Idle; Movement el resto.
@@ -91,7 +104,7 @@ export class Player {
     }
     // COMBO ARPG: cadena de clips reales por clase (1-2-3, el ultimo = finisher)
     this.comboActions = [];
-    for (const cn of comboClips(this.charFile)) {
+    for (const cn of comboClips(this.charFile, this.combatStyle)) {
       const c = clips.find(k => k.name === cn);
       if (c) this.comboActions.push(this.mixer.clipAction(plantClip(c)));
     }
@@ -102,7 +115,7 @@ export class Player {
     this.comboIdx = 0;
     this.comboT = 0;
     // skill Q: clip dramatico propio (jump chop / spin / summon)
-    const sClip = clips.find(c => c.name === specialClipName(this.charFile));
+    const sClip = clips.find(c => c.name === specialClipName(this.charFile, this.combatStyle));
     if (sClip) this.actions['Special'] = this.mixer.clipAction(plantClip(sClip));
     // reaccion al daño (Hit) + muerte (Death): clips reales del pack
     const hitClip = clips.find(c => c.name === 'Hit_A' || c.name === 'Hit_B');

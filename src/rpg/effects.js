@@ -75,6 +75,7 @@ export class Effects {
     this.numbers = [];    // { sprite, life, max, vy }
     this.flashes = [];    // { sprite, life, max }
     this.projectiles = []; // { group, dir, speed, dist, traveled, color, type, to, trail }
+    this.rings = [];      // { mesh, life, max, radius } anillos de nova expansivos
   }
 
   // Chorro de sangre generoso: cada golpe SE SIENTE (gore ARPG).
@@ -168,6 +169,43 @@ export class Effects {
     sprite.renderOrder = 999; // por encima de la geometria (depthTest:false)
     this.scene.add(sprite);
     this.numbers.push({ sprite, life: NUMBER_LIFE, max: NUMBER_LIFE });
+  }
+
+  // NOVA: anillo de energia que se expande por el piso hasta `radius` y se apaga.
+  nova(pos, colorHex, radius = 4.5) {
+    const p = readPos(pos);
+    const geo = new THREE.RingGeometry(0.72, 1.0, 40);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(colorHex != null ? colorHex : 0xff7a1e),
+      transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(p.x, 0.15, p.z);
+    mesh.scale.setScalar(0.4);
+    this.scene.add(mesh);
+    this.rings.push({ mesh, life: 0.55, max: 0.55, radius });
+    this.hitFlash({ x: p.x, y: 0.4, z: p.z }, colorHex);
+  }
+
+  // LLUVIA DE METEOROS: n bolas de fuego caen del cielo sobre puntos del area.
+  meteorRain(center, radius = 6, n = 8) {
+    const c = readPos(center);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * radius;
+      const x = c.x + Math.cos(ang) * r, z = c.z + Math.sin(ang) * r;
+      const delayJitter = Math.random() * 6;   // desincronizados via distancia extra
+      this.projectile({ x: x + 2, y: 14 + delayJitter, z: z - 2 }, { x, y: 0.4, z }, 'fireball');
+    }
+  }
+
+  // Sanacion: chispas verdes que suben + destello suave.
+  healBurst(pos) {
+    const p = readPos(pos);
+    this._spurt({ x: p.x, y: p.y + 0.5, z: p.z }, 12, 2.4, 0.7, 0x7be07b);
+    this.hitFlash({ x: p.x, y: p.y + 0.8, z: p.z }, 0x7be07b);
   }
 
   // Fogonazo blanco additive corto para feedback de impacto. colorHex opcional.
@@ -328,6 +366,20 @@ export class Effects {
       const k = e.life / e.max;
       e.sprite.material.opacity = 0.9 * k;
       e.sprite.scale.setScalar(0.8 + (1 - k) * 0.6);
+    }
+
+    // Anillos de nova: expanden hasta su radio y se desvanecen.
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const e = this.rings[i];
+      e.life -= d;
+      if (e.life <= 0) {
+        this._kill(e.mesh, true);
+        this.rings.splice(i, 1);
+        continue;
+      }
+      const t = 1 - e.life / e.max;
+      e.mesh.scale.setScalar(0.4 + t * e.radius);
+      e.mesh.material.opacity = 0.95 * (1 - t * t);
     }
 
     // Proyectiles: avanzan en linea recta, dejan estela y estallan al llegar.

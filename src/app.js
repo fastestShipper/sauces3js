@@ -3,36 +3,36 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708b';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708b';
-import { GrassSystem } from './veg/grass.js?v=20260708b';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708b';
-import { Player } from './player.js?v=20260708b';
-import { MiniMap } from './minimap.js?v=20260708b';
-import { StreetLife } from './npcs.js?v=20260708b';
-import { sanitizeImported } from './glbutil.js?v=20260708b';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708b';
-import { Net } from './net.js?v=20260708b';
-import { ChatUI, showBubble } from './chat.js?v=20260708b';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260708b';
-import { authRequest } from './rpg/account.js?v=20260708b';
-import { MobField } from './rpg/mobs.js?v=20260708b';
-import { Inventory } from './rpg/loot.js?v=20260708b';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708b';
-import { Combat } from './rpg/combat.js?v=20260708b';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708b';
-import { Effects } from './rpg/effects.js?v=20260708b';
-import { attachWeaponByName } from './weapons.js?v=20260708b';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708b';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708b';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708b';
-import { SocialPanel } from './social.js?v=20260708b';
-import { SkillSystem } from './rpg/skills.js?v=20260708b';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708b';
-import { createSfx } from './sfx.js?v=20260708b';
-import { installTouchControls } from './touch.js?v=20260708b';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708c';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708c';
+import { GrassSystem } from './veg/grass.js?v=20260708c';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708c';
+import { Player } from './player.js?v=20260708c';
+import { MiniMap } from './minimap.js?v=20260708c';
+import { StreetLife } from './npcs.js?v=20260708c';
+import { sanitizeImported } from './glbutil.js?v=20260708c';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708c';
+import { Net } from './net.js?v=20260708c';
+import { ChatUI, showBubble } from './chat.js?v=20260708c';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708c';
+import { authRequest } from './rpg/account.js?v=20260708c';
+import { MobField } from './rpg/mobs.js?v=20260708c';
+import { Inventory } from './rpg/loot.js?v=20260708c';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708c';
+import { Combat } from './rpg/combat.js?v=20260708c';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708c';
+import { Effects } from './rpg/effects.js?v=20260708c';
+import { attachWeaponByName } from './weapons.js?v=20260708c';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708c';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708c';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708c';
+import { SocialPanel } from './social.js?v=20260708c';
+import { SkillSystem } from './rpg/skills.js?v=20260708c';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708c';
+import { createSfx } from './sfx.js?v=20260708c';
+import { installTouchControls } from './touch.js?v=20260708c';
 
-const APP_VERSION = '20260708b';
+const APP_VERSION = '20260708c';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -59,8 +59,10 @@ function saveAuthSession(r) {
 }
 
 function cityGenOptions() {
-  const on = new URLSearchParams(location.search).get('procedural') === '1';
-  return { frontageStrips: on, interiorCarpet: on };
+  // barrio DENSO por defecto: fachadas party-wall + manzanas rellenas (sin
+  // huecos entre edificios). ?procedural=0 vuelve al modo solo-OSM.
+  const off = new URLSearchParams(location.search).get('procedural') === '0';
+  return { frontageStrips: !off, interiorCarpet: !off };
 }
 
 function ensureBootOverlay() {
@@ -631,11 +633,12 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
         }
       }
     };
-    // manojo por vano: [offset en el brazo, altura, mult de sag]
+    // manojo por vano: [offset en el brazo, altura, mult de sag] — 5 cables
+    // (8 saturaban el cielo: "reduce un poco de cables")
     const BUNDLE = [
-      [-0.45, 7.05, 1.0], [-0.15, 7.05, 1.12], [0.15, 7.05, 0.94], [0.45, 7.05, 1.06],
-      [-0.3, 6.35, 1.3], [0.3, 6.35, 1.2],
-      [0.08, 5.8, 2.1], [-0.42, 5.7, 1.8],   // telefonica floja (la que cuelga)
+      [-0.45, 7.05, 1.0], [0.15, 7.05, 0.94], [0.45, 7.05, 1.06],
+      [-0.3, 6.35, 1.25],
+      [0.08, 5.8, 1.8],   // telefonica floja (la que cuelga)
     ];
     for (const runArr of F.poleRuns) {
       for (let i = 0; i + 1 < runArr.length; i++) {
@@ -650,12 +653,12 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
         }
       }
     }
-    // cruces sobre la pista: 2 cables por par de postes enfrentados
-    for (const [x1, z1, x2, z2] of (F.cableCrossings || [])) {
+    // cruces sobre la pista: 1 cable, y solo en cruces alternos
+    (F.cableCrossings || []).forEach(([x1, z1, x2, z2], ci) => {
+      if (ci % 2) return;
       const span = Math.hypot(x2 - x1, z2 - z1);
       catenary(x1, z1, x2, z2, 6.6, span * 0.07, 0.4);
-      catenary(x1, z1, x2, z2, 6.0, span * 0.1, 0.8);
-    }
+    });
     const cgeo = new THREE.BufferGeometry();
     cgeo.setAttribute('position', new THREE.Float32BufferAttribute(cpos, 3));
     scene.add(new THREE.LineSegments(cgeo, new THREE.LineBasicMaterial({ color: 0x141310 })));
@@ -752,8 +755,15 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   }
 
   setBootOverlay(0.08, 'Cargando personaje…');
+  // spec completa del HEROE elegido: tinte, arma, aura, estilo y kit de skills
+  const heroSpec = choice.god ? CERNUNNOS : classById(choice.className);
   const playerSpawn = trailerConfig.enabled && P.landmark ? [P.landmark[0], P.landmark[1] + 8] : [-4.2, 47.1];
-  const player = new Player(scene, city, playerSpawn, choice);
+  const player = new Player(scene, city, playerSpawn, {
+    ...choice,
+    tint: heroSpec.tint,
+    weapon: heroSpec.weapon,
+    combatStyle: heroSpec.combatStyle,
+  });
   await player.load();
   setBootOverlay(0.42, 'Conectando al barrio…');
   const life = new StreetLife(scene, city);
@@ -765,10 +775,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   window.__game.net = net;
 
   // ===== MODO RPG (local) =====
-  // Cernunnos GOD: aura verde pastel en el piso bajo el personaje
+  // AURA de heroe bajo el personaje (color de clase; el GOD brilla verde pastel)
   let godAura = null;
-  if (choice.god) {
-    godAura = makeCharAura(CERNUNNOS.auraColor);
+  if (heroSpec.auraColor) {
+    godAura = makeCharAura(heroSpec.auraColor);
     player.root.add(godAura);
   }
   // mobs COMPARTIDOS: el server es dueno de los esqueletos (todos ven los mismos,
@@ -806,13 +816,14 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   const sfx = createSfx();
   player.sfx = sfx;
   sfx.onMuteChange = (muted) => hud.toast(muted ? '🔇 Sonido apagado (M)' : '🔊 Sonido encendido');
-  const skills = new SkillSystem(choice.className || 'guerrero');
+  const skills = new SkillSystem(choice.god ? 'cernunnos' : (choice.className || 'verdugo'));
   const wallet = new Wallet(document.body, 0);
   hud.setGold(0);
   // combate tab-target + PvP
   const combat = new Combat({
     scene, camera, player, mobField, net,
     inventory, progress, hud, effects, skills, sfx,
+    classSpec: heroSpec,
     onRespawn: () => {
       if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; }
     },

@@ -43,6 +43,9 @@ export class Combat {
     this.attackCd = 0;
     this.streak = 0;         // kills encadenados dentro de la ventana
     this.streakT = 0;
+    this.dmgBuffT = 0;       // buff de dano temporal (Grito de Guerra)
+    this.dmgBuffMult = 1;
+    this.classSpec = opts.classSpec || null;   // heroe: aura/proyectil/estilo
     this.dead = false;
     this.respawnT = 0;
     this.hpMax = this.prog.hpMax;
@@ -131,7 +134,8 @@ export class Combat {
 
   _playerAtk() {
     const w = this.inv.equippedWeapon;
-    return 9 + this.prog.level * 2 + (w ? w.atk * 0.5 : 0);
+    const buff = this.dmgBuffT > 0 ? (this.dmgBuffMult || 1) : 1;
+    return (9 + this.prog.level * 2 + (w ? w.atk * 0.5 : 0)) * buff;
   }
 
   // tajo en arco: pega a hasta 2 zombies extra frente al jugador (70% del daño)
@@ -191,6 +195,8 @@ export class Combat {
       this.streakT -= dt;
       if (this.streakT <= 0) { this.streak = 0; this.hud.hideStreak?.(); }
     }
+    // buff de dano (Grito de Guerra) expira solo
+    if (this.dmgBuffT > 0) this.dmgBuffT -= dt;
 
     this.attackCd -= dt;
     const target = this.targetId ? this.net.mobs.get(this.targetId) : null;
@@ -265,38 +271,141 @@ export class Combat {
     }
   }
 
-  // skill activa (tecla Q): aplica el efecto al objetivo / a ti. effect viene del SkillSystem.
-  castSkill(effect) {
-    if (this.dead || !effect) return;
-    if (effect.type === 'heal') {
-      const heal = Math.round(this.hpMax * (effect.heal || 0.4));
-      this.hp = Math.min(this.hpMax, this.hp + heal);
-      this.hud.setHP(this.hp, this.hpMax);
-      this.player.attack();
-      if (this.effects) this.effects.damageNumber({ x: this.player.pos.x, y: 2.2, z: this.player.pos.z }, heal, { heal: true });
-      return;
-    }
-    const base = this._playerAtk() * (effect.dmgMult || 1.5);
-    // clip dramatico propio de la skill (jump chop / spin / summon)
-    this.player.attackSpecial ? this.player.attackSpecial() : this.player.attack();
-    const c = this.targetId ? this.net.mobs.get(this.targetId) : null;
-    const cx = c ? c.x : this.player.pos.x;
-    const cz = c ? c.z : this.player.pos.z;
-    if (this.effects) {
-      const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
-      if (ptype) this.effects.projectile({ x: this.player.pos.x, y: 1.4, z: this.player.pos.z }, { x: cx, y: 0.9, z: cz }, ptype);
-    }
-    if (effect.aoe) {
+  // ====== SKILLS estilo Dota (Q/W/E/R): el SkillSystem entrega el spec y aqui
+  // se ejecuta el efecto. Cada tipo tiene su feel propio (anim + fx + dano). ======
+  castSkill(s) {
+    if (this.dead || !s || this.player.locked) return;
+    const fx = this.effects;
+    const p = this.player.pos;
+    const aura = (this.classSpec && this.classSpec.auraColor) || 0xffd24a;
+    const target = this.targetId ? this.net.mobs.get(this.targetId) : null;
+    const cx = target ? target.x : p.x;
+    const cz = target ? target.z : p.z;
+    const base = (mult) => Math.round(this._playerAtk() * (mult || 1.5));
+    const ptype = (this.classSpec && this.classSpec.projectile) || PROJECTILE_BY_CHAR[this.player.charFile];
+
+    // dano en area alrededor de (ax, az), con numero y sangre por victima
+    const hitArea = (ax, az, radius, dmg) => {
+      let hits = 0;
       for (const m of this.net.mobs.values()) {
-        if (Math.hypot(m.x - cx, m.z - cz) < effect.aoe) {
-          this.net.attackMob(m.id, base);
-          if (this.effects) { this.effects.bloodHit({ x: m.x, y: 0.8, z: m.z }); this.effects.damageNumber({ x: m.x, y: 1.5, z: m.z }, base, { crit: true }); }
-        }
+        if (Math.hypot(m.x - ax, m.z - az) > radius) continue;
+        hits++;
+        this.net.attackMob(m.id, dmg);
+        if (fx) { fx.bloodHit({ x: m.x, y: 0.9, z: m.z }); fx.damageNumber({ x: m.x, y: 1.6, z: m.z }, dmg, { crit: true }); }
       }
-    } else if (this.targetId) {
-      this.net.attackMob(this.targetId, base);
-      if (c && this.effects) this.effects.damageNumber({ x: c.x, y: 1.5, z: c.z }, base, { crit: true });
+      return hits;
+    };
+    const hitOne = (m, dmg) => {
+      if (!m) return;
+      this.net.attackMob(m.id, dmg);
+      if (fx) { fx.bloodHit({ x: m.x, y: 0.9, z: m.z }); fx.damageNumber({ x: m.x, y: 1.7, z: m.z }, dmg, { crit: true }); }
+    };
+    const anim = (special) => special ? (this.player.attackSpecial ? this.player.attackSpecial() : this.player.attack()) : this.player.attack();
+
+    switch (s.type) {
+      case 'strike': {              // golpe brutal single
+        anim(false);
+        hitOne(target, base(s.dmgMult));
+        break;
+      }
+      case 'stab': {                // single + roba vida
+        anim(false);
+        const dmg = base(s.dmgMult);
+        hitOne(target, dmg);
+        if (target && s.leech) {
+          const heal = Math.round(dmg * s.leech);
+          this.hp = Math.min(this.hpMax, this.hp + heal);
+          this.hud.setHP(this.hp, this.hpMax);
+          if (fx) { fx.healBurst({ x: p.x, y: 0.6, z: p.z }); fx.damageNumber({ x: p.x, y: 2.2, z: p.z }, heal, { heal: true }); }
+        }
+        break;
+      }
+      case 'pierce': case 'bolt': { // single ultra con proyectil
+        anim(false);
+        if (fx && target && ptype) fx.projectile({ x: p.x, y: 1.4, z: p.z }, { x: target.x, y: 0.9, z: target.z }, ptype);
+        hitOne(target, base(s.dmgMult));
+        break;
+      }
+      case 'execute': {             // remate: dano x2 extra si esta debil
+        anim(true);
+        if (target) {
+          const weak = target.hpMax && (target.hp / target.hpMax) <= (s.threshold || 0.4);
+          hitOne(target, base(weak ? s.executeMult : s.dmgMult));
+          if (weak && fx) fx.goreBurst({ x: target.x, y: 0.9, z: target.z }, 1.6);
+        }
+        break;
+      }
+      case 'spin': case 'bladedance': {   // AoE alrededor del heroe
+        anim(true);
+        if (fx) fx.nova(p, aura, s.radius || 4);
+        hitArea(p.x, p.z, s.radius || 4, base(s.dmgMult));
+        break;
+      }
+      case 'nova': {                // anillo alrededor del heroe
+        anim(true);
+        if (fx) fx.nova(p, aura, s.radius || 4.5);
+        hitArea(p.x, p.z, s.radius || 4.5, base(s.dmgMult));
+        break;
+      }
+      case 'leap': {                // salto colerico: AoE grande donde estas
+        anim(true);
+        if (fx) { fx.nova(p, aura, s.radius || 6); fx.goreBurst({ x: p.x, y: 0.5, z: p.z }, 1.4); }
+        hitArea(p.x, p.z, s.radius || 6, base(s.dmgMult));
+        break;
+      }
+      case 'fireball': {            // proyectil con explosion de area en el target
+        anim(false);
+        if (fx && ptype) fx.projectile({ x: p.x, y: 1.4, z: p.z }, { x: cx, y: 0.9, z: cz }, ptype);
+        hitArea(cx, cz, s.radius || 3.5, base(s.dmgMult));
+        break;
+      }
+      case 'rain': case 'storm': {  // lluvia de proyectiles sobre el area del target
+        anim(true);
+        if (fx) fx.meteorRain({ x: cx, y: 0, z: cz }, s.radius || 5, s.type === 'storm' ? 12 : 7);
+        hitArea(cx, cz, s.radius || 5, base(s.dmgMult));
+        break;
+      }
+      case 'meteor': {              // el cielo se cae sobre el area
+        anim(true);
+        if (fx) { fx.meteorRain({ x: cx, y: 0, z: cz }, s.radius || 7, 14); fx.nova({ x: cx, y: 0, z: cz }, 0xff7a1e, s.radius || 7); }
+        hitArea(cx, cz, s.radius || 7, base(s.dmgMult));
+        break;
+      }
+      case 'volley': {              // dispara a los N zombies mas cercanos
+        anim(false);
+        const near = [...this.net.mobs.values()]
+          .map((m) => ({ m, d: Math.hypot(m.x - p.x, m.z - p.z) }))
+          .filter((e) => e.d < (s.range || 12))
+          .sort((a, b) => a.d - b.d)
+          .slice(0, s.count || 3);
+        for (const { m } of near) {
+          if (fx && ptype) fx.projectile({ x: p.x, y: 1.4, z: p.z }, { x: m.x, y: 0.9, z: m.z }, ptype);
+          hitOne(m, base(s.dmgMult));
+        }
+        break;
+      }
+      case 'warcry': {              // buff de dano temporal + onda visual
+        anim(true);
+        this.dmgBuffMult = s.buffMult || 1.4;
+        this.dmgBuffT = s.buffDur || 6;
+        if (fx) fx.nova(p, aura, 3);
+        this.hud.toast('📢 ¡' + s.name + '! +' + Math.round(((s.buffMult || 1.4) - 1) * 100) + '% daño');
+        break;
+      }
+      case 'veil': case 'heal': {   // autocuracion
+        anim(true);
+        const heal = Math.round(this.hpMax * (s.healPct || s.heal || 0.35));
+        this.hp = Math.min(this.hpMax, this.hp + heal);
+        this.hud.setHP(this.hp, this.hpMax);
+        if (fx) { fx.healBurst({ x: p.x, y: 0.6, z: p.z }); fx.damageNumber({ x: p.x, y: 2.2, z: p.z }, heal, { heal: true }); }
+        break;
+      }
+      default: {                    // fallback: golpe fuerte
+        anim(false);
+        hitOne(target, base(s.dmgMult));
+      }
     }
+    if (this.sfx) this.sfx.hit();
   }
 
   _onPlayerHit(hit) {
