@@ -19,17 +19,17 @@ function injectStyle() {
   backdrop-filter: blur(4px); text-shadow: 0 1px 3px rgba(0,0,0,0.85);
   box-shadow: 0 12px 32px rgba(10,8,24,.38), inset 0 1px 0 rgba(255,255,255,.09); }
 .rpg-hud-bottom { left: 50%; bottom: 10px; transform: translateX(calc(-100% - 8px));
-  width: 228px; display: flex; flex-direction: column; gap: 4px;
-  padding: 7px 10px 7px 46px; }
+  width: 262px; display: flex; flex-direction: column; gap: 5px;
+  padding: 9px 12px 9px 54px; }
 .rpg-hud-lvl-badge { position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
-  width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center;
   background: linear-gradient(180deg, #ffe08a, #ffbe4d); color: #241a04;
-  font-size: 14px; font-weight: 700; text-shadow: none;
+  font-size: 16px; font-weight: 700; text-shadow: none;
   box-shadow: 0 4px 14px rgba(255,190,77,.4), inset 0 1px 0 rgba(255,255,255,.65),
     0 0 0 3px rgba(23,20,41,.9); }
-.rpg-hud-label { font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
+.rpg-hud-label { font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
   display: flex; justify-content: space-between; margin-bottom: 3px; opacity: 0.95; }
-.rpg-hud-bar { position: relative; height: 9px; border-radius: 999px;
+.rpg-hud-bar { position: relative; height: 12px; border-radius: 999px;
   background: rgba(8,6,18,0.72); overflow: hidden;
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,.08); }
 .rpg-hud-fill { position: absolute; inset: 0; width: 0%; border-radius: 999px;
@@ -56,10 +56,10 @@ function injectStyle() {
   padding: 8px 14px; border-radius: 11px;
   opacity: 0; transition: opacity 320ms ease, transform 320ms ease; pointer-events: none; }
 .rpg-hud-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
-.rpg-hud-gold { position: absolute; right: 6px; top: -26px; display: flex;
-  align-items: center; gap: 4px; padding: 2px 9px 2px 4px; border-radius: 999px;
+.rpg-hud-gold { position: absolute; right: 6px; top: -30px; display: flex;
+  align-items: center; gap: 5px; padding: 3px 10px 3px 5px; border-radius: 999px;
   background: rgba(23,20,41,0.88); border: 1px solid rgba(255,224,138,0.4);
-  box-shadow: 0 6px 16px rgba(10,8,24,.35); font-size: 11px; font-weight: 700;
+  box-shadow: 0 6px 16px rgba(10,8,24,.35); font-size: 12px; font-weight: 700;
   color: #ffe9b3; font-variant-numeric: tabular-nums; }
 .rpg-hud-gold i { width: 17px; height: 17px; border-radius: 999px; font-style: normal;
   display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #7a4e0a;
