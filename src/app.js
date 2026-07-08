@@ -3,36 +3,36 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708m';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708m';
-import { GrassSystem } from './veg/grass.js?v=20260708m';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708m';
-import { Player } from './player.js?v=20260708m';
-import { MiniMap } from './minimap.js?v=20260708m';
-import { StreetLife } from './npcs.js?v=20260708m';
-import { sanitizeImported } from './glbutil.js?v=20260708m';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708m';
-import { Net } from './net.js?v=20260708m';
-import { ChatUI, showBubble } from './chat.js?v=20260708m';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708m';
-import { authRequest } from './rpg/account.js?v=20260708m';
-import { MobField } from './rpg/mobs.js?v=20260708m';
-import { Inventory } from './rpg/loot.js?v=20260708m';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708m';
-import { Combat } from './rpg/combat.js?v=20260708m';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708m';
-import { Effects } from './rpg/effects.js?v=20260708m';
-import { attachWeaponByName } from './weapons.js?v=20260708m';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708m';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708m';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708m';
-import { SocialPanel } from './social.js?v=20260708m';
-import { SkillSystem } from './rpg/skills.js?v=20260708m';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708m';
-import { createSfx } from './sfx.js?v=20260708m';
-import { installTouchControls } from './touch.js?v=20260708m';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708n';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708n';
+import { GrassSystem } from './veg/grass.js?v=20260708n';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708n';
+import { Player } from './player.js?v=20260708n';
+import { MiniMap } from './minimap.js?v=20260708n';
+import { StreetLife } from './npcs.js?v=20260708n';
+import { sanitizeImported } from './glbutil.js?v=20260708n';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708n';
+import { Net } from './net.js?v=20260708n';
+import { ChatUI, showBubble } from './chat.js?v=20260708n';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708n';
+import { authRequest } from './rpg/account.js?v=20260708n';
+import { MobField } from './rpg/mobs.js?v=20260708n';
+import { Inventory } from './rpg/loot.js?v=20260708n';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708n';
+import { Combat } from './rpg/combat.js?v=20260708n';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708n';
+import { Effects } from './rpg/effects.js?v=20260708n';
+import { attachWeaponByName } from './weapons.js?v=20260708n';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708n';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708n';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708n';
+import { SocialPanel } from './social.js?v=20260708n';
+import { SkillSystem } from './rpg/skills.js?v=20260708n';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708n';
+import { createSfx } from './sfx.js?v=20260708n';
+import { installTouchControls } from './touch.js?v=20260708n';
 
-const APP_VERSION = '20260708m';
+const APP_VERSION = '20260708n';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -886,6 +886,47 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   net.onTop = (list) => hud.setTop(list);
   // Q lanza la skill de la clase via el combate (maná/furia/energia + cooldown)
   skills._onCast = (effect) => combat.castSkill(effect);
+  // arma de la tienda: SIEMPRE del tipo del heroe, tier escalado por nivel
+  const rollShopWeapon = (className, lvl) => {
+    const names = { verdugo: ['Hacha', 'axe_2handed'], piromante: ['Bast\u00f3n', 'staff'], cazadora: ['Arco', 'bow'], sombra: ['Daga', 'dagger'], cernunnos: ['Bast\u00f3n', 'staff'] };
+    const [base, weaponName] = names[className] || names.verdugo;
+    const tier = lvl >= 8 ? 'epic' : lvl >= 5 ? 'rare' : 'uncommon';
+    const atk = 10 + lvl * 3 + Math.floor(Math.random() * 6);
+    return { id: 'shop' + Date.now(), name: base + ' de la bodega', type: 'weapon', weaponName, tier, classReq: null, atk };
+  };
+  // ===== BODEGA OJEDA: mercader real del barrio (el oro POR FIN sirve) =====
+  const OJEDA = [-53.2, 88.6];
+  const shopProducts = () => [
+    { id: 'potion_s', name: '\ud83e\uddea Poci\u00f3n de la abuela', desc: 'Cura 40 HP', price: 25 },
+    { id: 'potion_l', name: '\ud83c\udf76 Tónico del bigote', desc: 'Cura toda la vida', price: 60 },
+    { id: 'weapon', name: '\u2694\ufe0f Arma de tu clase', desc: 'Tier seg\u00fan tu nivel (roll)', price: 150 },
+  ];
+  let nearOjeda = false;
+  inventory.getGold = () => wallet.gold;
+  inventory.onSell = (item, gold) => {
+    wallet.add(gold);
+    hud.setGold(wallet.gold);
+    hud.toast('\ud83d\udcb0 Vendido: ' + item.name + ' (+' + gold + 'g)');
+    sfx.coin();
+    if (nearOjeda) inventory.setShop(shopProducts());
+    saveChar();
+  };
+  inventory.onBuy = (prod) => {
+    if (!wallet.spend(prod.price)) { hud.toast('No te alcanza el oro'); return false; }
+    hud.setGold(wallet.gold);
+    if (prod.id === 'potion_s') inventory.add({ id: 'p' + Date.now(), name: 'Poci\u00f3n de la abuela', kind: 'potion', heal: 40 });
+    else if (prod.id === 'potion_l') inventory.add({ id: 'p' + Date.now(), name: 'T\u00f3nico del bigote', kind: 'potion', heal: 999 });
+    else if (prod.id === 'weapon') {
+      const lvl = Math.max(2, progress.level + 1);
+      const loot = rollShopWeapon(choice.god ? 'cernunnos' : choice.className, lvl);
+      inventory.add(loot);
+      hud.toast('\u2694\ufe0f ' + loot.name + ' (ATK ' + loot.atk + ')');
+    }
+    sfx.loot();
+    inventory.setShop(shopProducts());
+    saveChar();
+    return true;
+  };
   // pocion: clic en el inventario la bebe
   inventory.onUse = (item) => {
     combat.hp = Math.min(combat.hpMax, combat.hp + (item.heal || 25));
@@ -1095,6 +1136,17 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     if (streetT <= 0) {
       streetT = 0.2;
       minimap.updateStreet(player.pos.x, player.pos.z);
+      // mercader: cerca de la bodega Ojeda la tienda aparece dentro del inventario
+      const dOj = Math.hypot(player.pos.x - OJEDA[0], player.pos.z - OJEDA[1]);
+      if (dOj < 9 && !nearOjeda) {
+        nearOjeda = true;
+        inventory.setShop(shopProducts());
+        hud.toast('\ud83c\udfea Bodega Ojeda \u00b7 pulsa I para comerciar');
+        if (!inventory.isOpen()) inventory.setOpen(true);
+      } else if (dOj >= 9 && nearOjeda) {
+        nearOjeda = false;
+        inventory.setShop([]);
+      }
       poiUi.update(player.pos.x, player.pos.z);
       coordsEl.textContent = 'X ' + Math.round(player.pos.x) + ' · Z ' + Math.round(player.pos.z);
     }

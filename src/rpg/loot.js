@@ -1,18 +1,22 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260708m';
+import { TIERS } from './fx.js?v=20260708n';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
 const WEAPONS = [
-  { weaponName: 'sword_1handed',    base: 'Espada',    classReq: 'guerrero' },
-  { weaponName: 'axe_2handed',      base: 'Hacha',     classReq: 'guerrero' },
-  { weaponName: 'staff',            base: 'Bastón',    classReq: 'mago' },
-  { weaponName: 'bow',              base: 'Arco',      classReq: 'arquero' },
-  { weaponName: 'dagger',           base: 'Daga',      classReq: 'encapuchado' },
-  { weaponName: 'crossbow_1handed', base: 'Ballesta',  classReq: 'arquero' },
+  { weaponName: 'sword_1handed',    base: 'Espada',    classReq: 'verdugo' },
+  { weaponName: 'axe_2handed',      base: 'Hacha',     classReq: 'verdugo' },
+  { weaponName: 'staff',            base: 'Bastón',    classReq: 'piromante' },
+  { weaponName: 'bow',              base: 'Arco',      classReq: 'cazadora' },
+  { weaponName: 'dagger',           base: 'Daga',      classReq: 'sombra' },
+  { weaponName: 'crossbow_1handed', base: 'Ballesta',  classReq: 'cazadora' },
 ];
+// arma preferida por heroe para la tienda (roll dirigido)
+export const WEAPON_BY_CLASS = {
+  verdugo: 'axe_2handed', piromante: 'staff', cazadora: 'bow', sombra: 'dagger', cernunnos: 'staff',
+};
 
 // Adjetivo por tier para el nombre (concuerda con "Espada/Hacha", femenino mayormente).
 const TIER_ADJ = {
@@ -52,6 +56,14 @@ function rollAtk(tier, enemyLevel) {
   const base = 4 + rank * 6 + lvl * 2;
   const jitter = Math.floor(Math.random() * (rank + 2)); // pequeña varianza
   return base + jitter;
+}
+
+// valor de mercado de un item (venta en la bodega)
+export function sellPrice(item) {
+  if (!item) return 0;
+  if (item.kind === 'potion') return 8;
+  const rank = (TIERS[item.tier] && TIERS[item.tier].rank) || 1;
+  return Math.max(5, Math.round((item.atk || 0) * 1.5 + rank * 10));
 }
 
 let _idSeq = 0;
@@ -114,7 +126,19 @@ function injectStyleOnce() {
   opacity:0;pointer-events:none;transition:opacity .12s;z-index:5;text-align:left}
 .rpg-slot:hover .tip{opacity:1}
 .rpg-slot .tip b{color:var(--tc,#9aa0a6)}
-.rpg-inv-empty{opacity:.5;font-size:12px;text-align:center;padding:14px 0}`;
+.rpg-inv-empty{opacity:.5;font-size:12px;text-align:center;padding:14px 0}
+.rpg-inv-sub{font-size:10px;opacity:.6;margin:2px 0 8px}
+.rpg-shop{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14);display:none}
+.rpg-shop.is-open{display:block}
+.rpg-shop-h{font-size:12px;font-weight:800;letter-spacing:.5px;color:#ffcf5c;margin:0 0 8px}
+.rpg-shop-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;
+  background:rgba(255,255,255,.05);margin-bottom:6px;font-size:12px}
+.rpg-shop-row .n{flex:1;line-height:1.25}
+.rpg-shop-row .n i{display:block;font-style:normal;font-size:10px;opacity:.65}
+.rpg-shop-row button{border:0;border-radius:8px;padding:5px 10px;cursor:pointer;
+  font-family:inherit;font-weight:700;font-size:11px;color:#241a04;
+  background:linear-gradient(180deg,#ffe08a,#ffbe4d)}
+.rpg-shop-row button:disabled{opacity:.4;cursor:not-allowed}`;
   document.head.appendChild(el);
 }
 
@@ -139,6 +163,18 @@ export class Inventory {
     this._root = null;   // contenedor pasado en buildUI
     this._panel = null;  // nodo .rpg-inv
     this._grid = null;
+    this._shop = null;   // seccion Bodega Ojeda
+    this.onSell = null;  // (item, gold) -> el app acredita el oro
+    this.onBuy = null;   // (product) -> true si pudo pagar
+    this.getGold = null; // () -> oro actual (para deshabilitar botones)
+  }
+
+  // vende un item: lo quita y avisa con su precio
+  sell(item) {
+    if (!item || !this.items.some((i) => i.id === item.id)) return;
+    const gold = sellPrice(item);
+    this.remove(item.id);
+    if (this.onSell) this.onSell(item, gold);
   }
 
   add(item) {
@@ -180,13 +216,52 @@ export class Inventory {
     h.textContent = 'Inventario';
     const grid = document.createElement('div');
     grid.className = 'rpg-inv-grid';
+    const sub = document.createElement('div');
+    sub.className = 'rpg-inv-sub';
+    sub.textContent = 'Clic: equipar / beber \u00b7 Shift+clic: vender';
+    const shop = document.createElement('div');
+    shop.className = 'rpg-shop';
     panel.appendChild(h);
+    panel.appendChild(sub);
     panel.appendChild(grid);
+    panel.appendChild(shop);
     rootEl.appendChild(panel);
     this._panel = panel;
     this._grid = grid;
+    this._shop = shop;
     this._render();
     return panel;
+  }
+
+  // la BODEGA OJEDA: visible solo cerca de la tienda real. products =
+  // [{id, name, desc, price}] que el app define; comprar via onBuy.
+  setShop(products) {
+    if (!this._shop) return;
+    this._shop.classList.toggle('is-open', !!(products && products.length));
+    if (!products || !products.length) { this._shop.textContent = ''; return; }
+    this._shop.textContent = '';
+    const h = document.createElement('div');
+    h.className = 'rpg-shop-h';
+    h.textContent = '\ud83c\udfea BODEGA OJEDA';
+    this._shop.appendChild(h);
+    const gold = this.getGold ? this.getGold() : 0;
+    for (const prod of products) {
+      const row = document.createElement('div');
+      row.className = 'rpg-shop-row';
+      const n = document.createElement('div');
+      n.className = 'n';
+      n.textContent = prod.name;
+      const d = document.createElement('i');
+      d.textContent = prod.desc || '';
+      n.appendChild(d);
+      const btn = document.createElement('button');
+      btn.textContent = prod.price + 'g';
+      btn.disabled = gold < prod.price;
+      btn.addEventListener('click', () => { if (this.onBuy) this.onBuy(prod); });
+      row.appendChild(n);
+      row.appendChild(btn);
+      this._shop.appendChild(row);
+    }
   }
 
   _render() {
@@ -218,12 +293,16 @@ export class Inventory {
         ? [`Cura ${item.heal} HP`, 'Clic para beber']
         : [`Tier: ${tierName}`, `ATK ${item.atk}`];
       if (item.classReq) lines.push(`Clase: ${item.classReq}`);
+      lines.push(`Shift+clic: vender (${sellPrice(item)}g)`);
       for (const line of lines) {
         tip.appendChild(document.createElement('br'));
         tip.appendChild(document.createTextNode(line));
       }
       slot.appendChild(tip);
-      slot.addEventListener('click', () => this.equip(item)); // click = equipar
+      slot.addEventListener('click', (ev) => {
+        if (ev.shiftKey) this.sell(item);   // shift+clic = vender
+        else this.equip(item);              // clic = equipar / beber
+      });
       grid.appendChild(slot);
     }
   }
