@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260709i';
+import { sanitizeImported } from '../glbutil.js?v=20260709j';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -333,6 +333,12 @@ export class MobField {
 
   update(dt) {
     const cam = this.getCamera ? this.getCamera() : null;
+    // culling por distancia: animar 90 esqueletos SIEMPRE mata el fps (sobre
+    // todo en movil). Lejos: invisible + congelado. Medio: mixer a mitad.
+    const pp = this.net && this.net.player && this.net.player.pos;
+    const VIS = window.__SAUCES_MOBILE__ ? 42 : 85;
+    const HALF = window.__SAUCES_MOBILE__ ? 24 : 45;
+    this._lodFlip = !this._lodFlip;
     // gruñido ambiental: un zombie cercano gruñe cada tanto (presion constante)
     this._growlT = (this._growlT || 0) - dt;
     if (this._growlT <= 0 && this.sfx) {
@@ -352,6 +358,13 @@ export class MobField {
       v.root.position.x += (v.tx - v.root.position.x) * Math.min(1, dt * 9);
       v.root.position.z += (v.tz - v.root.position.z) * Math.min(1, dt * 9);
       if (Number.isFinite(v.th)) v.root.rotation.y = v.th;
+      if (pp) {
+        const dLod = Math.hypot(v.root.position.x - pp.x, v.root.position.z - pp.z);
+        const visible = dLod < VIS;
+        if (v.root.visible !== visible) v.root.visible = visible;
+        if (!visible) continue;                       // congelado: ni mixer ni barras
+        if (dLod > HALF && this._lodFlip) continue;   // media distancia: mitad de rate
+      }
       if (v.busyT > 0) {
         v.busyT -= dt;
         if (v.busyT <= 0) {

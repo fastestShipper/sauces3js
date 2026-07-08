@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
-const MAX_PARTICLES = 300;       // cap duro de particulas de sangre vivas
+const MAX_PARTICLES = (typeof window !== 'undefined' && window.__SAUCES_MOBILE__) ? 110 : 300;   // cap duro (movil: menos)
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
 const DEATH_LIFE = 0.6;          // vida de las particulas del estallido de muerte (s)
 const POOL_LIFE = 20.0;          // vida de la mancha en el piso (s) — gore persistente

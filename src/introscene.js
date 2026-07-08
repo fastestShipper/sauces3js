@@ -5,13 +5,14 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260709i';
+import { createToonSkyTexture } from './worldmat.js?v=20260709j';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
-  renderer.shadowMap.enabled = true;
+  const introMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, introMobile ? 1.0 : 1.25));
+  renderer.shadowMap.enabled = !introMobile;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.8;
