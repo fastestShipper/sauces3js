@@ -22,7 +22,7 @@ export const CLASSES = {
     skills: [
       { key: 'Q', name: 'Tajo Carnicero', desc: 'Golpe brutal al objetivo (240% daño)', emoji: '🪓', cost: 30, cd: 4, type: 'strike', dmgMult: 2.4 },
       { key: 'E', name: 'Torbellino', desc: 'Giras con el hacha: daña TODO a tu alrededor', emoji: '🌪️', cost: 45, cd: 7, type: 'spin', dmgMult: 1.7, radius: 4 },
-      { key: 'R', name: 'Grito de Guerra', desc: '+45% de daño por 6 segundos', emoji: '📢', cost: 25, cd: 12, type: 'warcry', buffMult: 1.45, buffDur: 6 },
+      { key: 'R', name: 'Grito de Guerra', desc: 'TODO el party pega +45% por 6s', emoji: '📢', cost: 25, cd: 15, type: 'partybuff', v: 0.45, dur: 6 },
       { key: 'F', name: 'Juicio del Verdugo', desc: 'Salto devastador: gran área a tu alrededor', emoji: '⚡', cost: 80, cd: 20, type: 'leap', dmgMult: 3.2, radius: 6 },
     ],
   },
@@ -41,7 +41,7 @@ export const CLASSES = {
     skills: [
       { key: 'Q', name: 'Bola de Fuego', desc: 'Proyectil que explota en área', emoji: '🔥', cost: 30, cd: 4, type: 'fireball', dmgMult: 2.1, radius: 3.5 },
       { key: 'E', name: 'Nova Ígnea', desc: 'Anillo de fuego alrededor tuyo', emoji: '💥', cost: 45, cd: 8, type: 'nova', dmgMult: 1.7, radius: 4.5 },
-      { key: 'R', name: 'Rayo Solar', desc: 'Un rayo concentrado (300% daño)', emoji: '☀️', cost: 25, cd: 6, type: 'bolt', dmgMult: 3.0 },
+      { key: 'R', name: 'Escudo Ígneo', desc: 'Escudo de 30 daño para TODO el party (8s)', emoji: '🛡️', cost: 35, cd: 16, type: 'partyshield', v: 30, dur: 8 },
       { key: 'F', name: 'Lluvia de Meteoros', desc: 'El cielo cae sobre el área del objetivo', emoji: '☄️', cost: 85, cd: 22, type: 'meteor', dmgMult: 2.6, radius: 7 },
     ],
   },
@@ -60,7 +60,7 @@ export const CLASSES = {
     skills: [
       { key: 'Q', name: 'Lluvia de Flechas', desc: 'Flechas sobre el área del objetivo', emoji: '🏹', cost: 30, cd: 5, type: 'rain', dmgMult: 1.6, radius: 4 },
       { key: 'E', name: 'Tiro Perforante', desc: 'Disparo letal a un objetivo (300%)', emoji: '🎯', cost: 25, cd: 6, type: 'pierce', dmgMult: 3.0 },
-      { key: 'R', name: 'Andanada', desc: 'Dispara a los 3 zombies más cercanos', emoji: '🔱', cost: 40, cd: 8, type: 'volley', dmgMult: 1.4, count: 3, range: 12 },
+      { key: 'R', name: 'Instinto de Manada', desc: 'TODO el party corre +30% por 6s', emoji: '🐺', cost: 30, cd: 15, type: 'partyhaste', v: 0.3, dur: 6 },
       { key: 'F', name: 'Tormenta de Acero', desc: 'Gran tormenta de flechas en área', emoji: '🌩️', cost: 80, cd: 20, type: 'storm', dmgMult: 2.2, radius: 7 },
     ],
   },
@@ -78,7 +78,7 @@ export const CLASSES = {
     skills: [
       { key: 'Q', name: 'Puñalada Vil', desc: 'Apuñala y ROBA vida (35% del daño)', emoji: '🗡️', cost: 30, cd: 4, type: 'stab', dmgMult: 2.2, leech: 0.35 },
       { key: 'E', name: 'Danza de Cuchillas', desc: 'Remolino de dagas a tu alrededor', emoji: '🌀', cost: 45, cd: 7, type: 'bladedance', dmgMult: 1.8, radius: 3.5 },
-      { key: 'R', name: 'Velo Sombrío', desc: 'Te curas 35% de tu vida máxima', emoji: '🌑', cost: 30, cd: 14, type: 'veil', healPct: 0.35 },
+      { key: 'R', name: 'Velo Sombrío', desc: 'Cura 35% de vida a TODO el party', emoji: '🌑', cost: 35, cd: 16, type: 'partyheal', v: 0.35 },
       { key: 'F', name: 'Ejecución', desc: 'Remata: x2 de daño si está débil (<40%)', emoji: '💀', cost: 75, cd: 18, type: 'execute', dmgMult: 2.4, executeMult: 4.8, threshold: 0.4 },
     ],
   },
@@ -107,7 +107,7 @@ export const CERNUNNOS = {
   skills: [
     { key: 'Q', name: 'Ira Verde', desc: 'GOD: explosión verde de área', emoji: '🌿', cost: 0, cd: 2, type: 'fireball', dmgMult: 4, radius: 5 },
     { key: 'E', name: 'Nova Salvaje', desc: 'GOD: anillo devastador', emoji: '🍃', cost: 0, cd: 4, type: 'nova', dmgMult: 3, radius: 7 },
-    { key: 'R', name: 'Aliento del Bosque', desc: 'GOD: cura total', emoji: '✨', cost: 0, cd: 6, type: 'veil', healPct: 1 },
+    { key: 'R', name: 'Aliento del Bosque', desc: 'GOD: cura total a TODO el party', emoji: '✨', cost: 0, cd: 6, type: 'partyheal', v: 1 },
     { key: 'F', name: 'Extinción', desc: 'GOD: apocalipsis en área', emoji: '☄️', cost: 0, cd: 10, type: 'meteor', dmgMult: 5, radius: 10 },
   ],
 };

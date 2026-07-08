@@ -748,6 +748,23 @@ wss.on('connection', (ws, req) => {
       }
 
     // --- PARTY ---
+    } else if (m.t === 'pskill') {
+      // skill de PARTY: reenvia el buff/cura a los miembros del grupo del
+      // emisor. Allowlist de tipos + clamps + cooldown anti-spam de 2.5s.
+      const PSKILL_KINDS = new Set(['heal', 'dmgbuff', 'haste', 'shield']);
+      const kind = String(m.kind || '');
+      if (!PSKILL_KINDS.has(kind)) return;
+      const nowMs = Date.now();
+      if (conn._pskillAt && nowMs - conn._pskillAt < 2500) return;
+      conn._pskillAt = nowMs;
+      const v = Math.max(0, Math.min(kind === 'shield' ? 60 : 1, Number(m.v) || 0));
+      const dur = Math.max(0, Math.min(12, Number(m.dur) || 0));
+      const fromName = (conn.char && conn.char.name) || conn.user || 'aliado';
+      for (const mid of partyMemberIds(conn.id)) {
+        if (mid === conn.id) continue;
+        const c = conns.get(mid);
+        if (c) send(c.ws, { t: 'pskill', kind, v, dur, from: fromName });
+      }
     } else if (m.t === 'pinvite') {
       // invita a un cliente por su conn-id. Solo le llega al invitado.
       const to = Number(m.to);

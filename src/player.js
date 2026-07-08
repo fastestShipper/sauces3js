@@ -1,9 +1,9 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708k';
-import { makeNametag } from './nametag.js?v=20260708k';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708k';
+import { sanitizeImported } from './glbutil.js?v=20260708l';
+import { makeNametag } from './nametag.js?v=20260708l';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708l';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -47,6 +47,8 @@ export class Player {
     this.dead = false;
     this.hitT = 0;
     this.locked = false;   // true mientras el chat esta abierto: ignora WASD/salto/ataque
+    this.speedBuffT = 0;   // haste de party (Instinto de Manada)
+    this.speedBuffMult = 1;
     addEventListener('mousedown', e => {
       if (e.button === 2) this.dragging = true;
       else if (e.button === 0) this.attack();   // clic izq = ataque
@@ -228,7 +230,9 @@ export class Player {
       if (this.keys['KeyD']) strafe += 1;
     }
     const moving = fwd !== 0 || strafe !== 0;
-    let spd = 9.0 * (this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? 2 : 1);
+    if (this.speedBuffT > 0) this.speedBuffT -= dt;
+    let spd = 9.0 * (this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? 2 : 1)
+      * (this.speedBuffT > 0 ? (this.speedBuffMult || 1) : 1);
     if (moving) {
       const dx = Math.sin(this.yaw) * -fwd + Math.cos(this.yaw) * strafe;
       const dz = Math.cos(this.yaw) * -fwd - Math.sin(this.yaw) * strafe;

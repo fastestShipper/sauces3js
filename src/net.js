@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708k';
-import { makeNametag } from './nametag.js?v=20260708k';
-import { cloneSkinned } from './npcs.js?v=20260708k';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708k';
-import { showBubble } from './chat.js?v=20260708k';
-import { WS_URL } from './rpg/account.js?v=20260708k';
+import { sanitizeImported } from './glbutil.js?v=20260708l';
+import { makeNametag } from './nametag.js?v=20260708l';
+import { cloneSkinned } from './npcs.js?v=20260708l';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708l';
+import { showBubble } from './chat.js?v=20260708l';
+import { WS_URL } from './rpg/account.js?v=20260708l';
 
 const SCALE = 1.9 / 2.54;
 
@@ -148,6 +148,9 @@ export class Net {
       if (m.mob) { this.mobs.set(m.mob.id, m.mob); if (this.onMobSpawn) this.onMobSpawn(m.mob); }
     }
     else if (m.t === 'pinvited') { if (this.onPartyInvited) this.onPartyInvited(m.from, m.name); }
+    else if (m.t === 'pskill') {
+      if (this.onPartySkill) this.onPartySkill(m);
+    }
     else if (m.t === 'party') {
       this.party = m.members || [];
       if (this.onParty) this.onParty(this.party);
@@ -177,6 +180,11 @@ export class Net {
 
   // ===== acciones de mobs / party / pvp / friends hacia el server =====
   _send(obj) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(obj)); }
+  // skill de party: el server la reenvia a los miembros del grupo
+  partySkill(kind, v, dur) {
+    this._send({ t: 'pskill', kind, v, dur });
+  }
+
   attackMob(id, dmg) { this._send({ t: 'mhit', id, dmg }); }
   invite(to) { this._send({ t: 'pinvite', to }); }
   accept(from) { this._send({ t: 'paccept', from }); }

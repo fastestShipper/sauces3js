@@ -47,6 +47,9 @@ export class Combat {
     this.dmgBuffMult = 1;
     this.hitStopT = 0;       // congela el mundo unos ms al conectar (game feel)
     this.slowMoT = 0;        // micro camara-lenta en kills con racha alta
+    this.targetLocked = false; // true = target FIJADO por TAB/clic (opcional)
+    this.shieldHp = 0;       // escudo de party: absorbe dano antes que la vida
+    this.shieldT = 0;
     this.classSpec = opts.classSpec || null;   // heroe: aura/proyectil/estilo
     this.dead = false;
     this.respawnT = 0;
@@ -62,6 +65,7 @@ export class Combat {
     // el server avisa cuando un mob muere; canal aparte del render (onMobDead lo usa MobField)
     this.net.onMobKilled = (id, by, party) => this._onMobDead(id, by, party);
     this.net.onPlayerHit = (hit) => this._onPlayerHit(hit);
+    this.net.onPartySkill = (m) => this.applyPartySkill(m);
     // clic izq = golpe PvP deliberado si hay rival targeteado (a humanos no se
     // les auto-ataca); contra zombies el auto-loop de update() ya cubre
     addEventListener('mousedown', (e) => { if (e.button === 0) this.manualAttack(); });
@@ -124,6 +128,7 @@ export class Combat {
     this.pvpId = null;
     if (this.targetId && this.targetId !== id) this.mobField.setTargeted(this.targetId, false);
     this.targetId = id;
+    this.targetLocked = true;
     this.mobField.setTargeted(id, true);
     const m = this.net.mobs.get(id);
     if (m) this.hud.showTarget('Zombi Nv.' + m.lvl, m.hp, m.hpMax);
@@ -200,7 +205,20 @@ export class Combat {
     } else if (dg > 30) {
       this._inGruta = false;
     }
-    if (this.targetId && !this.net.mobs.has(this.targetId)) { this.targetId = null; this.hud.hideTarget(); }
+    if (this.targetId && !this.net.mobs.has(this.targetId)) { this.targetId = null; this.targetLocked = false; this.hud.hideTarget(); }
+
+    // ACTION COMBAT: nadie clickea zombies. Sin target FIJADO (TAB/clic siguen
+    // siendo opcionales), el heroe engancha SOLO al zombie mas cercano y pelea.
+    if (this.pvpId == null && !(this.targetLocked && this.net.mobs.has(this.targetId))) {
+      const engage = PROJECTILE_BY_CHAR[this.player.charFile] ? RANGE_RANGED + 2 : 8;
+      let best = null, bestD = engage;
+      for (const m of this.net.mobs.values()) {
+        const d = Math.hypot(m.x - this.player.pos.x, m.z - this.player.pos.z);
+        if (d < bestD) { best = m; bestD = d; }
+      }
+      if (best) { this.targetId = best.id; this.targetLocked = false; }
+      else if (this.targetId && !this.targetLocked) { this.targetId = null; this.hud.hideTarget(); }
+    }
     if (this.pvpId != null && !this.net.remotes.has(this.pvpId)) { this.pvpId = null; this.hud.hideTarget(); }
 
     // racha: la ventana decae; al vencer se corta y desaparece el contador
@@ -210,6 +228,8 @@ export class Combat {
     }
     // buff de dano (Grito de Guerra) expira solo
     if (this.dmgBuffT > 0) this.dmgBuffT -= dt;
+    // escudo de party expira solo
+    if (this.shieldT > 0) { this.shieldT -= dt; if (this.shieldT <= 0) this.shieldHp = 0; }
 
     this.attackCd -= dt;
     const target = this.targetId ? this.net.mobs.get(this.targetId) : null;
@@ -278,11 +298,51 @@ export class Combat {
     return true;
   }
 
+  // aplica un efecto de party a ESTE jugador (local o recibido por red)
+  _applyBuff(kind, v, dur) {
+    const fx = this.effects;
+    const p = this.player.pos;
+    if (kind === 'heal') {
+      const heal = Math.round(this.hpMax * v);
+      this.hp = Math.min(this.hpMax, this.hp + heal);
+      this.hud.setHP(this.hp, this.hpMax);
+      if (fx) { fx.healBurst({ x: p.x, y: 0.6, z: p.z }); fx.damageNumber({ x: p.x, y: 2.2, z: p.z }, heal, { heal: true }); }
+    } else if (kind === 'dmgbuff') {
+      this.dmgBuffMult = 1 + v;
+      this.dmgBuffT = dur;
+      if (fx) fx.hitFlash({ x: p.x, y: 1.3, z: p.z }, 0xff5a3c);
+    } else if (kind === 'haste') {
+      this.player.speedBuffMult = 1 + v;
+      this.player.speedBuffT = dur;
+      if (fx) fx.hitFlash({ x: p.x, y: 0.5, z: p.z }, 0x59d98c);
+    } else if (kind === 'shield') {
+      this.shieldHp = Math.max(this.shieldHp, v);
+      this.shieldT = dur;
+      if (fx) fx.hitFlash({ x: p.x, y: 1.2, z: p.z }, 0xffa040);
+    }
+    if (this.sfx) this.sfx.heal();
+  }
+
+  // skill de party entrante (de un aliado, via server)
+  applyPartySkill(m) {
+    if (this.dead || !m) return;
+    this._applyBuff(m.kind, Number(m.v) || 0, Number(m.dur) || 0);
+    this.hud.toast('🤝 ' + (m.from || 'Aliado') + ' apoya al party');
+  }
+
   // dano PvP entrante (de otro jugador, ya validado por el server)
   takePvpHit(hit) {
     if (this.dead || !hit) return;
-    const dmg = Math.max(0, Number(hit.dmg) || 0);
+    let dmg = Math.max(0, Number(hit.dmg) || 0);
     if (!dmg) return;
+    // el ESCUDO de party absorbe antes que la vida
+    if (this.shieldHp > 0) {
+      const absorbed = Math.min(this.shieldHp, dmg);
+      this.shieldHp -= absorbed;
+      dmg -= absorbed;
+      if (this.effects) this.effects.hitFlash({ x: this.player.pos.x, y: 1.2, z: this.player.pos.z }, 0xffa040);
+      if (dmg <= 0) return;
+    }
     this.hp = Math.max(0, this.hp - dmg);
     this.hud.setHP(this.hp, this.hpMax);
     this.player.playHit();
@@ -416,6 +476,38 @@ export class Combat {
         this.dmgBuffT = s.buffDur || 6;
         if (fx) fx.nova(p, aura, 3);
         this.hud.toast('📢 ¡' + s.name + '! +' + Math.round(((s.buffMult || 1.4) - 1) * 100) + '% daño');
+        break;
+      }
+      // ===== SKILLS DE PARTY (slot R): benefician a TODO el grupo. La sinergia
+      // perfecta es tener a los 4 heroes juntos: dano+cura+velocidad+escudo =====
+      case 'partyheal': {           // Sombra: cura 35% a TODO el party
+        anim(true);
+        this._applyBuff('heal', s.v || 0.35, 0);
+        this.net.partySkill('heal', s.v || 0.35, 0);
+        this.hud.toast('🌑 ' + s.name + ': el party se cura');
+        break;
+      }
+      case 'partybuff': {           // Verdugo: +45% dano a TODO el party
+        anim(true);
+        this._applyBuff('dmgbuff', s.v || 0.45, s.dur || 6);
+        this.net.partySkill('dmgbuff', s.v || 0.45, s.dur || 6);
+        if (fx) fx.nova(p, aura, 3);
+        this.hud.toast('📢 ' + s.name + ': +' + Math.round((s.v || 0.45) * 100) + '% dano al party');
+        break;
+      }
+      case 'partyhaste': {          // Cazadora: +30% velocidad a TODO el party
+        anim(true);
+        this._applyBuff('haste', s.v || 0.3, s.dur || 6);
+        this.net.partySkill('haste', s.v || 0.3, s.dur || 6);
+        if (fx) fx.nova(p, aura, 3);
+        this.hud.toast('🐺 ' + s.name + ': el party corre +' + Math.round((s.v || 0.3) * 100) + '%');
+        break;
+      }
+      case 'partyshield': {         // Piromante: escudo de 30 pts a TODO el party
+        anim(true);
+        this._applyBuff('shield', s.v || 30, s.dur || 8);
+        this.net.partySkill('shield', s.v || 30, s.dur || 8);
+        this.hud.toast('🛡️ ' + s.name + ': escudo para el party');
         break;
       }
       case 'veil': case 'heal': {   // autocuracion
