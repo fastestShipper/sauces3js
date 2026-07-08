@@ -13,6 +13,36 @@ const SAMPLES = {
   bass: ['impact-bass-1.mp3', 'impact-bass-2.mp3'],
   hurt: ['hurt.wav'],
   riser: ['riser.mp3'],
+  // ===== SFX viscerales generados con MuAPI (mmaudio-v2) =====
+  decap: ['gen/decapitation.mp3'],
+  flesh: ['gen/flesh_tear.mp3'],
+  bones_real: ['gen/bone_crack.mp3'],
+  growl_real: ['gen/zombie_growl_real.mp3'],
+  zdeath_real: ['gen/zombie_death_real.mp3'],
+  boss_roar: ['gen/boss_roar.mp3'],
+  levelup_real: ['gen/levelup.mp3'],
+  sk_slash: ['gen/skill_slash.mp3'],
+  sk_spin: ['gen/skill_spin.mp3'],
+  sk_warcry: ['gen/skill_warcry.mp3'],
+  sk_leap: ['gen/skill_leap.mp3'],
+  sk_fire: ['gen/skill_fire.mp3'],
+  sk_arrows: ['gen/skill_arrows.mp3'],
+  sk_heal: ['gen/skill_heal.mp3'],
+  sk_shield: ['gen/skill_shield.mp3'],
+  sk_haste: ['gen/skill_haste.mp3'],
+};
+
+// pool de sample por TIPO de skill: cada skill suena distinto
+const SKILL_POOL = {
+  strike: 'sk_slash', stab: 'sk_slash', pierce: 'sk_slash', execute: 'sk_slash', bolt: 'sk_fire',
+  spin: 'sk_spin', bladedance: 'sk_spin',
+  partybuff: 'sk_warcry', warcry: 'sk_warcry',
+  leap: 'sk_leap',
+  fireball: 'sk_fire', nova: 'sk_fire', meteor: 'sk_fire',
+  rain: 'sk_arrows', volley: 'sk_arrows', storm: 'sk_arrows',
+  partyheal: 'sk_heal', veil: 'sk_heal', heal: 'sk_heal',
+  partyshield: 'sk_shield',
+  partyhaste: 'sk_haste',
 };
 
 class Sfx {
@@ -177,12 +207,28 @@ class Sfx {
     }
   }
 
-  zombieGrowl() { this._growl({ f: 75 + Math.random() * 40, dur: 0.55, gain: 0.16 }); }
-  zombieHurt() { this._growl({ f: 130 + Math.random() * 60, dur: 0.22, gain: 0.18 }); }
+  zombieGrowl() {
+    if (!this._sample('growl_real', { gain: 0.4, spread: 0.2 })) {
+      this._growl({ f: 75 + Math.random() * 40, dur: 0.55, gain: 0.16 });
+    }
+  }
+  zombieHurt() {
+    if (!this._sample('flesh', { gain: 0.4, spread: 0.2 })) {
+      this._growl({ f: 130 + Math.random() * 60, dur: 0.22, gain: 0.18 });
+    }
+  }
   zombieDeath() {
-    this._growl({ f: 110, dur: 0.5, gain: 0.2 });
-    this.bones();
+    if (!this._sample('zdeath_real', { gain: 0.5 })) this._growl({ f: 110, dur: 0.5, gain: 0.2 });
+    // 30% de las muertes: DECAPITACION visceral
+    if (Math.random() < 0.3) this._sample('decap', { gain: 0.6 });
+    if (!this._sample('bones_real', { gain: 0.45, delay: 0.08 })) this.bones();
     this._sample('bass', { gain: 0.5, rate: 0.8, delay: 0.05 });
+  }
+  bossRoar() { this._sample('boss_roar', { gain: 0.7, spread: 0.05 }); }
+  // cada skill con su propio sonido (samples MuAPI, fallback al golpe base)
+  skill(type) {
+    const pool = SKILL_POOL[type];
+    if (!pool || !this._sample(pool, { gain: 0.55, spread: 0.08 })) this.hit(false);
   }
 
   // te mordieron: sample de dolor + thump
@@ -200,7 +246,13 @@ class Sfx {
   }
   coin() { this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 }); this._tone({ type: 'square', f0: 1760, f1: 1760, dur: 0.1, gain: 0.12, delay: 0.06 }); }
   loot() { this._tone({ type: 'sine', f0: 660, f1: 990, dur: 0.12, gain: 0.24 }); this._tone({ type: 'sine', f0: 990, f1: 1320, dur: 0.16, gain: 0.2, delay: 0.1 }); }
-  levelup() { for (let i = 0; i < 4; i++) this._tone({ type: 'triangle', f0: 440 * Math.pow(1.26, i), f1: 440 * Math.pow(1.26, i), dur: 0.14, gain: 0.24, delay: i * 0.09 }); }
+  levelup() {
+    if (this._sample('levelup_real', { gain: 0.7, spread: 0 })) {
+      this._sample('bass', { gain: 0.5, rate: 0.9, delay: 0.1 });
+      return;
+    }
+    for (let i = 0; i < 4; i++) this._tone({ type: 'triangle', f0: 440 * Math.pow(1.26, i), f1: 440 * Math.pow(1.26, i), dur: 0.14, gain: 0.24, delay: i * 0.09 });
+  }
   potion() { this._tone({ type: 'sine', f0: 300, f1: 620, dur: 0.22, gain: 0.24 }); }
   death() { this._tone({ type: 'sawtooth', f0: 300, f1: 60, dur: 0.7, gain: 0.3 }); this._sample('bass', { gain: 0.7, rate: 0.7 }); }
   teleport() { this._tone({ type: 'sine', f0: 220, f1: 1400, dur: 0.5, gain: 0.2 }); this._noise({ dur: 0.4, gain: 0.1, fc: 2000, q: 0.6 }); }

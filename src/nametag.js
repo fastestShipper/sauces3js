@@ -2,7 +2,8 @@
 // canvas. Reused for the local player and for remote multiplayer players.
 import * as THREE from 'three';
 
-export function makeNametag(text) {
+export function makeNametag(text, lvl) {
+  if (lvl) text = text + '  ·  ' + lvl;
   const cv = document.createElement('canvas');
   cv.width = 256; cv.height = 64;
   const c = cv.getContext('2d');

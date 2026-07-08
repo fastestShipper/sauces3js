@@ -212,6 +212,27 @@ export class Effects {
     this.hitFlash({ x: p.x, y: p.y + 0.8, z: p.z }, 0x7be07b);
   }
 
+  // LEVEL-UP estilo MU: columna de luz dorada + chispas ascendentes + nova
+  levelUpBurst(pos) {
+    const p = readPos(pos);
+    const geo = new THREE.CylinderGeometry(0.55, 0.85, 9, 18, 1, true);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffd875, transparent: true, opacity: 0.75, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p.x, 4.5, p.z);
+    this.scene.add(mesh);
+    // reutiliza el pool de anillos para animar el pilar (vida propia)
+    this.rings.push({ mesh, life: 2.0, max: 2.0, radius: 1, pillar: true });
+    this.nova({ x: p.x, y: 0, z: p.z }, 0xffd24a, 5);
+    // chispas doradas subiendo en espiral
+    for (let i = 0; i < 3; i++) {
+      this._spurt({ x: p.x, y: 0.4 + i * 0.8, z: p.z }, 10, 3.2, 1.1, 0xffe08a);
+    }
+    this.hitFlash({ x: p.x, y: 1.4, z: p.z }, 0xffd875);
+  }
+
   // SCREEN SHAKE: pide una sacudida; el loop la aplica a la camara via shakeOffset()
   shake(amp = 0.1, dur = 0.14) {
     this.shakeAmp = Math.max(this.shakeAmp, amp);
@@ -451,8 +472,15 @@ export class Effects {
         continue;
       }
       const t = 1 - e.life / e.max;
-      e.mesh.scale.setScalar(0.4 + t * e.radius);
-      e.mesh.material.opacity = 0.95 * (1 - t * t);
+      if (e.pillar) {
+        // el pilar de level-up gira, se estrecha y se desvanece hacia arriba
+        e.mesh.rotation.y += 0.12;
+        e.mesh.scale.set(1 - t * 0.55, 1 + t * 0.4, 1 - t * 0.55);
+        e.mesh.material.opacity = 0.75 * (1 - t * t);
+      } else {
+        e.mesh.scale.setScalar(0.4 + t * e.radius);
+        e.mesh.material.opacity = 0.95 * (1 - t * t);
+      }
     }
 
     // Proyectiles: avanzan en linea recta, dejan estela y estallan al llegar.

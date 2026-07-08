@@ -735,7 +735,7 @@ wss.on('connection', (ws, req) => {
       me.cu = sanitizeCu(m.cu);
       const players = [];
       for (const [oid, c] of clients) {
-        if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, cu: c.cu, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
+        if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, cu: c.cu, lv: c.lv, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
       }
       send(ws, { t: 'roster', players });
       // estado actual de los mobs compartidos (server-authoritative).
@@ -752,7 +752,8 @@ wss.on('connection', (ws, req) => {
       me.x = clampNum(m.x, -3000, 3000); me.z = clampNum(m.z, -3000, 3000);
       me.h = clampNum(m.h, -10, 10); me.a = clean(m.a, 12) || 'Idle';
       me.hp = clampInt(m.hp, 0, 100000); me.hm = clampInt(m.hm ?? 100, 1, 100000);
-      broadcast(id, { t: 's', id, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm });
+      me.lv = clampInt(m.lv ?? 1, 1, 99);
+      broadcast(id, { t: 's', id, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm, lv: me.lv });
     } else if (m.t === 'atk') {
       broadcast(id, { t: 'atk', id });
     } else if (m.t === 'chat') {

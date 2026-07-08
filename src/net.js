@@ -3,20 +3,20 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708p';
-import { composeCharacter } from './rpg/charcustom.js?v=20260708p';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260708p';
+import { sanitizeImported } from './glbutil.js?v=20260708q';
+import { composeCharacter } from './rpg/charcustom.js?v=20260708q';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260708q';
 
 // spec de heroe a partir del charFile del remoto (para paleta/piezas)
 function classByChar(charFile) {
   if (charFile === CERNUNNOS.char) return CERNUNNOS;
   return CLASS_LIST.find((c) => c.char === charFile) || CLASS_LIST[0];
 }
-import { makeNametag } from './nametag.js?v=20260708p';
-import { cloneSkinned } from './npcs.js?v=20260708p';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708p';
-import { showBubble } from './chat.js?v=20260708p';
-import { WS_URL } from './rpg/account.js?v=20260708p';
+import { makeNametag } from './nametag.js?v=20260708q';
+import { cloneSkinned } from './npcs.js?v=20260708q';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708q';
+import { showBubble } from './chat.js?v=20260708q';
+import { WS_URL } from './rpg/account.js?v=20260708q';
 
 const SCALE = 1.9 / 2.54;
 
@@ -117,6 +117,11 @@ export class Net {
           r.hp = m.hp; r.hpMax = m.hm || 100;
           if (r.hpBar) r.hpBar.draw(r.hp, r.hpMax);
         }
+      }
+      const rr = this.remotes.get(m.id);
+      if (rr && rr.ready && Number(m.lv) > 0 && Number(m.lv) !== rr.lv) {
+        rr.lv = Number(m.lv);
+        if (rr.tag) { rr.root.remove(rr.tag); rr.tag = makeNametag(rr.name, rr.lv); rr.root.add(rr.tag); }
       }
     }
     else if (m.t === 'atk') { const r = this.remotes.get(m.id); if (r) this._remoteAttack(r); }
@@ -254,7 +259,8 @@ export class Net {
     // el remoto se ve COMO SE VE EL: piezas mix-and-match + paleta
     await composeCharacter(this.loader, ch, classByChar(charFile), p.cu || {});
     r.root.add(ch);
-    if (p.name) r.root.add(makeNametag(p.name));
+    r.lv = Number(p.lv) || 0;
+    if (p.name) { r.tag = makeNametag(p.name, r.lv); r.root.add(r.tag); }
     r.hp = Number.isFinite(p.hp) ? p.hp : 100;
     r.hpMax = Number.isFinite(p.hm) && p.hm > 0 ? p.hm : 100;
     r.hpBar = makeHpBar();
@@ -282,7 +288,8 @@ export class Net {
     if (this.ws && this.ws.readyState === 1 && this.acc > 0.1) {
       this.acc = 0;
       this.ws.send(JSON.stringify({
-        t: 's', x: +player.pos.x.toFixed(2), z: +player.pos.z.toFixed(2),
+        t: 's', lv: (this.combat && this.combat.prog && this.combat.prog.level) || 1,
+        x: +player.pos.x.toFixed(2), z: +player.pos.z.toFixed(2),
         h: +player.heading.toFixed(2), a: player.cur || 'Idle',
         hp: this.combat ? Math.round(this.combat.hp) : 100,
         hm: this.combat ? Math.round(this.combat.hpMax) : 100,

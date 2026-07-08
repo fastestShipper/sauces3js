@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260708p';
+import { sanitizeImported } from '../glbutil.js?v=20260708q';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -148,6 +148,8 @@ export class MobField {
     const v = this._createMob(mob);
     // el zombie se LEVANTA del suelo (Awaken); fallback al spawn generico
     if (v) this._playOnce(v, v.actions.Awaken ? 'Awaken' : 'Spawn_Ground');
+    // la ABOMINACION ruge al nacer (se escucha antes de verse)
+    if (mob && mob.b && this.sfx) this.sfx.bossRoar?.();
   }
 
   // golpe del mob al jugador: anim de ataque real (la avisa combat via phit)

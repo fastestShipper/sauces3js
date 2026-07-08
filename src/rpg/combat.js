@@ -48,6 +48,9 @@ export class Combat {
     this.hitStopT = 0;       // congela el mundo unos ms al conectar (game feel)
     this.slowMoT = 0;        // micro camara-lenta en kills con racha alta
     this.targetLocked = false; // true = target FIJADO por TAB/clic (opcional)
+    // combate MANUAL por default (el clic pega); X enciende el auto-farmeo
+    this.autoAttack = localStorage.getItem('sauces_auto') === '1';
+    this._punchT = 0;        // ventana de golpe manual tras un clic/tap
     this.shieldHp = 0;       // escudo de party: absorbe dano antes que la vida
     this.shieldT = 0;
     this.classSpec = opts.classSpec || null;   // heroe: aura/proyectil/estilo
@@ -68,7 +71,13 @@ export class Combat {
     this.net.onPartySkill = (m) => this.applyPartySkill(m);
     // clic izq = golpe PvP deliberado si hay rival targeteado (a humanos no se
     // les auto-ataca); contra zombies el auto-loop de update() ya cubre
-    addEventListener('mousedown', (e) => { if (e.button === 0) this.manualAttack(); });
+    addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (!this.manualAttack()) this.pokeAttack();   // sin rival: golpe manual a mobs
+    });
+    addEventListener('keydown', (e) => {
+      if (e.code === 'KeyX' && !e.repeat && !this.player.locked) this.toggleAuto();
+    });
 
     this.hud.setHP(this.hp, this.hpMax);
     this.hud.setXP(this.prog.xp, this.prog.xpNext, this.prog.level);
@@ -140,6 +149,19 @@ export class Combat {
     const r = this.net.remotes.get(pid);
     // vida del rival es de SU cliente: mostramos frame con barra llena
     this.hud.showTarget('⚔ ' + ((r && r.name) || 'Jugador'), 1, 1);
+  }
+
+  // golpe manual: abre una ventana corta para que el loop conecte UN ataque
+  pokeAttack() {
+    if (this.dead || this.player.locked) return;
+    this._punchT = 0.3;
+  }
+
+  // X: alterna entre combate manual (clic) y auto-farmeo
+  toggleAuto() {
+    this.autoAttack = !this.autoAttack;
+    localStorage.setItem('sauces_auto', this.autoAttack ? '1' : '0');
+    this.hud.toast(this.autoAttack ? '\u2694\ufe0f Auto-pelea ACTIVADA (X apaga)' : '\ud83d\udd90\ufe0f Combate MANUAL: cada clic es un golpe (X reactiva)');
   }
 
   // factor de tiempo del mundo: hit-stop (freeze corto) > slow-mo (racha) > 1.
@@ -237,7 +259,9 @@ export class Combat {
       const d = Math.hypot(target.x - this.player.pos.x, target.z - this.player.pos.z);
       const range = PROJECTILE_BY_CHAR[this.player.charFile] ? RANGE_RANGED : RANGE_MELEE;
       // ARPG: se pega EN MOVIMIENTO (kitear y tajear es el core loop)
-      if (d < range && this.attackCd <= 0 && !this.player.locked) {
+      if (this._punchT > 0) this._punchT -= dt;
+      if (d < range && this.attackCd <= 0 && !this.player.locked && (this.autoAttack || this._punchT > 0)) {
+        this._punchT = 0;
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
         this.player.attack();
@@ -523,7 +547,7 @@ export class Combat {
         hitOne(target, base(s.dmgMult));
       }
     }
-    if (this.sfx) this.sfx.hit();
+    if (this.sfx) this.sfx.skill(s.type);
   }
 
   _onPlayerHit(hit) {
@@ -572,6 +596,10 @@ export class Combat {
     const leveled = this.prog.gainXp(Math.round((4 + lvl) * mult));
     this.hpMax = this.prog.hpMax;
     if (leveled) {
+      // LEVEL-UP estilo MU: columna de luz dorada + fanfarria + banner
+      if (this.effects) this.effects.levelUpBurst(this.player.pos);
+      this.hud.banner?.('\u2b50 \u00a1NIVEL ' + this.prog.level + '!');
+      this.slowMoT = 0.25;
       this.hp = this.hpMax;
       this.hud.toast('Subiste a nivel ' + this.prog.level);
       if (this.sfx) this.sfx.levelup();

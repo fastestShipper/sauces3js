@@ -93,30 +93,90 @@
     box-shadow: 0 14px 36px rgba(10,8,24,.5);
   }
 
-  /* ===== loading ===== */
+  /* ===== loading: atardecer de invasion ===== */
   #loading {
     position: fixed; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 18px; z-index: 50;
+    align-items: center; justify-content: center; z-index: 50;
     font-family: var(--font); color: #fff; overflow: hidden;
   }
+  .ld-dusk {
+    background:
+      radial-gradient(ellipse 64% 46% at 50% 62%, rgba(255,160,90,.5), rgba(255,160,90,0) 70%),
+      linear-gradient(180deg, #1a2542 0%, #43395f 32%, #a05070 58%, #e08a5a 76%, #f4b06a 88%, #2a2438 88.2%, #201c30 100%);
+  }
+  .ld-sun {
+    position: absolute; left: 50%; top: 58%; width: 130px; height: 130px;
+    transform: translate(-50%, -50%); border-radius: 999px;
+    background: radial-gradient(circle, #ffe9b8 0%, #ffc370 46%, rgba(255,170,90,0) 72%);
+    filter: blur(2px); animation: ld-breathe 6s ease-in-out infinite;
+  }
+  @keyframes ld-breathe { 50% { transform: translate(-50%, -52%) scale(1.06); } }
+  .ld-drift { animation: ld-drift linear infinite; }
+  @keyframes ld-drift { from { transform: translateX(-12vw); } to { transform: translateX(112vw); } }
+  .ld-skyline-far {
+    position: absolute; left: 0; right: 0; bottom: 11vh; height: 13vh; opacity: .5;
+    background: #3a3054; pointer-events: none;
+    clip-path: polygon(0 70%, 5% 70%, 5% 40%, 11% 40%, 11% 76%, 17% 76%, 17% 52%, 25% 52%, 25% 30%, 29% 30%, 29% 58%, 37% 58%, 37% 44%, 44% 44%, 44% 68%, 51% 68%, 51% 24%, 55% 24%, 55% 50%, 63% 50%, 63% 60%, 70% 60%, 70% 36%, 77% 36%, 77% 62%, 85% 62%, 85% 46%, 92% 46%, 92% 58%, 100% 58%, 100% 100%, 0 100%);
+  }
+  .ld-dusk .sky-skyline { background: linear-gradient(180deg, rgba(23,20,38,0) 0, rgba(23,20,38,0) 8%, #171426 8%, #171426 100%); opacity: 1; }
+  .ld-horde {
+    position: absolute; left: 0; right: 0; bottom: 2.2vh; height: 46px;
+    pointer-events: none; z-index: 2;
+  }
+  .ld-horde span {
+    position: absolute; bottom: 0; left: 0; font-size: 30px; line-height: 1;
+    filter: brightness(0) opacity(.85); animation: ld-march linear infinite;
+  }
+  @keyframes ld-march {
+    from { transform: translateX(-8vw) scaleX(-1); }
+    to { transform: translateX(108vw) scaleX(-1); }
+  }
+  .ld-center { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; z-index: 3; }
+  .ld-alert {
+    font-size: 12px; font-weight: 700; letter-spacing: 3px; color: #ffb0a0;
+    border: 1px solid rgba(255,120,90,.5); background: rgba(60,16,20,.45);
+    padding: 6px 16px; border-radius: 999px; animation: ld-alert 2.2s ease-in-out infinite;
+    backdrop-filter: blur(4px);
+  }
+  @keyframes ld-alert { 50% { box-shadow: 0 0 18px rgba(255,90,72,.45); color: #ffd6cc; } }
   #loading .ld-title {
-    font-size: clamp(42px, 7vw, 74px); font-weight: 700; letter-spacing: 1px; line-height: .95;
-    color: #fff; text-shadow: 0 3px 0 rgba(29,66,84,.55), 0 14px 42px rgba(19,46,80,.5);
+    font-size: clamp(48px, 8.4vw, 96px); font-weight: 700; letter-spacing: 2px; line-height: .95;
+    color: #fff; text-shadow: 0 4px 0 rgba(40,20,50,.6), 0 20px 60px rgba(20,10,40,.8), 0 0 44px rgba(255,170,90,.35);
   }
   #loading .ld-sub {
-    font-size: 15px; font-weight: 600; letter-spacing: 4px; text-transform: uppercase;
-    color: #16456b; background: rgba(255,255,255,.66); padding: 5px 16px; border-radius: 999px;
+    font-size: 14px; font-weight: 600; letter-spacing: 5px; text-transform: uppercase;
+    color: #ffd9b0; background: rgba(40,24,48,.6); border: 1px solid rgba(255,200,140,.3);
+    padding: 6px 18px; border-radius: 999px; backdrop-filter: blur(4px);
   }
-  #loading .ld-msg { font-size: 14px; font-weight: 500; color: rgba(255,255,255,.95); text-shadow: 0 1px 4px rgba(19,46,80,.6); }
+  #loading .ld-msg { font-size: 14px; font-weight: 500; color: rgba(255,235,215,.95); text-shadow: 0 1px 4px rgba(20,10,30,.8); }
   #loading .bar {
-    width: min(340px, 74vw); height: 12px; border-radius: 999px;
-    background: rgba(16,38,60,.45); overflow: hidden;
-    box-shadow: inset 0 2px 5px rgba(10,20,40,.5), 0 1px 0 rgba(255,255,255,.35);
+    width: min(380px, 76vw); height: 13px; border-radius: 999px;
+    background: rgba(20,12,30,.65); overflow: hidden;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.12);
+    border: 1px solid rgba(255,200,140,.25);
   }
   #loading .bar i {
     display: block; height: 100%; width: 0%; border-radius: 999px;
-    background: linear-gradient(180deg, #ffe08a, #ffb84d);
-    box-shadow: 0 0 12px rgba(255,203,92,.7); transition: width .2s;
+    background: linear-gradient(90deg, #ff8a5c, #ffcf5c);
+    box-shadow: 0 0 16px rgba(255,150,80,.8); transition: width .2s;
+  }
+  .ld-tips { position: relative; height: 20px; width: min(480px, 86vw); margin-top: 6px; }
+  .ld-tips span {
+    position: absolute; inset: 0; text-align: center; font-size: 13px; font-weight: 500;
+    color: rgba(255,220,190,.9); text-shadow: 0 1px 4px rgba(20,10,30,.8);
+    opacity: 0; animation: ld-tip 20s linear infinite;
+  }
+  .ld-tips span:nth-child(1) { animation-delay: 0s; }
+  .ld-tips span:nth-child(2) { animation-delay: 4s; }
+  .ld-tips span:nth-child(3) { animation-delay: 8s; }
+  .ld-tips span:nth-child(4) { animation-delay: 12s; }
+  .ld-tips span:nth-child(5) { animation-delay: 16s; }
+  @keyframes ld-tip {
+    0% { opacity: 0; transform: translateY(6px); }
+    2.5% { opacity: 1; transform: translateY(0); }
+    17.5% { opacity: 1; }
+    20% { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 0; }
   }
 
   /* ===== class pick ===== */
@@ -227,22 +287,40 @@
 <div id="app"></div>
 <div id="hud">
   <div class="title">Los Sauces <b>·</b> San Borja</div>
-  <div id="hint"><span class="key">WASD</span> moverse · acércate y PELEAS solo · <span class="key">Q E R F</span> skills (R = party) · <span class="key">I</span> inventario · <span class="key">B</span> gruta</div>
+  <div id="hint"><span class="key">WASD</span> moverse · <span class="key">clic</span> golpea · <span class="key">X</span> auto-pelea · <span class="key">Q E R F</span> skills (R = party) · <span class="key">I</span> inventario · <span class="key">B</span> gruta</div>
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
 <div id="coords">X 0 · Z 0</div>
 <div id="chat-log"></div>
 <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Escribe y Enter para enviar…">
-<div id="loading" class="sky-scene">
-  <div class="sky-cloud" style="width:210px;height:56px;left:12%;top:18%"></div>
-  <div class="sky-cloud" style="width:150px;height:44px;left:68%;top:12%;opacity:.8"></div>
-  <div class="sky-cloud" style="width:260px;height:62px;left:78%;top:34%;opacity:.7"></div>
-  <div class="sky-cloud" style="width:180px;height:48px;left:30%;top:40%;opacity:.6"></div>
+<div id="loading" class="ld-dusk">
+  <div class="ld-sun"></div>
+  <div class="sky-cloud ld-drift" style="width:240px;height:58px;left:8%;top:16%;animation-duration:52s"></div>
+  <div class="sky-cloud ld-drift" style="width:170px;height:46px;left:62%;top:10%;opacity:.7;animation-duration:64s"></div>
+  <div class="sky-cloud ld-drift" style="width:280px;height:64px;left:74%;top:30%;opacity:.55;animation-duration:44s"></div>
+  <div class="ld-skyline-far"></div>
   <div class="sky-skyline"></div>
-  <div class="ld-title">LOS SAUCES</div>
-  <div class="ld-sub">San Borja · Lima</div>
-  <div class="bar"><i id="lbar"></i></div>
-  <div class="ld-msg">Construyendo Los Sauces…</div>
+  <div class="ld-horde" aria-hidden="true">
+    <span style="animation-duration:26s;animation-delay:0s">🧟</span>
+    <span style="animation-duration:31s;animation-delay:-9s;font-size:34px">🧟‍♀️</span>
+    <span style="animation-duration:23s;animation-delay:-16s;font-size:26px">🧟</span>
+    <span style="animation-duration:36s;animation-delay:-4s;font-size:40px">🧟‍♂️</span>
+    <span style="animation-duration:28s;animation-delay:-21s;font-size:30px">🧟</span>
+  </div>
+  <div class="ld-center">
+    <div class="ld-alert">☣ INVASIÓN ZOMBIE EN CURSO</div>
+    <div class="ld-title">LOS SAUCES</div>
+    <div class="ld-sub">San Borja · Lima</div>
+    <div class="bar"><i id="lbar"></i></div>
+    <div class="ld-msg">Construyendo Los Sauces…</div>
+    <div class="ld-tips">
+      <span>La gruta de la Virgen es refugio sagrado: los zombies no entran.</span>
+      <span>De noche las hordas crecen. Vuelve a la gruta o pelea en manada.</span>
+      <span>La R de cada héroe beneficia a TODO tu party. Júntense.</span>
+      <span>Shift+clic vende objetos. La bodega Ojeda compra de todo.</span>
+      <span>Cada 3 oleadas llega una ABOMINACIÓN. Se escucha antes de verse.</span>
+    </div>
+  </div>
 </div>
 <div id="onboard" class="sky-scene">
   <div class="sky-cloud" style="width:210px;height:56px;left:10%;top:16%"></div>
@@ -267,6 +345,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708p"></script>
+<script type="module" src="./src/app.js?v=20260708q"></script>
 </body>
 </html>
