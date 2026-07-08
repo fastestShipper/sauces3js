@@ -1,10 +1,10 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260709l';
-import { makeNametag } from './nametag.js?v=20260709l';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260709l';
-import { composeCharacter } from './rpg/charcustom.js?v=20260709l';
+import { sanitizeImported } from './glbutil.js?v=20260709m';
+import { makeNametag } from './nametag.js?v=20260709m';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260709m';
+import { composeCharacter } from './rpg/charcustom.js?v=20260709m';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe

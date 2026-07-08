@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260709l';
+import { sanitizeImported } from '../glbutil.js?v=20260709m';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -351,14 +351,26 @@ export class MobField {
         }
       }
     }
+    // suavizado independiente de FPS: a cualquier framerate el mob llega igual
+    // de rapido a su objetivo (con dt*9 fijo, a fps alto arrastraba = "cargando")
+    const k = 1 - Math.exp(-dt * 14);
     // mobs vivos: avanzar mixer, billboardear barra, volver a Idle al terminar one-shots
     for (const v of this.mobs.values()) {
-      v.root.position.x += (v.tx - v.root.position.x) * Math.min(1, dt * 9);
-      v.root.position.z += (v.tz - v.root.position.z) * Math.min(1, dt * 9);
+      // SNAP si el salto es grande (reaparicion tras culling, respawn, desync):
+      // sin esto el mesh se DESLIZA lento desde su vieja posicion = "como cargando"
+      const jump = Math.hypot(v.tx - v.root.position.x, v.tz - v.root.position.z);
+      if (jump > 4) {
+        v.root.position.x = v.tx;
+        v.root.position.z = v.tz;
+      } else {
+        v.root.position.x += (v.tx - v.root.position.x) * k;
+        v.root.position.z += (v.tz - v.root.position.z) * k;
+      }
       if (Number.isFinite(v.th)) v.root.rotation.y = v.th;
       if (pp) {
         const dLod = Math.hypot(v.root.position.x - pp.x, v.root.position.z - pp.z);
-        const visible = dLod < VIS;
+        // histeresis: aparece a VIS-4, se oculta a VIS+4 (sin flicker en el borde)
+        const visible = v.root.visible ? dLod < VIS + 4 : dLod < VIS - 4;
         if (v.root.visible !== visible) v.root.visible = visible;
         if (!visible) continue;                       // congelado: ni mixer ni barras
       }
