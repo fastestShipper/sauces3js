@@ -252,6 +252,33 @@ const MOB_WANDER_PAUSE_MIN_MS = 600;
 const MOB_WANDER_PAUSE_MAX_MS = 1800;
 const MOB_ATTACK_CD_MS = 1500;   // la horda rodea y asusta, no tritura en 2s
 
+// --- AI de horda: separacion, rodeo, personalidades, timing organico, zigzag ---
+const MOB_SEP_RADIUS = 1.6;      // a menos de 1.6m entre mobs hay empujon anti-apilamiento
+const MOB_SEP_FORCE = 2.5;       // m/s del empuje (suave: ~0.25m por tick, no teleport)
+const MOB_SEP_MAX_CHECK = 8;     // vecinos maximos revisados por mob y tick (perf con 90 mobs)
+const MOB_SURROUND_DIST = 6;     // a esta distancia del objetivo se abren en anillo
+const MOB_SURROUND_R = 1.5;      // radio del anillo (< MOB_ATTACK_RANGE: siguen mordiendo)
+const MOB_ZIGZAG_AMP = 0.9;      // metros de desvio lateral senoidal en la persecucion
+const MOB_FIRST_HIT_JITTER_MS = 600;   // primer golpe desfasado 0-600ms (manada no sincronizada)
+const MOB_GROWL_CHANCE = 0.10;   // 10%: tras golpear, "grunido de pausa"
+const MOB_GROWL_MS = 800;        // 0.8s extra sin atacar durante el grunido
+
+// PERSONALIDADES: cada zombie nace con caracter propio (semilla = id, determinista:
+// el respawn reusa el id => mismo caracter). El boss SIEMPRE es tanque.
+const MOB_PERSONAS = {
+  normal:   { speed: 1.0, hp: 1.0, dmg: 1.0 },
+  corredor: { speed: 1.3, hp: 0.8, dmg: 1.0 },   // flaco y rapido, muere antes
+  tanque:   { speed: 0.8, hp: 1.4, dmg: 1.3 },   // lento pero aguanta y muerde fuerte
+};
+function mobPersona(id, boss) {
+  if (boss) return 'tanque';
+  const h = (id * 2654435761) >>> 0;   // hash multiplicativo de Knuth, barato y estable
+  const r = h % 10;
+  if (r < 3) return 'corredor';   // 30%
+  if (r < 5) return 'tanque';     // 20%
+  return 'normal';                // 50%
+}
+
 // top 5 de rachas del dia (se resetea cada 24h)
 let topStreaks = [];
 const rankReset = setInterval(() => { topStreaks = []; broadcastAll({ t: 'top', list: [] }); }, 86400000);
@@ -280,9 +307,11 @@ function loadMobSpawns() {
   }
 }
 
-// crea un objeto mob desde un spawn. hpMax = 30 + lvl*16 (early amable); boss x4.
+// crea un objeto mob desde un spawn. hpMax = 30 + lvl*16 (early amable); boss x4;
+// la personalidad multiplica hp/velocidad/dano encima de eso.
 function makeMob(id, spawn) {
-  const hpMax = (30 + spawn.lvl * 16) * (spawn.boss ? 4 : 1);
+  const persona = mobPersona(id, !!spawn.boss);
+  const hpMax = Math.round((30 + spawn.lvl * 16) * (spawn.boss ? 4 : 1) * MOB_PERSONAS[persona].hp);
   return {
     id,
     x: spawn.x,
@@ -302,12 +331,21 @@ function makeMob(id, spawn) {
     wanderX: null,
     wanderZ: null,
     nextWanderMs: 0,
+    persona,
+    // RODEO: angulo propio alrededor del objetivo (angulo aureo por id = reparto parejo)
+    surroundA: (id * 2.39996323) % (Math.PI * 2),
+    // ZIGZAG: fase propia del desvio senoidal (que no caminen en fila india)
+    zigPhase: (id * 1.7) % (Math.PI * 2),
+    // TIMING: false hasta el primer contacto de cada enganche => primer golpe desfasado
+    _engaged: false,
   };
 }
 
 // representacion publica del mob para los clientes.
+// k2 = personalidad (0 normal, 1 corredor, 2 tanque) por si el cliente quiere pintarla.
 function mobView(m) {
-  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, zone: m.zone, b: m.boss ? 1 : 0 };
+  const k2 = m.persona === 'corredor' ? 1 : (m.persona === 'tanque' ? 2 : 0);
+  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, k2, zone: m.zone, b: m.boss ? 1 : 0 };
 }
 
 // spawnea hasta MOB_CAP mobs en spawns DISTINTOS (toma los primeros N).
@@ -357,6 +395,46 @@ function stepToward(mob, tx, tz, step) {
   return true;
 }
 
+// SEPARACION boids barata: empuje suave lejos de los mobs del MISMO pack
+// (mismo targetId). NO es O(n^2): los packs se arman en una pasada O(n) por
+// tick y cada mob revisa a lo sumo MOB_SEP_MAX_CHECK vecinos (offset por id
+// para que no miren todos a los mismos). No toca mob.h: siguen mirando al
+// objetivo mientras se acomodan.
+function applyMobSeparation(mob, pack, dt) {
+  if (!pack || pack.length < 2) return;
+  const n = pack.length;
+  const start = mob.id % n;   // ventana propia por id: reparte los chequeos
+  let px = 0, pz = 0, checked = 0, found = false;
+  for (let k = 0; k < n && checked < MOB_SEP_MAX_CHECK; k++) {
+    const o = pack[(start + k) % n];
+    if (o === mob || o.hp <= 0) continue;
+    checked++;
+    const dx = mob.x - o.x, dz = mob.z - o.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= MOB_SEP_RADIUS * MOB_SEP_RADIUS) continue;
+    const d = Math.sqrt(d2);
+    if (d < 0.001) {
+      // apilados EXACTOS: separa con angulo aureo por id (unico por mob, evita NaN)
+      const a = (mob.id * 2.39996323) % (Math.PI * 2);
+      px += Math.cos(a); pz += Math.sin(a);
+    } else {
+      const w = (MOB_SEP_RADIUS - d) / MOB_SEP_RADIUS;   // mas cerca = mas empuje
+      px += (dx / d) * w; pz += (dz / d) * w;
+    }
+    found = true;
+  }
+  if (!found) return;
+  const m = Math.hypot(px, pz);
+  if (m < 0.0001) return;
+  const nx = mob.x + (px / m) * MOB_SEP_FORCE * dt;
+  const nz = mob.z + (pz / m) * MOB_SEP_FORCE * dt;
+  // el empuje respeta gruta y sello igual que stepToward
+  if (Math.hypot(nx - SAFE_X, nz - SAFE_Z) < SAFE_R - 3) return;
+  if (Math.hypot(nx - SEAL_X, nz - SEAL_Z) < SEAL_R) return;
+  mob.x = nx;
+  mob.z = nz;
+}
+
 function clearMobWander(mob) {
   mob.wanderX = null;
   mob.wanderZ = null;
@@ -394,7 +472,8 @@ function stepMobWander(mob, now, dt) {
 // balance: los clusters fundian al lvl 1 en segundos; pegan menos y desde
 // mas cerca para que la primera experiencia no sea morir camninando
 function mobDamage(mob) {
-  return 4 + mob.lvl * 2;   // balance horda: varios pegando a la vez
+  const pk = MOB_PERSONAS[mob.persona] || MOB_PERSONAS.normal;
+  return Math.round((4 + mob.lvl * 2) * pk.dmg);   // balance horda: varios pegando a la vez
 }
 
 function mobTick() {
@@ -402,6 +481,15 @@ function mobTick() {
   const dt = MOB_TICK_MS / 1000;
   const now = Date.now();
   const changed = [];
+  // pasada O(n): agrupa mobs por targetId (del tick anterior, persiste) para
+  // la separacion. Un tick de lag en el pack es invisible e irrelevante.
+  const packs = new Map();
+  for (const mob of mobs.values()) {
+    if (mob.hp <= 0 || mob.targetId == null) continue;
+    let arr = packs.get(mob.targetId);
+    if (!arr) { arr = []; packs.set(mob.targetId, arr); }
+    arr.push(mob);
+  }
   for (const mob of mobs.values()) {
     if (mob.hp <= 0) continue;
     // zombies de oleada vencidos: de vuelta a la tumba (sin loot, by -1).
@@ -416,6 +504,7 @@ function mobTick() {
     let state = 'idle';
     if (distHome > MOB_LEASH_RANGE) {
       mob.targetId = null;
+      mob._engaged = false;   // enganche roto: el proximo primer golpe vuelve a desfasarse
       if (stepToward(mob, mob.spawnX, mob.spawnZ, MOB_RETURN_SPEED * dt)) state = 'walk';
     } else {
       const target = nearestMobTarget(mob);
@@ -423,20 +512,45 @@ function mobTick() {
         const [tid, c, d] = target;
         mob.targetId = tid;
         clearMobWander(mob);
+        const pk = MOB_PERSONAS[mob.persona] || MOB_PERSONAS.normal;
         if (d > MOB_ATTACK_RANGE) {
           // PANICO: al verte cerca CORREN (x1.7), y en el ultimo tramo EMBISTEN
           const rush = d < 4 ? 2.3 : (d < 11 ? 1.7 : 1);
-          if (stepToward(mob, c.x, c.z, MOB_SPEED * rush * dt)) state = 'walk';
+          // RODEO: cerca del objetivo cada mob apunta a SU punto del anillo,
+          // no al centro del jugador => la manada rodea en vez de apilarse
+          let tx = c.x, tz = c.z;
+          if (d < MOB_SURROUND_DIST) {
+            tx = c.x + Math.sin(mob.surroundA) * MOB_SURROUND_R;
+            tz = c.z + Math.cos(mob.surroundA) * MOB_SURROUND_R;
+          }
+          // ZIGZAG: desvio senoidal perpendicular al avance (fase por id,
+          // periodo ~1.6s) que se apaga al acercarse para no fallar la mordida
+          const zigK = Math.min(1, (d - MOB_ATTACK_RANGE) / 6);
+          const zig = Math.sin(now / 260 + mob.zigPhase) * MOB_ZIGZAG_AMP * zigK;
+          const ux = (c.x - mob.x) / d, uz = (c.z - mob.z) / d;
+          tx += -uz * zig;
+          tz += ux * zig;
+          if (stepToward(mob, tx, tz, MOB_SPEED * rush * pk.speed * dt)) state = 'walk';
         } else {
           mob.h = Math.atan2(c.x - mob.x, c.z - mob.z);
           state = 'attack';
-          if (mob.hitCdMs <= 0) {
+          if (!mob._engaged) {
+            // primer contacto del enganche: golpe DESFASADO 0-600ms para que
+            // la manada no muerda toda en el mismo frame
+            mob._engaged = true;
+            mob.hitCdMs = Math.max(mob.hitCdMs, Math.random() * MOB_FIRST_HIT_JITTER_MS);
+          } else if (mob.hitCdMs <= 0) {
             mob.hitCdMs = MOB_ATTACK_CD_MS;
+            // GRUNIDO: 10% de las veces se toma 0.8s extra tras golpear (ritmo organico)
+            if (Math.random() < MOB_GROWL_CHANCE) mob.hitCdMs += MOB_GROWL_MS;
             send(c.ws, { t: 'phit', id: mob.id, dmg: mobDamage(mob), hp: null });
           }
         }
+        // SEPARACION: acomodo suave contra companeros del mismo pack (walk y attack)
+        applyMobSeparation(mob, packs.get(tid), dt);
       } else {
         mob.targetId = null;
+        mob._engaged = false;
         if (stepMobWander(mob, now, dt)) state = 'walk';
       }
     }
