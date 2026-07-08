@@ -5,7 +5,7 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260708w';
+import { createToonSkyTexture } from './worldmat.js?v=20260708x';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -80,25 +80,34 @@ export function createIntroScene(appVersion) {
       g.scene.traverse((o) => { if (/^sauce_[a-d]$/.test(o.name)) protos.push(o); });
       if (!protos.length) return;
       const rng = (() => { let s = 420; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
-      for (let i = 0; i < 14; i++) {
-        const t = protos[i % protos.length].clone(true);
-        // anillo interior + dispersos afuera; ninguno tapando el centro
-        const ang = rng() * Math.PI * 2;
-        const r = i < 8 ? 26 + rng() * 12 : 46 + rng() * 50;   // claro central despejado
-        const h = 5.2 + rng() * 2.8;
+      const plant = (parent, ang, r, h) => {
+        const t = protos[(rng() * protos.length) | 0].clone(true);
         t.scale.setScalar(h / 20.6);
         t.position.set(Math.sin(ang) * r, 0, Math.cos(ang) * r);
         t.rotation.y = rng() * Math.PI * 2;
         t.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = true; } });
-        scene.add(t);
+        parent.add(t);
+      };
+      // login: claro con sauces enmarcando
+      for (let i = 0; i < 14; i++) {
+        plant(scene, rng() * Math.PI * 2, i < 8 ? 26 + rng() * 12 : 46 + rng() * 50, 5.2 + rng() * 2.8);
+      }
+      // carga: BOSQUE DE SAUCES — grandes, por todos lados, cuadro lleno
+      for (let i = 0; i < 30; i++) {
+        plant(forest, rng() * Math.PI * 2, 8 + rng() * 46, 7.5 + rng() * 4.5);
       }
     })
     .catch(() => { /* sin arboles: el fondo CSS de respaldo sigue ahi */ });
 
-  // dos camaras: paseo a ras de suelo (login) / vista aerea del parque (carga)
+  // bosque denso de la pantalla de carga (oculto durante el login)
+  const forest = new THREE.Group();
+  forest.visible = false;
+  scene.add(forest);
+
+  // dos camaras: paseo a ras de suelo (login) / INMERSION en el bosque (carga)
   let mode = 'ground';
   let t0 = performance.now();
-  function setMode(m) { mode = m; }
+  function setMode(m) { mode = m; forest.visible = m !== 'ground'; }
 
   const onResize = () => {
     camera.aspect = innerWidth / innerHeight;
@@ -118,10 +127,10 @@ export function createIntroScene(appVersion) {
       camera.position.set(Math.sin(a) * 9, 2.3 + Math.sin(t * 0.3) * 0.25, Math.cos(a) * 9);
       camera.lookAt(Math.sin(a + 1.1) * 30, 5.2, Math.cos(a + 1.1) * 30);
     } else {
-      // toma de DRONE: baja, oblicua, con horizonte y sauces en cuadro
-      const a = t * 0.035;
-      camera.position.set(Math.sin(a) * 30, 17 + Math.sin(t * 0.25) * 1.5, Math.cos(a) * 30);
-      camera.lookAt(Math.sin(a + 1.5) * 10, 3, Math.cos(a + 1.5) * 10);
+      // DENTRO del bosque: sauces gigantes llenando el cuadro por todos lados
+      const a = t * 0.03;
+      camera.position.set(Math.sin(a) * 16, 4.6 + Math.sin(t * 0.2) * 0.6, Math.cos(a) * 16);
+      camera.lookAt(Math.sin(a + 0.8) * 34, 6.5, Math.cos(a + 0.8) * 34);
     }
     renderer.render(scene, camera);
   })();
