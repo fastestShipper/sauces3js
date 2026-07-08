@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708c';
-import { makeNametag } from './nametag.js?v=20260708c';
-import { cloneSkinned } from './npcs.js?v=20260708c';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708c';
-import { showBubble } from './chat.js?v=20260708c';
-import { WS_URL } from './rpg/account.js?v=20260708c';
+import { sanitizeImported } from './glbutil.js?v=20260708d';
+import { makeNametag } from './nametag.js?v=20260708d';
+import { cloneSkinned } from './npcs.js?v=20260708d';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708d';
+import { showBubble } from './chat.js?v=20260708d';
+import { WS_URL } from './rpg/account.js?v=20260708d';
 
 const SCALE = 1.9 / 2.54;
 
