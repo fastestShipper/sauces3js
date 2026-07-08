@@ -85,6 +85,8 @@ export function installTouchControls({ player, combat }) {
   btn('tc-atk', 'ATK', () => {
     if (player.locked) return;
     if (!combat.targetId && combat.pvpId == null) combat._cycleTarget();
+    // PvP tactil: el tap en ATK es el golpe deliberado a humanos
+    if (combat.manualAttack && combat.manualAttack()) return;
     player.attack();
   });
   btn('tc-jmp', 'SALTO', () => {

@@ -62,6 +62,9 @@ export class Combat {
     // el server avisa cuando un mob muere; canal aparte del render (onMobDead lo usa MobField)
     this.net.onMobKilled = (id, by, party) => this._onMobDead(id, by, party);
     this.net.onPlayerHit = (hit) => this._onPlayerHit(hit);
+    // clic izq = golpe PvP deliberado si hay rival targeteado (a humanos no se
+    // les auto-ataca); contra zombies el auto-loop de update() ya cubre
+    addEventListener('mousedown', (e) => { if (e.button === 0) this.manualAttack(); });
 
     this.hud.setHP(this.hp, this.hpMax);
     this.hud.setXP(this.prog.xp, this.prog.xpNext, this.prog.level);
@@ -243,27 +246,36 @@ export class Combat {
       return;
     }
     // PvP: auto-ataque contra el jugador targeteado (el server valida rango/zona)
+    // PvP: a HUMANOS no se les auto-ataca. El frame muestra su vida; el golpe
+    // solo sale con CLIC deliberado (manualAttack), a diferencia de los zombies.
     const rival = this.pvpId != null ? this.net.remotes.get(this.pvpId) : null;
     if (rival && rival.ready) {
-      // frame del rival con su vida REAL (llega en el estado 's' del relay)
       this.hud.showTarget('⚔ ' + (rival.name || 'Jugador'), rival.hp ?? 1, rival.hpMax ?? 1);
-      const d = Math.hypot(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
-      if (d < ATTACK_RANGE && this.attackCd <= 0 && !this.player.locked) {
-        this.attackCd = ATTACK_CD;
-        this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
-        this.player.attack();
-        if (this.sfx) { this.sfx.swing(); this.sfx.hit(false); }
-        this.hitStopT = 0.045;
-        const atk = this._playerAtk();
-        if (this.effects) {
-          const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
-          if (ptype) this.effects.projectile({ x: this.player.pos.x, y: 1.35, z: this.player.pos.z }, { x: rival.x, y: 0.9, z: rival.z }, ptype);
-          this.effects.bloodHit({ x: rival.x, y: 1.0, z: rival.z });
-        }
-        if (this.skills) this.skills.onHit();
-        this.net.attackPlayer(this.pvpId, atk);   // el SERVER valida y se lo manda a la victima
-      }
     }
+  }
+
+  // golpe PvP MANUAL: clic izquierdo / boton ATK con un jugador targeteado en
+  // rango. La agresion a humanos es siempre una decision, nunca un automatismo.
+  manualAttack() {
+    if (this.dead || this.player.locked) return false;
+    const rival = this.pvpId != null ? this.net.remotes.get(this.pvpId) : null;
+    if (!rival || !rival.ready) return false;
+    const d = Math.hypot(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
+    if (d >= ATTACK_RANGE || this.attackCd > 0) return false;
+    this.attackCd = ATTACK_CD;
+    this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
+    this.player.attack();
+    if (this.sfx) { this.sfx.swing(); this.sfx.hit(false); }
+    this.hitStopT = 0.045;
+    const atk = this._playerAtk();
+    if (this.effects) {
+      const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
+      if (ptype) this.effects.projectile({ x: this.player.pos.x, y: 1.35, z: this.player.pos.z }, { x: rival.x, y: 0.9, z: rival.z }, ptype);
+      this.effects.bloodHit({ x: rival.x, y: 1.0, z: rival.z });
+    }
+    if (this.skills) this.skills.onHit();
+    this.net.attackPlayer(this.pvpId, atk);   // el SERVER valida y se lo manda a la victima
+    return true;
   }
 
   // dano PvP entrante (de otro jugador, ya validado por el server)
