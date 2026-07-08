@@ -60,22 +60,23 @@ function applyWillow(tree, { droop = 0.1, lean = 0, seed = 1, levels = 2 } = {})
   // 2. esqueleto SIMPLE (levels 2) = menos ramas peladas sobresaliendo
   // 3. hojas desde start 0 y count alto = el esqueleto queda CUBIERTO
   o.branch.levels = levels;
-  o.branch.angle = { 1: 72, 2: 48, 3: 40 };
-  // primarias CORTAS + muchas secundarias LARGAS desde temprano (start 0.12):
-  // la punta pelada de la primaria queda envuelta por follaje de secundarias
+  // COPA CON PORTE (feedback: "copa caida como sin esqueleto"): las ramas
+  // estructurales suben (angle 1 cerrado, casi sin force) y forman cupula
+  // alta; el "llanto" lo dan las puntas apenas dobladas + hojas COLGANTES
+  o.branch.angle = { 1: 52, 2: 62, 3: 40 };
   o.branch.children = levels === 2 ? { 0: 6, 1: 4, 2: 2 } : { 0: 4, 1: 3, 2: 2 };
   o.branch.force = { direction: { x: lean, y: -1, z: 0 }, strength: droop };
   o.branch.gnarliness = { 0: 0.02, 1: 0.03, 2: 0.05, 3: 0.05 };
-  o.branch.length = { 0: 9, 1: 7, 2: 7.5, 3: 3 };
+  o.branch.length = { 0: 9, 1: 9, 2: 7, 3: 3 };
   o.branch.radius = { 0: 1.5, 1: 0.55, 2: 0.45, 3: 0.35 };
   o.branch.sections = { 0: 4, 1: 7, 2: 5, 3: 3 };
   o.branch.segments = { 0: 5, 1: 4, 2: 3, 3: 3 };
-  o.branch.start = { 1: 0.5, 2: 0.12, 3: 0.2 };
+  o.branch.start = { 1: 0.45, 2: 0.15, 3: 0.2 };
   o.branch.taper = { 0: 0.85, 1: 0.8, 2: 0.7, 3: 0.7 };
   o.branch.twist = { 0: 0.05, 1: 0.08, 2: 0, 3: 0 };
   o.leaves.type = 'ash';
   o.leaves.billboard = 'double';
-  o.leaves.angle = 68;
+  o.leaves.angle = 84;   // hojas casi verticales = cortina colgante de sauce
   o.leaves.count = levels === 2 ? 17 : 12;
   o.leaves.start = 0;
   o.leaves.size = 2.7;
@@ -146,10 +147,10 @@ const WSLIM = { leafMul: 1, leafSizeMul: 1, childMax: [6, 3, 2] };
 // TODAS levels 2: esqueleto simple bien cubierto (el levels 3 asomaba puntas
 // peladas que en el juego leian como "arboles destrozados")
 const TREE_SET = [
-  { name: 'sauce_a', willow: { droop: 0.08, lean: 0, seed: 505, levels: 2 }, slim: WSLIM },
-  { name: 'sauce_b', willow: { droop: 0.12, lean: 0.1, seed: 606, levels: 2 }, slim: WSLIM },
-  { name: 'sauce_c', willow: { droop: 0.09, lean: -0.08, seed: 303, levels: 2 }, slim: WSLIM },
-  { name: 'sauce_d', willow: { droop: 0.11, lean: 0.05, seed: 404, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_a', willow: { droop: 0.03, lean: 0, seed: 505, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_b', willow: { droop: 0.05, lean: 0.06, seed: 606, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_c', willow: { droop: 0.035, lean: -0.05, seed: 303, levels: 2 }, slim: WSLIM },
+  { name: 'sauce_d', willow: { droop: 0.045, lean: 0.03, seed: 404, levels: 2 }, slim: WSLIM },
 ];
 
 // modo preview (?preview=1): renderiza el set en pantalla para iterar params
