@@ -8,7 +8,7 @@ const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre haci
 const MAX_PARTICLES = 300;       // cap duro de particulas de sangre vivas
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
 const DEATH_LIFE = 0.6;          // vida de las particulas del estallido de muerte (s)
-const POOL_LIFE = 3.0;           // vida de la mancha en el piso (s)
+const POOL_LIFE = 7.0;           // vida de la mancha en el piso (s) — gore persistente
 const NUMBER_LIFE = 0.9;         // vida del numero de dano (s)
 const NUMBER_RISE = 1.2;         // cuanto sube el numero en su vida (u)
 const FLASH_LIFE = 0.15;         // vida del fogonazo de impacto (s)
@@ -77,9 +77,9 @@ export class Effects {
     this.projectiles = []; // { group, dir, speed, dist, traveled, color, type, to, trail }
   }
 
-  // Pequeno chorro de sangre: 8-12 particulas con velocidad radial + arriba.
+  // Chorro de sangre generoso: cada golpe SE SIENTE (gore ARPG).
   bloodHit(pos) {
-    this._spurt(pos, 8 + Math.floor(Math.random() * 5), 3.5, HIT_LIFE);
+    this._spurt(pos, 14 + Math.floor(Math.random() * 7), 4.4, HIT_LIFE);
   }
 
   // Estallido mayor (20-30 particulas) + mancha plana en el piso que se desvanece.
@@ -87,6 +87,18 @@ export class Effects {
     const p = readPos(pos);
     this._spurt(p, 20 + Math.floor(Math.random() * 11), 5.0, DEATH_LIFE);
     this._pool(p);
+  }
+
+  // GORE de kill zombie: explosion de sangre + esquirlas de hueso que rebotan
+  // + charco grande que persiste. streak alto = estallido mas grande.
+  goreBurst(pos, intensity = 1) {
+    const p = readPos(pos);
+    const k = Math.min(2, Math.max(1, intensity));
+    this._spurt(p, Math.round(26 * k), 6.0 * k, DEATH_LIFE * 1.2);
+    this._spurt(p, Math.round(8 * k), 4.5, 0.7, 0xe8e2d4);   // esquirlas de hueso
+    this._pool(p);
+    this._pool({ x: p.x + (Math.random() - 0.5) * 1.2, y: p.y, z: p.z + (Math.random() - 0.5) * 1.2 });
+    this.hitFlash(p, 0xff3020);
   }
 
   // Genera n particulas saliendo desde pos. spread = magnitud de la velocidad.
@@ -117,7 +129,7 @@ export class Effects {
   // Mancha plana roja en el piso (CircleGeometry horizontal). Escala y se desvanece.
   _pool(pos) {
     const p = readPos(pos);
-    const geo = new THREE.CircleGeometry(0.5 + Math.random() * 0.3, 16);
+    const geo = new THREE.CircleGeometry(0.7 + Math.random() * 0.5, 16);
     const mat = new THREE.MeshBasicMaterial({
       color: BLOOD_COLOR,
       transparent: true,

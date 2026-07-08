@@ -72,7 +72,23 @@ function injectStyle() {
 .rpg-hud-death .d-title { font-size: 46px; font-weight: 700; letter-spacing: 2px;
   color: #ff8a76; text-shadow: 0 4px 24px rgba(0,0,0,.8); }
 .rpg-hud-death .d-sub { font-size: 15px; font-weight: 500; color: #f2d9d4; }
-.rpg-hud-death .d-count { font-size: 30px; font-weight: 700; color: #ffe08a; }`;
+.rpg-hud-death .d-count { font-size: 30px; font-weight: 700; color: #ffe08a; }
+.rpg-hud-streak { right: 24px; top: 42%; text-align: right; background: none;
+  border: none; box-shadow: none; backdrop-filter: none; padding: 0;
+  opacity: 0; transform: scale(0.6); transition: opacity 180ms ease, transform 180ms cubic-bezier(0.16,1.6,0.3,1); }
+.rpg-hud-streak.is-on { opacity: 1; transform: scale(1); }
+.rpg-hud-streak .s-num { font-size: 44px; font-weight: 700; color: #ff5a3c; line-height: 1;
+  text-shadow: 0 2px 0 rgba(60,4,0,.8), 0 6px 22px rgba(255,60,20,.55); }
+.rpg-hud-streak .s-label { font-size: 13px; font-weight: 700; letter-spacing: 2.5px;
+  color: #ffd9c8; text-transform: uppercase; }
+.rpg-hud-streak .s-mult { font-size: 15px; font-weight: 700; color: #ffe08a; }
+.rpg-hud-banner { left: 50%; top: 22%; transform: translate(-50%, -10px) scale(0.85);
+  background: rgba(30,6,8,0.88); border-color: rgba(255,80,50,0.55);
+  font-size: 24px; font-weight: 700; letter-spacing: 2px; text-align: center;
+  color: #ff8a76; padding: 14px 30px; border-radius: 16px;
+  text-transform: uppercase; opacity: 0;
+  transition: opacity 260ms ease, transform 260ms cubic-bezier(0.16,1.4,0.3,1); }
+.rpg-hud-banner.is-on { opacity: 1; transform: translate(-50%, 0) scale(1); }`;
   const el = document.createElement('style');
   el.id = STYLE_ID;
   el.textContent = css;
@@ -111,6 +127,12 @@ export class HUD {
         <div><span class="rpg-hud-qcount">0/0</span><span class="rpg-hud-qtext"></span></div>
       </div>
       <div class="rpg-hud-panel rpg-hud-toast"></div>
+      <div class="rpg-hud-panel rpg-hud-streak">
+        <div class="s-num">x2</div>
+        <div class="s-label">Racha</div>
+        <div class="s-mult"></div>
+      </div>
+      <div class="rpg-hud-panel rpg-hud-banner"></div>
       <div class="rpg-hud-death"><div class="d-title">HAS CAÍDO</div>
         <div class="d-sub">La Virgen de la gruta te levanta…</div>
         <div class="d-count">3</div></div>`;
@@ -129,6 +151,11 @@ export class HUD {
     this.elQuestText = root.querySelector('.rpg-hud-qtext');
     this.elQuestCount = root.querySelector('.rpg-hud-qcount');
     this.elToast = root.querySelector('.rpg-hud-toast');
+    this.elStreak = root.querySelector('.rpg-hud-streak');
+    this.elStreakNum = root.querySelector('.rpg-hud-streak .s-num');
+    this.elStreakMult = root.querySelector('.rpg-hud-streak .s-mult');
+    this.elBanner = root.querySelector('.rpg-hud-banner');
+    this._bannerTimer = null;
     this.elGold = root.querySelector('.rpg-hud-gold-num');
     this.elDeath = root.querySelector('.rpg-hud-death');
     this.elDeathCount = root.querySelector('.rpg-hud-death .d-count');
@@ -178,6 +205,27 @@ export class HUD {
     const c = Math.max(0, Math.round(cur || 0));
     const g = Math.max(0, Math.round(goal || 0));
     this.elQuestCount.textContent = `${c}/${g}`;
+  }
+
+  // contador de racha: numero grande con pop (re-dispara la animacion en cada kill)
+  showStreak(n, mult) {
+    if (!this.elStreak) return;
+    this.elStreakNum.textContent = 'x' + n;
+    this.elStreakMult.textContent = mult > 1 ? '+' + Math.round((mult - 1) * 100) + '% botin' : '';
+    this.elStreak.classList.remove('is-on');
+    void this.elStreak.offsetWidth;   // reflow: reinicia la transicion de pop
+    this.elStreak.classList.add('is-on');
+  }
+
+  hideStreak() { if (this.elStreak) this.elStreak.classList.remove('is-on'); }
+
+  // banner central grande (oleadas / eventos). Se va solo a los 4s.
+  banner(text) {
+    if (!this.elBanner) return;
+    this.elBanner.textContent = text;
+    this.elBanner.classList.add('is-on');
+    if (this._bannerTimer) clearTimeout(this._bannerTimer);
+    this._bannerTimer = setTimeout(() => this.elBanner.classList.remove('is-on'), 4000);
   }
 
   toast(text) {

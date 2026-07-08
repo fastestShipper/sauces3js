@@ -83,6 +83,10 @@ class Sfx {
   heal() { this._tone({ type: 'sine', f0: 520, f1: 660, dur: 0.25, gain: 0.14 }); }
   click() { this._tone({ type: 'square', f0: 900, f1: 900, dur: 0.03, gain: 0.1 }); }
   pvpkill() { this._tone({ type: 'sawtooth', f0: 200, f1: 400, dur: 0.18, gain: 0.24 }); this._tone({ type: 'sawtooth', f0: 400, f1: 300, dur: 0.22, gain: 0.2, delay: 0.16 }); }
+  // la racha sube de tono con cada kill encadenado (feedback adictivo)
+  streak(n) { if (n < 2) return; const f = 660 * Math.pow(1.06, Math.min(20, n)); this._tone({ type: 'square', f0: f, f1: f * 1.5, dur: 0.09, gain: 0.16, delay: 0.12 }); }
+  // sirena corta de invasion (oleada zombie)
+  wave() { for (let i = 0; i < 2; i++) this._tone({ type: 'sawtooth', f0: 340, f1: 620, dur: 0.34, gain: 0.2, delay: i * 0.38 }); }
 }
 
 export function createSfx() { return new Sfx(); }

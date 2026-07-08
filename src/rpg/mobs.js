@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260707f';
+import { sanitizeImported } from '../glbutil.js?v=20260708b';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -23,10 +23,11 @@ const HIT_SPEED = 1.4;             // acelera el clip de impacto para que sea sn
 // kind % 4 -> tipo de esqueleto. El server manda kind; el cliente solo lo mapea a un look.
 const KIND_TO_TYPE = ['Minion', 'Rogue', 'Warrior', 'Mage'];
 
-// Tinte por nivel para que la horda no se vea uniforme. Niveles altos viran a rojizo.
+// Tinte ZOMBIE: verde putrefacto que oscurece con el nivel (los duros se ven
+// mas podridos). Multiplica el albedo hueso del pack = carne verdosa.
 function levelTint(lvl) {
-  const t = Math.min(1, Math.max(0, (lvl || 1) / 30));
-  return new THREE.Color().setHSL(0.58 - 0.58 * t, 0.18 + 0.25 * t, 0.95 - 0.12 * t);
+  const t = Math.min(1, Math.max(0, (lvl || 1) / 10));
+  return new THREE.Color().setHSL(0.29 - 0.05 * t, 0.45 + 0.15 * t, 0.72 - 0.22 * t);
 }
 
 // Barra de vida flotante: fondo oscuro + relleno verde. Dos planos apilados dentro
@@ -145,7 +146,14 @@ export class MobField {
 
   _onSpawn(mob) {
     const v = this._createMob(mob);
-    if (v) this._playOnce(v, 'Spawn_Ground');   // animacion de aparicion si existe
+    // el zombie se LEVANTA del suelo (Awaken); fallback al spawn generico
+    if (v) this._playOnce(v, v.actions.Awaken ? 'Awaken' : 'Spawn_Ground');
+  }
+
+  // golpe del mob al jugador: anim de ataque real (la avisa combat via phit)
+  playAttack(id) {
+    const v = this.mobs.get(id);
+    if (v && !v.dead) this._playOnce(v, 'Attack', 1.35);
   }
 
   // construye el Object3D + mixer + barra de vida de un mob. Idempotente por id.
@@ -164,6 +172,7 @@ export class MobField {
     catch { return null; }
     ch.scale.setScalar(SCALE);
     const tint = levelTint(mob.lvl);
+    const mats = [];
     ch.traverse(o => {
       if (!o.isMesh) return;
       o.castShadow = true;
@@ -171,6 +180,7 @@ export class MobField {
       if (o.material && o.material.color) {
         o.material = o.material.clone();
         o.material.color.multiply(tint);
+        mats.push(o.material);
       }
     });
     root.add(ch);
@@ -187,30 +197,36 @@ export class MobField {
       const clip = this.clips.find(c => c.name === name);
       return clip ? mixer.clipAction(clip) : null;
     };
-    actions.Idle = bind('Idle') || bind('Idle_B');
-    actions.Walk = bind('Walking_A') || bind('Walk') || bind('Run');
+    actions.Idle = bind('Idle_Combat') || bind('Idle') || bind('Idle_B');
+    // andar ZOMBIE del pack (arrastrado) con fallback al walk normal
+    actions.Walk = bind('Walking_D_Skeletons') || bind('Walking_A') || bind('Walk') || bind('Run');
     actions.Hit = bind('Hit_A') || bind('Hit_B');
+    actions.Attack = bind('1H_Melee_Attack_Slice_Diagonal') || bind('Unarmed_Melee_Attack_Punch_A');
     actions.Death = bind('Death_A') || bind('Death_B');
     actions.Spawn_Ground = bind('Spawn_Ground');
+    actions.Awaken = bind('Skeletons_Awaken_Floor') || null;
     if (actions.Idle) actions.Idle.play();
     const v = {
-      id: mob.id, root, ch, mixer, actions, bar, ring,
+      id: mob.id, root, ch, mixer, actions, bar, ring, mats,
       hp: mob.hp != null ? mob.hp : (mob.hpMax || 1),
       hpMax: mob.hpMax || mob.hp || 1,
       tx: mob.x || 0, tz: mob.z || 0, th: mob.h || 0, state: mob.state || 'idle',
-      busyT: 0, dead: false,
+      busyT: 0, dead: false, flashT: 0,
     };
     this.mobs.set(mob.id, v);
     return v;
   }
 
-  // recibo de daño: actualiza la barra y dispara Hit_A (one-shot, vuelve a Idle).
+  // recibo de daño: barra + Hit one-shot + FLASH blanco del material (gore juice)
   _onHp(id, hp) {
     const v = this.mobs.get(id);
     if (!v) return;
     v.hp = hp;
     setHpFill(v.bar, v.hpMax ? hp / v.hpMax : 0);
-    if (!v.dead) this._playOnce(v, 'Hit', HIT_SPEED);
+    if (!v.dead) {
+      this._playOnce(v, 'Hit', HIT_SPEED);
+      v.flashT = 0.14;
+    }
   }
 
   // movimiento/state server-side: el render interpola hacia tx/tz y rota al heading.
@@ -282,6 +298,12 @@ export class MobField {
         }
       }
       if (v.mixer) { try { v.mixer.update(dt); } catch {} }
+      // flash blanco al recibir golpe: emissive que decae rapido
+      if (v.flashT > 0) {
+        v.flashT -= dt;
+        const k = Math.max(0, v.flashT / 0.14);
+        for (const m of v.mats) if (m.emissive) m.emissive.setScalar(k * 0.9);
+      }
       if (cam && v.bar && v.bar.group) v.bar.group.quaternion.copy(cam.quaternion);
     }
     // mobs muriendo: terminar la pose y retirarlos al expirar el temporizador

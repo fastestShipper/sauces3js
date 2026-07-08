@@ -1,9 +1,9 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260707f';
-import { makeNametag } from './nametag.js?v=20260707f';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260707f';
+import { sanitizeImported } from './glbutil.js?v=20260708b';
+import { makeNametag } from './nametag.js?v=20260708b';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708b';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -37,6 +37,9 @@ export class Player {
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     this.dragging = false;
     this.attackT = 0;
+    this.comboT = 0;
+    this.comboIdx = 0;
+    this.comboStep = 0;
     this.dead = false;
     this.hitT = 0;
     this.locked = false;   // true mientras el chat esta abierto: ignora WASD/salto/ataque
@@ -86,9 +89,21 @@ export class Player {
       const clip = findClip(re);
       if (clip) this.actions[state] = this.mixer.clipAction(clip);
     }
-    // ataque: clip de accion real (one-shot), acelerado para que sea snappy
-    const aClip = clips.find(c => c.name === attackClipName(this.charFile));
-    if (aClip) this.actions['Attack'] = this.mixer.clipAction(plantClip(aClip));
+    // COMBO ARPG: cadena de clips reales por clase (1-2-3, el ultimo = finisher)
+    this.comboActions = [];
+    for (const cn of comboClips(this.charFile)) {
+      const c = clips.find(k => k.name === cn);
+      if (c) this.comboActions.push(this.mixer.clipAction(plantClip(c)));
+    }
+    if (!this.comboActions.length) {
+      const th = clips.find(k => k.name === 'Throw');
+      if (th) this.comboActions.push(this.mixer.clipAction(plantClip(th)));
+    }
+    this.comboIdx = 0;
+    this.comboT = 0;
+    // skill Q: clip dramatico propio (jump chop / spin / summon)
+    const sClip = clips.find(c => c.name === specialClipName(this.charFile));
+    if (sClip) this.actions['Special'] = this.mixer.clipAction(plantClip(sClip));
     // reaccion al daño (Hit) + muerte (Death): clips reales del pack
     const hitClip = clips.find(c => c.name === 'Hit_A' || c.name === 'Hit_B');
     if (hitClip) this.actions['Hit'] = this.mixer.clipAction(plantClip(hitClip));
@@ -97,19 +112,43 @@ export class Player {
     this.play('Idle');
   }
 
-  // ataque one-shot con un clip real; bloquea reintento y locomocion mientras dura
+  // golpe del combo: cicla los clips de la clase. El ultimo 35% de cada anim es
+  // CANCELABLE (attackT corto) = cadencia ARPG; la ventana comboT encadena 1-2-3.
   attack() {
-    const a = this.actions['Attack'];
-    if (this.locked || this.attackT > 0 || !a) return;
+    if (this.locked || this.attackT > 0 || this.dead || !this.comboActions?.length) return false;
+    if (this.comboT <= 0) this.comboIdx = 0;   // ventana vencida: reinicia el combo
+    this.comboStep = this.comboIdx % this.comboActions.length;
+    const a = this.comboActions[this.comboStep];
+    this.comboIdx++;
+    this.comboT = 1.5;
     if (this.sfx) this.sfx.swing();
     a.reset();
     a.setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
     a.timeScale = ATTACK_SPEED;
-    this.attackT = a.getClip().duration / ATTACK_SPEED;
-    if (this.cur && this.actions[this.cur]) a.crossFadeFrom(this.actions[this.cur], 0.12, false);
+    this.attackT = (a.getClip().duration / ATTACK_SPEED) * 0.65;
+    if (this.cur && this.actions[this.cur]) a.crossFadeFrom(this.actions[this.cur], 0.08, false);
     a.play();
+    this.actions['Attack'] = a;   // para que play()/otros crossfades encuentren la actual
     this.cur = 'Attack';
+    return true;
+  }
+
+  // skill Q: clip dramatico completo (sin cancel), mas lento y con peso
+  attackSpecial() {
+    const a = this.actions['Special'];
+    if (this.locked || this.dead || !a) return this.attack();
+    if (this.sfx) this.sfx.swing();
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    a.timeScale = 1.25;
+    this.attackT = a.getClip().duration / 1.25;
+    if (this.cur && this.actions[this.cur] && this.actions[this.cur] !== a) a.crossFadeFrom(this.actions[this.cur], 0.1, false);
+    a.play();
+    this.actions['Attack'] = a;
+    this.cur = 'Attack';
+    return true;
   }
 
   // tambaleo corto al recibir daño (no interrumpe ataque ni muerte)
@@ -213,6 +252,8 @@ export class Player {
     }
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.heading;
+    // la ventana de combo corre SIEMPRE (encadena entre golpes, no solo durante)
+    this.comboT -= dt;
     // prioridad de animacion: muerte > ataque > tambaleo > salto > locomocion
     if (this.dead) {
       // mantener la pose de Death; no pisar con nada

@@ -1,7 +1,7 @@
 // Cosmetic weapons: attach each class's weapon to the KayKit hand slot bones
 // (handslot.r / handslot.l). Shared by player, NPCs and remote players. The
 // attack uses a REAL animator-made clip (not a hand-rolled bone rotation).
-import { sanitizeImported } from './glbutil.js?v=20260707f';
+import { sanitizeImported } from './glbutil.js?v=20260708b';
 
 const WEAPON_BY_CHAR = {
   'char_knight.glb': { r: 'sword_1handed', l: 'shield_round' },
@@ -95,5 +95,34 @@ export function attackClipName(charFile) {
   return ATTACK_BY_CHAR[charFile] || 'Throw';
 }
 
-// el clip dura ~1.37s; lo aceleramos para que el ataque se sienta snappy
-export const ATTACK_SPEED = 1.3;
+// COMBO ARPG: cadena de clips reales por clase; el ultimo golpe es el finisher.
+// Las clases a distancia repiten su cast/disparo (el combo alli es la cadencia).
+const COMBO_BY_CHAR = {
+  'char_knight.glb': ['Melee_1H_Attack_Slice_Horizontal', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
+  'char_barbarian.glb': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spin'],
+  'char_rogue.glb': ['Melee_1H_Attack_Stab', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
+  'char_rogue_hooded.glb': ['Melee_1H_Attack_Stab', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
+  'char_mage.glb': ['Ranged_Magic_Shoot'],
+  'char_ranger.glb': ['Ranged_Bow_Release'],
+  'char_cernunnos.glb': ['Ranged_Magic_Shoot'],
+};
+export function comboClips(charFile) {
+  return COMBO_BY_CHAR[charFile] || [attackClipName(charFile)];
+}
+
+// clip dramatico para la skill Q de las clases melee (los ranged castean)
+const SPECIAL_BY_CHAR = {
+  'char_knight.glb': 'Melee_1H_Attack_Jump_Chop',
+  'char_barbarian.glb': 'Melee_2H_Attack_Spinning',
+  'char_rogue.glb': 'Melee_Dualwield_Attack_Slice',
+  'char_rogue_hooded.glb': 'Melee_Dualwield_Attack_Slice',
+  'char_mage.glb': 'Ranged_Magic_Spellcasting',
+  'char_ranger.glb': 'Ranged_Bow_Release_Up',
+  'char_cernunnos.glb': 'Ranged_Magic_Summon',
+};
+export function specialClipName(charFile) {
+  return SPECIAL_BY_CHAR[charFile] || attackClipName(charFile);
+}
+
+// cadencia ARPG: clips acelerados para que el combo se sienta snappy
+export const ATTACK_SPEED = 1.45;

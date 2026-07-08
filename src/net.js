@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260707f';
-import { makeNametag } from './nametag.js?v=20260707f';
-import { cloneSkinned } from './npcs.js?v=20260707f';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260707f';
-import { showBubble } from './chat.js?v=20260707f';
-import { WS_URL } from './rpg/account.js?v=20260707f';
+import { sanitizeImported } from './glbutil.js?v=20260708b';
+import { makeNametag } from './nametag.js?v=20260708b';
+import { cloneSkinned } from './npcs.js?v=20260708b';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708b';
+import { showBubble } from './chat.js?v=20260708b';
+import { WS_URL } from './rpg/account.js?v=20260708b';
 
 const SCALE = 1.9 / 2.54;
 
@@ -61,6 +61,7 @@ export class Net {
     this.onMobSpawn = null;      // (mob)
     this.onMobKilled = null;     // (id, by, party) -> el combate da XP (canal aparte del render visual)
     this.onPlayerHit = null;     // ({ id, dmg, hp }) -> dano server-side al jugador
+    this.onWave = null;          // ({ x, z }) -> banner de oleada zombie
     this.onParty = null;         // (members)
     this.onPartyInvited = null;  // (fromId, name)
     // ===== PvP + friends =====
@@ -151,6 +152,7 @@ export class Net {
       this.party = m.members || [];
       if (this.onParty) this.onParty(this.party);
     }
+    else if (m.t === 'wave') { if (this.onWave) this.onWave({ x: m.x, z: m.z }); }
     else if (m.t === 'pvph') { if (this.onPvpHit) this.onPvpHit({ from: m.from, name: m.name, dmg: m.dmg }); }
     else if (m.t === 'pvpkill') { if (this.onPvpKill) this.onPvpKill(m.killer, m.victim); }
     else if (m.t === 'pvpsafe') { if (this.onPvpSafe) this.onPvpSafe(); }

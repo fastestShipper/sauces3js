@@ -4,9 +4,15 @@
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
 
-const ATTACK_CD = 0.9;       // segundos entre auto-ataques
-const ATTACK_RANGE = 3.6;    // rango para pegar
+const ATTACK_CD = 0.42;      // cadencia ARPG: golpes rapidos encadenados
+const RANGE_MELEE = 2.7;     // CUERPO A CUERPO real: la espada toca al zombie
+const RANGE_RANGED = 11;     // mago/arquero castean a distancia (como debe ser)
+const ATTACK_RANGE = 3.6;    // rango del PvP (el server valida 5m)
 const RESPAWN_T = 3.0;
+const CRIT_CHANCE = 0.18;    // golpes criticos x2 (numeros dorados grandes)
+const CLEAVE_RANGE = 3.0;    // el tajo melee barre en arco a los cercanos
+const CLEAVE_ARC = 1.25;     // ± rad respecto al heading (~140 grados)
+const STREAK_WINDOW = 6;     // s para encadenar kills en racha
 
 // clases a distancia disparan un proyectil visible al atacar
 const PROJECTILE_BY_CHAR = {
@@ -35,6 +41,8 @@ export class Combat {
     this.targetId = null;
     this.pvpId = null;       // conn-id del jugador targeteado (excluyente con targetId)
     this.attackCd = 0;
+    this.streak = 0;         // kills encadenados dentro de la ventana
+    this.streakT = 0;
     this.dead = false;
     this.respawnT = 0;
     this.hpMax = this.prog.hpMax;
@@ -110,7 +118,7 @@ export class Combat {
     this.targetId = id;
     this.mobField.setTargeted(id, true);
     const m = this.net.mobs.get(id);
-    if (m) this.hud.showTarget('Esqueleto Nv.' + m.lvl, m.hp, m.hpMax);
+    if (m) this.hud.showTarget('Zombi Nv.' + m.lvl, m.hp, m.hpMax);
   }
 
   _setPvpTarget(pid) {
@@ -124,6 +132,28 @@ export class Combat {
   _playerAtk() {
     const w = this.inv.equippedWeapon;
     return 9 + this.prog.level * 2 + (w ? w.atk * 0.5 : 0);
+  }
+
+  // tajo en arco: pega a hasta 2 zombies extra frente al jugador (70% del daño)
+  _cleave(mainId, dmg) {
+    const px = this.player.pos.x, pz = this.player.pos.z, hd = this.player.heading;
+    let extra = 0;
+    for (const m of this.net.mobs.values()) {
+      if (extra >= 2 || m.id === mainId) continue;
+      const dx = m.x - px, dz = m.z - pz;
+      if (Math.hypot(dx, dz) > CLEAVE_RANGE) continue;
+      let diff = Math.atan2(dx, dz) - hd;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > CLEAVE_ARC) continue;
+      extra++;
+      const sdmg = Math.round(dmg * 0.7);
+      this.net.attackMob(m.id, sdmg);
+      if (this.effects) {
+        this.effects.bloodHit({ x: m.x, y: 1.0, z: m.z });
+        this.effects.damageNumber({ x: m.x, y: 1.6, z: m.z }, sdmg, {});
+      }
+    }
   }
 
   _isMoving() {
@@ -156,23 +186,40 @@ export class Combat {
     if (this.targetId && !this.net.mobs.has(this.targetId)) { this.targetId = null; this.hud.hideTarget(); }
     if (this.pvpId != null && !this.net.remotes.has(this.pvpId)) { this.pvpId = null; this.hud.hideTarget(); }
 
+    // racha: la ventana decae; al vencer se corta y desaparece el contador
+    if (this.streakT > 0) {
+      this.streakT -= dt;
+      if (this.streakT <= 0) { this.streak = 0; this.hud.hideStreak?.(); }
+    }
+
     this.attackCd -= dt;
     const target = this.targetId ? this.net.mobs.get(this.targetId) : null;
     if (target) {
       const d = Math.hypot(target.x - this.player.pos.x, target.z - this.player.pos.z);
-      if (d < ATTACK_RANGE && this.attackCd <= 0 && !this.player.locked && !this._isMoving()) {
+      const range = PROJECTILE_BY_CHAR[this.player.charFile] ? RANGE_RANGED : RANGE_MELEE;
+      // ARPG: se pega EN MOVIMIENTO (kitear y tajear es el core loop)
+      if (d < range && this.attackCd <= 0 && !this.player.locked) {
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
         this.player.attack();
         if (this.sfx) this.sfx.hit();
-        const atk = this._playerAtk();
+        // crit + finisher: el 3er golpe del combo pega mas fuerte
+        const crit = Math.random() < CRIT_CHANCE;
+        const finisher = this.player.comboStep === 2;
+        const atk = Math.round(this._playerAtk() * (crit ? 2 : 1) * (finisher ? 1.35 : 1));
+        const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
         if (this.effects) {
-          const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
           if (ptype) this.effects.projectile({ x: this.player.pos.x, y: 1.35, z: this.player.pos.z }, { x: target.x, y: 0.9, z: target.z }, ptype);
+          this.effects.bloodHit({ x: target.x, y: 1.0, z: target.z });
+          // los CRITS revientan carne y hueso (mini gore burst)
+          if (crit) this.effects.goreBurst({ x: target.x, y: 0.9, z: target.z }, 0.8);
+          this.effects.damageNumber({ x: target.x, y: 1.6, z: target.z }, atk, { crit });
         }
         if (this.skills) this.skills.onHit();      // el guerrero sube rage al pegar
         this.net.attackMob(this.targetId, atk);    // el SERVER aplica el dano (compartido)
-        this.hud.showTarget('Esqueleto Nv.' + target.lvl, target.hp, target.hpMax);
+        // CLEAVE melee: el tajo barre en arco y alcanza hasta 2 zombies extra
+        if (!ptype) this._cleave(target.id, atk);
+        this.hud.showTarget('Zombi Nv.' + target.lvl, target.hp, target.hpMax);
       }
       return;
     }
@@ -182,7 +229,7 @@ export class Combat {
       // frame del rival con su vida REAL (llega en el estado 's' del relay)
       this.hud.showTarget('⚔ ' + (rival.name || 'Jugador'), rival.hp ?? 1, rival.hpMax ?? 1);
       const d = Math.hypot(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
-      if (d < ATTACK_RANGE && this.attackCd <= 0 && !this.player.locked && !this._isMoving()) {
+      if (d < ATTACK_RANGE && this.attackCd <= 0 && !this.player.locked) {
         this.attackCd = ATTACK_CD;
         this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
         this.player.attack();
@@ -230,7 +277,8 @@ export class Combat {
       return;
     }
     const base = this._playerAtk() * (effect.dmgMult || 1.5);
-    this.player.attack();
+    // clip dramatico propio de la skill (jump chop / spin / summon)
+    this.player.attackSpecial ? this.player.attackSpecial() : this.player.attack();
     const c = this.targetId ? this.net.mobs.get(this.targetId) : null;
     const cx = c ? c.x : this.player.pos.x;
     const cz = c ? c.z : this.player.pos.z;
@@ -253,6 +301,8 @@ export class Combat {
 
   _onPlayerHit(hit) {
     if (this.dead || !hit) return;
+    // el zombie que te pego se anima (el server manda su id en phit)
+    if (this.mobField && hit.id != null) this.mobField.playAttack?.(hit.id);
     const dmg = Math.max(0, Number(hit.dmg) || 0);
     if (!dmg) return;
     this.hp = Math.max(0, this.hp - dmg);
@@ -268,13 +318,21 @@ export class Combat {
   }
 
   _onMobDead(id, by, party) {
-    if (this.targetId === id) { this.targetId = null; this.hud.hideTarget(); }
+    const wasMyTarget = this.targetId === id;
+    if (wasMyTarget) { this.targetId = null; this.hud.hideTarget(); }
     const mine = (by === this.net.myId) || (Array.isArray(party) && party.includes(this.net.myId));
     if (!mine) return;
     const m = this.net.mobs.get(id);   // aun existe: net lo borra DESPUES de avisar
     const lvl = m ? m.lvl : 1;
-    if (this.sfx) this.sfx.kill();
-    const leveled = this.prog.gainXp(4 + lvl);   // XP lento, escala con nivel del mob
+    // RACHA: kills encadenados = multiplicador de oro/XP + contador en pantalla
+    this.streak++;
+    this.streakT = STREAK_WINDOW;
+    const mult = 1 + Math.min(2, (this.streak - 1) * 0.15);
+    if (this.streak >= 2) this.hud.showStreak?.(this.streak, mult);
+    if (this.sfx) { this.sfx.kill(); this.sfx.streak?.(this.streak); }
+    // GORE de kill (escala con la racha)
+    if (this.effects && m) this.effects.goreBurst({ x: m.x, y: 0.7, z: m.z }, 1 + Math.min(1, this.streak * 0.1));
+    const leveled = this.prog.gainXp(Math.round((4 + lvl) * mult));
     this.hpMax = this.prog.hpMax;
     if (leveled) {
       this.hp = this.hpMax;
@@ -283,7 +341,20 @@ export class Combat {
     }
     this.hud.setXP(this.prog.xp, this.prog.xpNext, this.prog.level);
     this.hud.setHP(this.hp, this.hpMax);
-    if (this.onKillRewards) this.onKillRewards({ lvl, x: m ? m.x : 0, z: m ? m.z : 0 });
+    if (this.onKillRewards) this.onKillRewards({ lvl, x: m ? m.x : 0, z: m ? m.z : 0, streak: this.streak, mult });
+    // CADENA: retarget automatico al zombie mas cercano — el farmeo no se corta
+    if (wasMyTarget) this._autoRetarget();
+  }
+
+  // busca el mob vivo mas cercano (<=14m) y lo targetea solo: cadena adictiva
+  _autoRetarget() {
+    const p = this.player.pos;
+    let best = null, bd = 14;
+    for (const m of this.net.mobs.values()) {
+      const d = Math.hypot(m.x - p.x, m.z - p.z);
+      if (d < bd) { bd = d; best = m.id; }
+    }
+    if (best != null) this._setTarget(best);
   }
 
   _die() {

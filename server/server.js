@@ -224,11 +224,11 @@ const MOB_SPAWNS_PATH = path.join(__dirname, 'mob_spawns.json');
 // de 66 el orden del JSON dejaba vacias las zonas cercanas al spawn/parque
 // tras cada restart ("faltan los mobs") hasta que los respawns rotaban.
 const MOB_CAP = 66;
-const MOB_RESPAWN_MS = 12000;
+const MOB_RESPAWN_MS = 7000;   // ARPG: la horda vuelve rapido, farmeo sin huecos
 const MOB_DMG_MAX = 3000;
 const MOB_TICK_MS = 100;
-const MOB_AGGRO_RANGE = 22;
-const MOB_ATTACK_RANGE = 2.8;
+const MOB_AGGRO_RANGE = 24;   // zombies agresivos pero sin trenes interminables
+const MOB_ATTACK_RANGE = 2.0;   // el zombie se pega al cuerpo antes de morder
 const MOB_LEASH_RANGE = 42;
 const MOB_SPEED = 4.2;
 const MOB_RETURN_SPEED = 3.0;
@@ -237,7 +237,7 @@ const MOB_WANDER_RADIUS = 4.5;
 const MOB_WANDER_REACH = 0.45;
 const MOB_WANDER_PAUSE_MIN_MS = 600;
 const MOB_WANDER_PAUSE_MAX_MS = 1800;
-const MOB_ATTACK_CD_MS = 1150;
+const MOB_ATTACK_CD_MS = 1500;   // la horda rodea y asusta, no tritura en 2s
 
 const mobs = new Map();   // mobId -> { id, x, z, spawnX, spawnZ, h, state, lvl, hp, hpMax, kind }
 let nextMobId = 1;        // contador propio de mobs, separado del de jugadores
@@ -308,6 +308,9 @@ function nearestMobTarget(mob) {
   let bestD = MOB_AGGRO_RANGE;
   for (const [id, c] of clients) {
     if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) continue;
+    // la gruta es refugio TOTAL: los refugiados no son targeteables (sin esto
+    // las oleadas campean el respawn = cadena de muertes sin escape)
+    if (Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R) continue;
     const leashD = Math.hypot(c.x - mob.spawnX, c.z - mob.spawnZ);
     if (leashD > MOB_LEASH_RANGE) continue;
     const d = Math.hypot(c.x - mob.x, c.z - mob.z);
@@ -321,8 +324,12 @@ function stepToward(mob, tx, tz, step) {
   const d = Math.hypot(dx, dz);
   if (d < 0.01) return false;
   const s = Math.min(step, d);
-  mob.x += (dx / d) * s;
-  mob.z += (dz / d) * s;
+  const nx = mob.x + (dx / d) * s;
+  const nz = mob.z + (dz / d) * s;
+  // los zombies no pisan la gruta (perimetro sagrado)
+  if (Math.hypot(nx - SAFE_X, nz - SAFE_Z) < SAFE_R - 3) return false;
+  mob.x = nx;
+  mob.z = nz;
   mob.h = Math.atan2(dx, dz);
   return true;
 }
@@ -364,7 +371,7 @@ function stepMobWander(mob, now, dt) {
 // balance: los clusters fundian al lvl 1 en segundos; pegan menos y desde
 // mas cerca para que la primera experiencia no sea morir camninando
 function mobDamage(mob) {
-  return 5 + mob.lvl * 3;
+  return 4 + mob.lvl * 2;   // balance horda: varios pegando a la vez
 }
 
 function mobTick() {
@@ -374,6 +381,13 @@ function mobTick() {
   const changed = [];
   for (const mob of mobs.values()) {
     if (mob.hp <= 0) continue;
+    // zombies de oleada vencidos: de vuelta a la tumba (sin loot, by -1).
+    // Sin TTL las oleadas se ACUMULAN sin limite (176 mobs en el QA local).
+    if (mob._dieAtMs && now > mob._dieAtMs) {
+      mobs.delete(mob.id);
+      broadcastAll({ t: 'mdead', id: mob.id, by: -1, party: [] });
+      continue;
+    }
     mob.hitCdMs = Math.max(0, (mob.hitCdMs || 0) - MOB_TICK_MS);
     const distHome = Math.hypot(mob.x - mob.spawnX, mob.z - mob.spawnZ);
     let state = 'idle';
@@ -410,6 +424,50 @@ function mobTick() {
 }
 
 spawnInitialMobs();
+
+// OLEADAS ZOMBIE: cada ~4 min brota una horda temporal alrededor de un jugador
+// al azar. Sin _spawn => no respawnean: limpiarla ES el evento (botin de racha).
+const WAVE_EVERY_MS = Number(process.env.WAVE_EVERY_MS) || 240000;
+const WAVE_SIZE = 10;
+const waveTimer = setInterval(() => {
+  const players = [...clients.values()].filter((c) => c.ws && c.ws.readyState === 1);
+  if (!players.length) return;
+  const c = players[Math.floor(Math.random() * players.length)];
+  // la oleada ESCALA con el poder del objetivo (estimado por su hpMax):
+  // un novato recibe 4 zombies suaves; un veterano, 10 y de nivel alto
+  const power = Math.max(0, Math.round(((c.hm || 100) - 100) / 50));
+  const size = Math.min(WAVE_SIZE, 4 + power);
+  const lvlCap = Math.min(5, 2 + Math.ceil(power / 2));
+  for (let i = 0; i < size; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 16 + Math.random() * 24;
+    let sx = c.x + Math.cos(ang) * dist;
+    let sz = c.z + Math.sin(ang) * dist;
+    // la oleada nunca brota pegada a la gruta (el refugio se respeta)
+    const dg = Math.hypot(sx - SAFE_X, sz - SAFE_Z);
+    if (dg < SAFE_R + 14) {
+      const k = (SAFE_R + 14) / Math.max(dg, 0.01);
+      sx = SAFE_X + (sx - SAFE_X) * k;
+      sz = SAFE_Z + (sz - SAFE_Z) * k;
+    }
+    const spawn = {
+      x: sx,
+      z: sz,
+      lvl: 1 + Math.floor(Math.random() * lvlCap),
+      zone: 'oleada',
+    };
+    const id = nextMobId++;
+    const mob = makeMob(id, spawn);
+    // TTL: si nadie lo mata, se despawnea solo (sin esto las oleadas se
+    // ACUMULAN sin limite y el server se llena de zombies fantasma)
+    mob._dieAtMs = Date.now() + 90000;
+    mobs.set(id, mob);
+    broadcastAll({ t: 'mspawn', mob: mobView(mob) });
+  }
+  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z) });
+  console.log('oleada zombie sobre', c.name, '@', Math.round(c.x), Math.round(c.z));
+}, WAVE_EVERY_MS);
+if (waveTimer.unref) waveTimer.unref();
 const mobTimer = setInterval(mobTick, MOB_TICK_MS);
 if (mobTimer.unref) mobTimer.unref();
 
@@ -660,7 +718,8 @@ wss.on('connection', (ws, req) => {
       if (!Number.isInteger(mid)) return;
       const mob = mobs.get(mid);
       if (!mob || mob.hp <= 0) return;
-      if (Math.hypot(mob.x - me.x, mob.z - me.z) > 5.0) return;
+      // 12m cubre al arquero/mago legitimos; el FEEL melee lo pone el cliente (2.7)
+      if (Math.hypot(mob.x - me.x, mob.z - me.z) > 12.0) return;
       const now = Date.now();
       if (me.lastMobHitMs && now - me.lastMobHitMs < 650) return;
       me.lastMobHitMs = now;

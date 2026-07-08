@@ -3,36 +3,36 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260707f';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260707f';
-import { GrassSystem } from './veg/grass.js?v=20260707f';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260707f';
-import { Player } from './player.js?v=20260707f';
-import { MiniMap } from './minimap.js?v=20260707f';
-import { StreetLife } from './npcs.js?v=20260707f';
-import { sanitizeImported } from './glbutil.js?v=20260707f';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260707f';
-import { Net } from './net.js?v=20260707f';
-import { ChatUI, showBubble } from './chat.js?v=20260707f';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260707f';
-import { authRequest } from './rpg/account.js?v=20260707f';
-import { MobField } from './rpg/mobs.js?v=20260707f';
-import { Inventory } from './rpg/loot.js?v=20260707f';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260707f';
-import { Combat } from './rpg/combat.js?v=20260707f';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260707f';
-import { Effects } from './rpg/effects.js?v=20260707f';
-import { attachWeaponByName } from './weapons.js?v=20260707f';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260707f';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260707f';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260707f';
-import { SocialPanel } from './social.js?v=20260707f';
-import { SkillSystem } from './rpg/skills.js?v=20260707f';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260707f';
-import { createSfx } from './sfx.js?v=20260707f';
-import { installTouchControls } from './touch.js?v=20260707f';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708b';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708b';
+import { GrassSystem } from './veg/grass.js?v=20260708b';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708b';
+import { Player } from './player.js?v=20260708b';
+import { MiniMap } from './minimap.js?v=20260708b';
+import { StreetLife } from './npcs.js?v=20260708b';
+import { sanitizeImported } from './glbutil.js?v=20260708b';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708b';
+import { Net } from './net.js?v=20260708b';
+import { ChatUI, showBubble } from './chat.js?v=20260708b';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260708b';
+import { authRequest } from './rpg/account.js?v=20260708b';
+import { MobField } from './rpg/mobs.js?v=20260708b';
+import { Inventory } from './rpg/loot.js?v=20260708b';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708b';
+import { Combat } from './rpg/combat.js?v=20260708b';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708b';
+import { Effects } from './rpg/effects.js?v=20260708b';
+import { attachWeaponByName } from './weapons.js?v=20260708b';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708b';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708b';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708b';
+import { SocialPanel } from './social.js?v=20260708b';
+import { SkillSystem } from './rpg/skills.js?v=20260708b';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708b';
+import { createSfx } from './sfx.js?v=20260708b';
+import { installTouchControls } from './touch.js?v=20260708b';
 
-const APP_VERSION = '20260707f';
+const APP_VERSION = '20260708b';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -615,15 +615,18 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     const cpos = [];
     const SEGS = 6;
     const rngC = mulberry32(4242);
-    // catenaria generica entre dos puntos 3D de anclaje
+    // catenaria generica entre dos puntos 3D de anclaje. El sag se CLAMPEA para
+    // que el punto mas bajo nunca caiga de ~3.2m (cables flojos en vanos largos
+    // barrian el suelo: "los cables estan caidos")
     const catenary = (x1, z1, x2, z2, hy, sag, jitter = 0) => {
+      const s2 = Math.min(sag, Math.max(0.4, hy - 3.2));
       const jx = jitter ? (rngC() - 0.5) * jitter : 0;
       const jz = jitter ? (rngC() - 0.5) * jitter : 0;
       for (let s = 0; s < SEGS; s++) {
         for (const tt of [s / SEGS, (s + 1) / SEGS]) {
           cpos.push(
             x1 + (x2 - x1) * tt + jx * Math.sin(Math.PI * tt),
-            hy - Math.sin(Math.PI * tt) * sag,
+            hy - Math.sin(Math.PI * tt) * s2,
             z1 + (z2 - z1) * tt + jz * Math.sin(Math.PI * tt));
         }
       }
@@ -813,14 +816,16 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     onRespawn: () => {
       if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; }
     },
-    // loot MU-style al matar: oro directo, pociones/armas al inventario
-    onKillRewards: ({ lvl }) => {
+    // loot MU-style al matar: oro directo, pociones/armas al inventario.
+    // La RACHA multiplica el oro (mult viene del combate) = farmeo adictivo.
+    onKillRewards: ({ lvl, mult = 1 }) => {
       const gained = [];
       for (const drop of rollDrops(lvl)) {
         if (drop.kind === 'gold') {
-          wallet.add(drop.amount);
+          const amount = Math.round(drop.amount * mult);
+          wallet.add(amount);
           hud.setGold(wallet.gold);
-          gained.push('+' + drop.amount + ' oro');
+          gained.push('+' + amount + ' oro');
           sfx.coin();
         } else if (drop.kind === 'potion') {
           if (inventory.add(drop)) gained.push(drop.name);
@@ -843,6 +848,13 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     },
   });
   net.combat = combat;   // la vida local viaja en el estado 's' (visible p/ todos)
+  // oleada zombie del server: sirena + banner + pista de direccion
+  net.onWave = ({ x, z }) => {
+    const dx = x - player.pos.x, dz = z - player.pos.z;
+    const d = Math.round(Math.hypot(dx, dz));
+    hud.banner('☣ ¡INVASIÓN ZOMBIE!' + (d > 40 ? ' · a ' + d + 'm' : ''));
+    sfx.wave();
+  };
   // Q lanza la skill de la clase via el combate (maná/furia/energia + cooldown)
   skills._onCast = (effect) => combat.castSkill(effect);
   // pocion: clic en el inventario la bebe
