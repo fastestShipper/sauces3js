@@ -5,7 +5,7 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260708u';
+import { createToonSkyTexture } from './worldmat.js?v=20260708v';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -44,6 +44,17 @@ export function createIntroScene(appVersion) {
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
+  // parches de cesped irregular: el plano uniforme se veia a mapa vacio
+  const patchMat = new THREE.MeshStandardMaterial({ color: 0x6ea850, roughness: 1 });
+  const rng0 = (() => { let q = 77; return () => (q = (q * 16807) % 2147483647) / 2147483647; })();
+  for (let i = 0; i < 22; i++) {
+    const patch = new THREE.Mesh(new THREE.CircleGeometry(3 + rng0() * 9, 14), patchMat);
+    patch.rotation.x = -Math.PI / 2;
+    const pa = rng0() * Math.PI * 2, pr = 8 + rng0() * 90;
+    patch.position.set(Math.sin(pa) * pr, 0.01, Math.cos(pa) * pr);
+    patch.receiveShadow = true;
+    scene.add(patch);
+  }
   const pathMat = new THREE.MeshStandardMaterial({ color: 0xcfcabc, roughness: 1 });
   const ring = new THREE.Mesh(new THREE.RingGeometry(26, 30, 64), pathMat);
   ring.rotation.x = -Math.PI / 2;
@@ -107,9 +118,10 @@ export function createIntroScene(appVersion) {
       camera.position.set(Math.sin(a) * 9, 2.3 + Math.sin(t * 0.3) * 0.25, Math.cos(a) * 9);
       camera.lookAt(Math.sin(a + 1.1) * 30, 5.2, Math.cos(a + 1.1) * 30);
     } else {
-      const a = t * 0.03;
-      camera.position.set(Math.sin(a) * 46, 52, Math.cos(a) * 46);
-      camera.lookAt(0, 0, 0);
+      // toma de DRONE: baja, oblicua, con horizonte y sauces en cuadro
+      const a = t * 0.035;
+      camera.position.set(Math.sin(a) * 30, 17 + Math.sin(t * 0.25) * 1.5, Math.cos(a) * 30);
+      camera.lookAt(Math.sin(a + 1.5) * 10, 3, Math.cos(a + 1.5) * 10);
     }
     renderer.render(scene, camera);
   })();
