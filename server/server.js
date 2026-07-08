@@ -273,7 +273,7 @@ function loadMobSpawns() {
       const x = Number(s.x), z = Number(s.z);
       const lvl = clampInt(s.lvl, 1, 5);
       if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
-      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28) });
+      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28), boss: !!s.boss });
     }
   } catch {
     mobSpawns = [];

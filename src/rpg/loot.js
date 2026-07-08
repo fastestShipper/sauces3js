@@ -1,7 +1,7 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260708z';
+import { TIERS } from './fx.js?v=20260709a';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -181,6 +181,20 @@ export class Inventory {
     this.getGold = null; // () -> oro actual (para deshabilitar botones)
   }
 
+  // vende de golpe TODAS las armas comunes no equipadas
+  sellAllCommon() {
+    const junk = this.items.filter((i) => i.type === 'weapon'
+      && (!i.tier || i.tier === 'common')
+      && !(this.equippedWeapon && this.equippedWeapon.id === i.id));
+    if (!junk.length) return;
+    let total = 0;
+    for (const it of junk) total += sellPrice(it);
+    this.items = this.items.filter((i) => !junk.includes(i));
+    this._render();
+    this.onChange();
+    if (this.onSell) this.onSell({ name: junk.length + ' comunes' }, total);
+  }
+
   // vende un item: lo quita y avisa con su precio
   sell(item) {
     if (!item || !this.items.some((i) => i.id === item.id)) return;
@@ -228,6 +242,10 @@ export class Inventory {
     h.textContent = 'Inventario';
     const grid = document.createElement('div');
     grid.className = 'rpg-inv-grid';
+    const sellAll = document.createElement('button');
+    sellAll.textContent = 'Vender todo lo común';
+    sellAll.style.cssText = 'width:100%;margin:0 0 8px;padding:7px;border-radius:9px;cursor:pointer;font-family:inherit;font-weight:700;font-size:11px;color:#d6f5c8;background:rgba(255,255,255,.07);border:1px solid rgba(150,230,150,.4)';
+    sellAll.addEventListener('click', () => this.sellAllCommon());
     const sub = document.createElement('div');
     sub.className = 'rpg-inv-sub';
     sub.textContent = 'Toca un objeto para ver sus acciones';
@@ -236,6 +254,7 @@ export class Inventory {
     const shop = document.createElement('div');
     shop.className = 'rpg-shop';
     panel.appendChild(h);
+    panel.appendChild(sellAll);
     panel.appendChild(sub);
     panel.appendChild(grid);
     panel.appendChild(detail);
