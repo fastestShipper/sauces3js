@@ -1,7 +1,7 @@
 // Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
 // (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
 // Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
-import { classById, CERNUNNOS } from './classes.js?v=20260708e';
+import { classById, CERNUNNOS } from './classes.js?v=20260708f';
 
 const STYLE_ID = 'rpg-skill-style';
 
@@ -18,44 +18,44 @@ function injectStyle() {
 .rpg-skill-root { position: fixed; left: 50%; bottom: 10px; transform: translateX(8px);
   z-index: 41; pointer-events: none; display: flex; flex-direction: column; gap: 3px;
   align-items: flex-start; font-family: 'Fredoka', system-ui, sans-serif; }
-.rpg-skill-resbox { width: 210px; pointer-events: none; }
-.rpg-skill-label { display: flex; justify-content: space-between; font-size: 9px;
+.rpg-skill-resbox { width: 264px; pointer-events: none; }
+.rpg-skill-label { display: flex; justify-content: space-between; font-size: 11px;
   font-weight: 700; letter-spacing: 0.6px; color: #f4f4f8; opacity: 0.95;
   text-shadow: 0 1px 3px rgba(0,0,0,.85); margin-bottom: 2px; }
-.rpg-skill-bar { height: 8px; border-radius: 999px; background: rgba(8,6,18,0.75);
+.rpg-skill-bar { height: 10px; border-radius: 999px; background: rgba(8,6,18,0.75);
   overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6); }
 .rpg-skill-fill { height: 100%; width: 0%; border-radius: 999px;
   transition: width 200ms ease; }
-.rpg-skill-row { display: flex; gap: 6px; pointer-events: auto; }
-.rpg-skill-slot { position: relative; width: 48px; height: 48px; border-radius: 11px;
+.rpg-skill-row { display: flex; gap: 8px; pointer-events: auto; }
+.rpg-skill-slot { position: relative; width: 60px; height: 60px; border-radius: 14px;
   background: rgba(23,20,41,0.9); border: 1px solid rgba(255,255,255,0.16);
   box-shadow: 0 10px 24px rgba(10,8,24,.4), inset 0 1px 0 rgba(255,255,255,.1);
   cursor: pointer; display: grid; place-items: center; transition: transform 120ms ease,
   border-color 160ms ease, box-shadow 160ms ease; }
 .rpg-skill-slot:hover { transform: translateY(-3px); }
-.rpg-skill-slot .s-emoji { font-size: 21px; line-height: 1; filter: saturate(0.4) brightness(0.7);
+.rpg-skill-slot .s-emoji { font-size: 26px; line-height: 1; filter: saturate(0.4) brightness(0.7);
   transition: filter 160ms ease; }
 .rpg-skill-slot.is-ready .s-emoji { filter: none; }
 .rpg-skill-slot.is-ready { border-color: rgba(255,224,138,0.65);
   box-shadow: 0 10px 24px rgba(10,8,24,.4), 0 0 14px rgba(255,205,92,.35),
   inset 0 1px 0 rgba(255,255,255,.12); }
-.rpg-skill-slot .s-key { position: absolute; top: -6px; left: -6px; width: 17px; height: 17px;
-  border-radius: 6px; display: grid; place-items: center; font-size: 10px; font-weight: 700;
+.rpg-skill-slot .s-key { position: absolute; top: -8px; left: -8px; width: 21px; height: 21px;
+  border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700;
   color: #241a04; background: linear-gradient(180deg, #ffe08a, #ffbe4d);
   box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-.rpg-skill-slot .s-cost { position: absolute; bottom: 2px; right: 5px; font-size: 9px;
+.rpg-skill-slot .s-cost { position: absolute; bottom: 3px; right: 6px; font-size: 11px;
   font-weight: 700; color: #9fc2ff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
 .rpg-skill-slot .s-cd { position: absolute; inset: 0; border-radius: 10px;
-  background: rgba(8,6,16,0.78); display: none; place-items: center; font-size: 15px;
+  background: rgba(8,6,16,0.78); display: none; place-items: center; font-size: 19px;
   font-weight: 700; color: #ffd9c8; }
 .rpg-skill-slot .s-cd.is-on { display: grid; }
 .rpg-skill-slot .s-tip { position: absolute; bottom: calc(100% + 8px); left: 50%;
-  transform: translateX(-50%); width: 172px; white-space: normal; text-align: left;
+  transform: translateX(-50%); width: 215px; white-space: normal; text-align: left;
   background: rgba(23,20,41,0.96); border: 1px solid rgba(255,224,138,0.35);
-  border-radius: 9px; padding: 6px 9px; font-size: 11px; font-weight: 600;
+  border-radius: 11px; padding: 8px 11px; font-size: 14px; font-weight: 600;
   color: #ffe9b3; opacity: 0; pointer-events: none; transition: opacity 140ms ease; }
 .rpg-skill-slot .s-tip i { display: block; font-style: normal; font-weight: 500;
-  font-size: 10px; color: #cfcbe6; margin-top: 2px; line-height: 1.35; }
+  font-size: 12px; color: #cfcbe6; margin-top: 2px; line-height: 1.35; }
 .rpg-skill-slot:hover .s-tip { opacity: 1; }`;
   const el = document.createElement('style');
   el.id = STYLE_ID;
