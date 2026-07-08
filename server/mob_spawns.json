@@ -1,400 +1,398 @@
-{
-  "spawns": [
-    {
-      "x": 80.2,
-      "z": 122.7,
-      "lvl": 1,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 154.2,
-      "z": 13.8,
-      "lvl": 1,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 140.2,
-      "z": 50.2,
-      "lvl": 1,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 44.2,
-      "z": 177.1,
-      "lvl": 1,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 50.5,
-      "z": 169.2,
-      "lvl": 2,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 82.9,
-      "z": 83.4,
-      "lvl": 2,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 59.7,
-      "z": 148.9,
-      "lvl": 2,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": 66.7,
-      "z": 134.1,
-      "lvl": 2,
-      "zone": "park_boulevard_east"
-    },
-    {
-      "x": -189.5,
-      "z": 167.1,
-      "lvl": 2,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -147.2,
-      "z": 144.2,
-      "lvl": 2,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -230.1,
-      "z": 140.1,
-      "lvl": 2,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -156.6,
-      "z": 142.2,
-      "lvl": 2,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -205.5,
-      "z": 124.1,
-      "lvl": 2,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -169.1,
-      "z": 140.4,
-      "lvl": 3,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -224.5,
-      "z": 146.8,
-      "lvl": 3,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -216.3,
-      "z": 121.3,
-      "lvl": 3,
-      "zone": "park_poussin"
-    },
-    {
-      "x": -124.3,
-      "z": 441.2,
-      "lvl": 2,
-      "zone": "park_north"
-    },
-    {
-      "x": 48.6,
-      "z": 228.2,
-      "lvl": 2,
-      "zone": "park_north"
-    },
-    {
-      "x": 40.1,
-      "z": 234.0,
-      "lvl": 3,
-      "zone": "park_north"
-    },
-    {
-      "x": -111.9,
-      "z": 443.8,
-      "lvl": 3,
-      "zone": "park_north"
-    },
-    {
-      "x": -108.2,
-      "z": 430.2,
-      "lvl": 3,
-      "zone": "park_north"
-    },
-    {
-      "x": -107.1,
-      "z": 400.9,
-      "lvl": 3,
-      "zone": "park_north"
-    },
-    {
-      "x": -118.0,
-      "z": 449.4,
-      "lvl": 4,
-      "zone": "park_north"
-    },
-    {
-      "x": -116.8,
-      "z": 437.3,
-      "lvl": 4,
-      "zone": "park_north"
-    },
-    {
-      "x": -294.5,
-      "z": 12.6,
-      "lvl": 2,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -281.3,
-      "z": -5.6,
-      "lvl": 2,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -346.7,
-      "z": 19.0,
-      "lvl": 2,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -347.0,
-      "z": -9.2,
-      "lvl": 3,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -341.3,
-      "z": 27.3,
-      "lvl": 3,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -293.1,
-      "z": 2.4,
-      "lvl": 3,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -312.2,
-      "z": 26.8,
-      "lvl": 3,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": -333.7,
-      "z": 16.0,
-      "lvl": 4,
-      "zone": "park_west_sauces"
-    },
-    {
-      "x": 3.6,
-      "z": -154.2,
-      "lvl": 3,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": -4.1,
-      "z": -180.0,
-      "lvl": 3,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": 0.4,
-      "z": -146.7,
-      "lvl": 3,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": -34.4,
-      "z": -163.7,
-      "lvl": 3,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": -89.0,
-      "z": -162.3,
-      "lvl": 4,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": -91.4,
-      "z": -153.2,
-      "lvl": 4,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": 8.4,
-      "z": -146.8,
-      "lvl": 4,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": -7.5,
-      "z": -158.5,
-      "lvl": 4,
-      "zone": "park_javier_prado"
-    },
-    {
-      "x": -103.7,
-      "z": -158.4,
-      "lvl": 3,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -115.7,
-      "z": -156.1,
-      "lvl": 3,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -113.9,
-      "z": -168.2,
-      "lvl": 3,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -116.2,
-      "z": -180.2,
-      "lvl": 3,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -104.1,
-      "z": -178.4,
-      "lvl": 3,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -92.1,
-      "z": -180.7,
-      "lvl": 4,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -93.9,
-      "z": -168.6,
-      "lvl": 4,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -91.6,
-      "z": -156.6,
-      "lvl": 4,
-      "zone": "javier_prado"
-    },
-    {
-      "x": -24.1,
-      "z": 336.7,
-      "lvl": 4,
-      "zone": "boulevard_deep"
-    },
-    {
-      "x": -29.4,
-      "z": 349.5,
-      "lvl": 4,
-      "zone": "boulevard_deep"
-    },
-    {
-      "x": -46.6,
-      "z": 351.1,
-      "lvl": 4,
-      "zone": "boulevard_deep"
-    },
-    {
-      "x": -43.8,
-      "z": 334.0,
-      "lvl": 4,
-      "zone": "boulevard_deep"
-    },
-    {
-      "x": -41.3,
-      "z": 321.2,
-      "lvl": 4,
-      "zone": "boulevard_deep"
-    },
-    {
-      "x": -26.7,
-      "z": 316.5,
-      "lvl": 4,
-      "zone": "boulevard_deep"
-    },
-    {
-      "x": 173.9,
-      "z": -52.2,
-      "lvl": 4,
-      "zone": "circunvalacion_edge"
-    },
-    {
-      "x": 165.8,
-      "z": -41.7,
-      "lvl": 4,
-      "zone": "circunvalacion_edge"
-    },
-    {
-      "x": 148.2,
-      "z": -45.8,
-      "lvl": 4,
-      "zone": "circunvalacion_edge"
-    },
-    {
-      "x": 156.1,
-      "z": -61.2,
-      "lvl": 4,
-      "zone": "circunvalacion_edge"
-    },
-    {
-      "x": 164.2,
-      "z": -71.7,
-      "lvl": 4,
-      "zone": "circunvalacion_edge"
-    },
-    {
-      "x": 181.8,
-      "z": -67.6,
-      "lvl": 4,
-      "zone": "circunvalacion_edge"
-    },
-    {
-      "x": 194.5,
-      "z": 333.3,
-      "lvl": 5,
-      "zone": "artes_norte"
-    },
-    {
-      "x": 182.5,
-      "z": 338.9,
-      "lvl": 5,
-      "zone": "artes_norte"
-    },
-    {
-      "x": 168.7,
-      "z": 327.3,
-      "lvl": 5,
-      "zone": "artes_norte"
-    },
-    {
-      "x": 182.7,
-      "z": 317.1,
-      "lvl": 5,
-      "zone": "artes_norte"
-    },
-    {
-      "x": 194.7,
-      "z": 311.5,
-      "lvl": 5,
-      "zone": "artes_norte"
-    },
-    {
-      "x": 208.5,
-      "z": 323.1,
-      "lvl": 5,
-      "zone": "artes_norte"
-    }
-  ]
-}
+[
+ {
+  "x": 19.4,
+  "z": -85.7,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -363.1,
+  "z": -112.8,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": -125.2,
+  "z": 100.4,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -75.3,
+  "z": 64.6,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -235.5,
+  "z": 58.7,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": 67.9,
+  "z": -163.9,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -185.6,
+  "z": 26.3,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": 27.2,
+  "z": -37.3,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -99.0,
+  "z": -135.1,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -6.2,
+  "z": -93.9,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 216.4,
+  "z": 52.4,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": 60.9,
+  "z": 146.2,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -53.3,
+  "z": -97.7,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 156.9,
+  "z": -177.6,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -364.2,
+  "z": -33.4,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": 110.0,
+  "z": 192.0,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -110.3,
+  "z": -299.4,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": 96.1,
+  "z": 178.5,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -52.1,
+  "z": 57.6,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 173.2,
+  "z": 87.8,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -211.1,
+  "z": -58.5,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -356.3,
+  "z": -3.0,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": -45.8,
+  "z": 51.7,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -8.9,
+  "z": -58.8,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 207.7,
+  "z": -110.9,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -100.8,
+  "z": 301.9,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -121.5,
+  "z": -13.4,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -4.7,
+  "z": -93.6,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 87.7,
+  "z": 172.6,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -174.9,
+  "z": -22.6,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -176.4,
+  "z": 167.5,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -222.8,
+  "z": 98.5,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": 161.6,
+  "z": -68.8,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -2.4,
+  "z": 137.2,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -13.3,
+  "z": -253.5,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": 42.3,
+  "z": -60.2,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -57.2,
+  "z": 149.6,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": 103.0,
+  "z": 17.1,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 103.3,
+  "z": -38.1,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -308.2,
+  "z": -209.7,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": 6.2,
+  "z": -191.6,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -133.7,
+  "z": 194.1,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": 233.4,
+  "z": -124.8,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -103.6,
+  "z": -146.5,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -41.1,
+  "z": -78.4,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -142.5,
+  "z": -71.3,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -202.8,
+  "z": -248.3,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -127.5,
+  "z": 10.1,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": 107.9,
+  "z": 18.1,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -219.3,
+  "z": 128.8,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -328.2,
+  "z": 77.0,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": 212.8,
+  "z": 29.8,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -169.3,
+  "z": 39.3,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -237.0,
+  "z": -3.2,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": 217.6,
+  "z": -127.4,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": -152.6,
+  "z": 241.7,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -254.7,
+  "z": -57.7,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -264.6,
+  "z": -5.0,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": 199.2,
+  "z": -88.1,
+  "lvl": 3,
+  "zone": "barrio"
+ },
+ {
+  "x": -116.1,
+  "z": 67.8,
+  "lvl": 1,
+  "zone": "barrio"
+ },
+ {
+  "x": -313.4,
+  "z": 10.2,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -47.1,
+  "z": 285.6,
+  "lvl": 5,
+  "zone": "barrio"
+ },
+ {
+  "x": -177.0,
+  "z": 15.7,
+  "lvl": 2,
+  "zone": "barrio"
+ },
+ {
+  "x": -25.6,
+  "z": 220.8,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": -138.5,
+  "z": -250.5,
+  "lvl": 4,
+  "zone": "barrio"
+ },
+ {
+  "x": 246.0,
+  "z": 28.5,
+  "lvl": 5,
+  "zone": "barrio"
+ }
+]

@@ -3,12 +3,12 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708l';
-import { makeNametag } from './nametag.js?v=20260708l';
-import { cloneSkinned } from './npcs.js?v=20260708l';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708l';
-import { showBubble } from './chat.js?v=20260708l';
-import { WS_URL } from './rpg/account.js?v=20260708l';
+import { sanitizeImported } from './glbutil.js?v=20260708m';
+import { makeNametag } from './nametag.js?v=20260708m';
+import { cloneSkinned } from './npcs.js?v=20260708m';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708m';
+import { showBubble } from './chat.js?v=20260708m';
+import { WS_URL } from './rpg/account.js?v=20260708m';
 
 const SCALE = 1.9 / 2.54;
 
@@ -155,7 +155,8 @@ export class Net {
       this.party = m.members || [];
       if (this.onParty) this.onParty(this.party);
     }
-    else if (m.t === 'wave') { if (this.onWave) this.onWave({ x: m.x, z: m.z }); }
+    else if (m.t === 'wave') { if (this.onWave) this.onWave({ x: m.x, z: m.z, boss: !!m.boss, night: !!m.night }); }
+    else if (m.t === 'top') { if (this.onTop) this.onTop(Array.isArray(m.list) ? m.list : []); }
     else if (m.t === 'pvph') { if (this.onPvpHit) this.onPvpHit({ from: m.from, name: m.name, dmg: m.dmg }); }
     else if (m.t === 'pvpkill') { if (this.onPvpKill) this.onPvpKill(m.killer, m.victim); }
     else if (m.t === 'pvpsafe') { if (this.onPvpSafe) this.onPvpSafe(); }
@@ -180,6 +181,11 @@ export class Net {
 
   // ===== acciones de mobs / party / pvp / friends hacia el server =====
   _send(obj) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(obj)); }
+  // reporta la racha local al leaderboard del dia (el server clampa y difunde)
+  reportStreak(v) {
+    this._send({ t: 'rank', v });
+  }
+
   // skill de party: el server la reenvia a los miembros del grupo
   partySkill(kind, v, dur) {
     this._send({ t: 'pskill', kind, v, dur });

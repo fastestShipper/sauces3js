@@ -65,6 +65,14 @@ function injectStyle() {
   display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #7a4e0a;
   background: radial-gradient(circle at 35% 30%, #fff3c4, #f3c54a 50%, #c98a18);
   border: 1px solid #8a5a10; }
+.rpg-hud-top { position: fixed; right: 14px; top: 252px; z-index: 30; width: 132px;
+  padding: 7px 10px; font-size: 11px; line-height: 1.55; display: none; }
+.rpg-hud-top .t-title { font-weight: 700; color: #ffcf5c; font-size: 10px;
+  letter-spacing: 0.8px; margin-bottom: 2px; }
+.rpg-hud-top .t-row { display: flex; justify-content: space-between; gap: 6px; }
+.rpg-hud-top .t-row span:first-child { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.rpg-hud-top .t-row b { color: #ff8a5c; }
 .rpg-hud-hurt { position: fixed; inset: 0; z-index: 39; pointer-events: none;
   opacity: 0; background: radial-gradient(ellipse at center,
   rgba(0,0,0,0) 55%, rgba(190,20,20,0.45) 100%);
@@ -139,6 +147,7 @@ export class HUD {
         <div class="s-mult"></div>
       </div>
       <div class="rpg-hud-panel rpg-hud-banner"></div>
+      <div class="rpg-hud-panel rpg-hud-top"><div class="t-title">\ud83d\udd25 RACHAS HOY</div><div class="t-list"></div></div>
       <div class="rpg-hud-hurt"></div>
       <div class="rpg-hud-death"><div class="d-title">HAS CAÍDO</div>
         <div class="d-sub">La Virgen de la gruta te levanta…</div>
@@ -233,6 +242,17 @@ export class HUD {
     this.elBanner.classList.add('is-on');
     if (this._bannerTimer) clearTimeout(this._bannerTimer);
     this._bannerTimer = setTimeout(() => this.elBanner.classList.remove('is-on'), 4000);
+  }
+
+  // leaderboard de rachas del dia (top 3 visibles)
+  setTop(list) {
+    const panel = this.root.querySelector('.rpg-hud-top');
+    if (!panel) return;
+    const rows = (list || []).slice(0, 3);
+    panel.style.display = rows.length ? 'block' : 'none';
+    panel.querySelector('.t-list').innerHTML = rows
+      .map((e) => '<div class="t-row"><span>' + String(e.name || '?').replace(/[<>&]/g, '') + '</span><b>x' + (Number(e.v) || 0) + '</b></div>')
+      .join('');
   }
 
   // vignette roja de 160ms cuando el jugador RECIBE dano

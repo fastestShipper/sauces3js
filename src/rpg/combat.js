@@ -131,7 +131,7 @@ export class Combat {
     this.targetLocked = true;
     this.mobField.setTargeted(id, true);
     const m = this.net.mobs.get(id);
-    if (m) this.hud.showTarget('Zombi Nv.' + m.lvl, m.hp, m.hpMax);
+    if (m) this.hud.showTarget((m.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + m.lvl, m.hp, m.hpMax);
   }
 
   _setPvpTarget(pid) {
@@ -261,7 +261,7 @@ export class Combat {
         this.net.attackMob(this.targetId, atk);    // el SERVER aplica el dano (compartido)
         // CLEAVE melee: el tajo barre en arco y alcanza hasta 2 zombies extra
         if (!ptype) this._cleave(target.id, atk);
-        this.hud.showTarget('Zombi Nv.' + target.lvl, target.hp, target.hpMax);
+        this.hud.showTarget((target.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + target.lvl, target.hp, target.hpMax);
       }
       return;
     }
@@ -578,7 +578,9 @@ export class Combat {
     }
     this.hud.setXP(this.prog.xp, this.prog.xpNext, this.prog.level);
     this.hud.setHP(this.hp, this.hpMax);
-    if (this.onKillRewards) this.onKillRewards({ lvl, x: m ? m.x : 0, z: m ? m.z : 0, streak: this.streak, mult });
+    // racha >=3 compite en el leaderboard del dia
+    if (this.streak >= 3) this.net.reportStreak?.(this.streak);
+    if (this.onKillRewards) this.onKillRewards({ lvl, x: m ? m.x : 0, z: m ? m.z : 0, streak: this.streak, mult, boss: !!(m && m.b) });
     // CADENA: retarget automatico al zombie mas cercano — el farmeo no se corta
     if (wasMyTarget) this._autoRetarget();
   }

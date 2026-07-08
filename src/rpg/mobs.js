@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260708l';
+import { sanitizeImported } from '../glbutil.js?v=20260708m';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -170,8 +170,10 @@ export class MobField {
     let ch;
     try { ch = cloneSkeleton(proto); }
     catch { return null; }
-    ch.scale.setScalar(SCALE);
+    // ABOMINACION (boss de oleada): mole de 1.5x que impone
+    ch.scale.setScalar(mob.b ? SCALE * 1.5 : SCALE);
     const tint = levelTint(mob.lvl);
+    if (mob.b) tint.multiplyScalar(0.7);   // mas podrida y oscura
     const mats = [];
     ch.traverse(o => {
       if (!o.isMesh) return;
@@ -231,8 +233,8 @@ export class MobField {
       if (pp) {
         const dx = v.root.position.x - pp.x, dz = v.root.position.z - pp.z;
         const dd = Math.hypot(dx, dz) || 1;
-        v.root.position.x += (dx / dd) * 0.45;
-        v.root.position.z += (dz / dd) * 0.45;
+        v.root.position.x += (dx / dd) * 0.3;
+        v.root.position.z += (dz / dd) * 0.3;
       }
       // herido visible: bajo el 50% la piel se oscurece (una sola vez)
       if (!v.wounded && v.hpMax && hp / v.hpMax < 0.5) {

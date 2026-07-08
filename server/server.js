@@ -239,6 +239,11 @@ const MOB_WANDER_PAUSE_MIN_MS = 600;
 const MOB_WANDER_PAUSE_MAX_MS = 1800;
 const MOB_ATTACK_CD_MS = 1500;   // la horda rodea y asusta, no tritura en 2s
 
+// top 5 de rachas del dia (se resetea cada 24h)
+let topStreaks = [];
+const rankReset = setInterval(() => { topStreaks = []; broadcastAll({ t: 'top', list: [] }); }, 86400000);
+if (rankReset.unref) rankReset.unref();
+
 const mobs = new Map();   // mobId -> { id, x, z, spawnX, spawnZ, h, state, lvl, hp, hpMax, kind }
 let nextMobId = 1;        // contador propio de mobs, separado del de jugadores
 let mobSpawns = [];       // lista de { x, z, lvl, zone } cargada del JSON
@@ -262,9 +267,9 @@ function loadMobSpawns() {
   }
 }
 
-// crea un objeto mob desde un spawn. hpMax = 40 + lvl*22; kind = lvl-1 (0..4).
+// crea un objeto mob desde un spawn. hpMax = 30 + lvl*16 (early amable); boss x4.
 function makeMob(id, spawn) {
-  const hpMax = 40 + spawn.lvl * 22;
+  const hpMax = (30 + spawn.lvl * 16) * (spawn.boss ? 4 : 1);
   return {
     id,
     x: spawn.x,
@@ -276,6 +281,7 @@ function makeMob(id, spawn) {
     lvl: spawn.lvl,
     hp: hpMax,
     hpMax,
+    boss: !!spawn.boss,
     kind: spawn.lvl - 1,
     zone: spawn.zone || '',
     targetId: null,
@@ -288,7 +294,7 @@ function makeMob(id, spawn) {
 
 // representacion publica del mob para los clientes.
 function mobView(m) {
-  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, zone: m.zone };
+  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, zone: m.zone, b: m.boss ? 1 : 0 };
 }
 
 // spawnea hasta MOB_CAP mobs en spawns DISTINTOS (toma los primeros N).
@@ -431,6 +437,11 @@ spawnInitialMobs();
 // al azar. Sin _spawn => no respawnean: limpiarla ES el evento (botin de racha).
 const WAVE_EVERY_MS = Number(process.env.WAVE_EVERY_MS) || 240000;
 const WAVE_SIZE = 10;
+// ciclo dia/noche por reloj compartido: 10 min, el ultimo 40% es NOCHE.
+// El cliente usa la misma formula (Date.now) para el visual: sincronia gratis.
+const DAYNIGHT_MS = 600000;
+function isNight() { return (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS >= 0.6; }
+let waveN = 0;
 const waveTimer = setInterval(() => {
   const players = [...clients.values()].filter((c) => c.ws && c.ws.readyState === 1);
   if (!players.length) return;
@@ -438,8 +449,13 @@ const waveTimer = setInterval(() => {
   // la oleada ESCALA con el poder del objetivo (estimado por su hpMax):
   // un novato recibe 4 zombies suaves; un veterano, 10 y de nivel alto
   const power = Math.max(0, Math.round(((c.hm || 100) - 100) / 50));
-  const size = Math.min(WAVE_SIZE, 4 + power);
-  const lvlCap = Math.min(5, 2 + Math.ceil(power / 2));
+  waveN++;
+  const night = isNight();
+  // NOCHE DE LOS MUERTOS: la horda nocturna es mas grande y mas brava
+  let size = Math.min(night ? 14 : WAVE_SIZE, Math.round((4 + power) * (night ? 1.5 : 1)));
+  const lvlCap = Math.min(5, 2 + Math.ceil(power / 2) + (night ? 1 : 0));
+  // cada 3ra oleada trae un BOSS: la ABOMINACION (hp x4, nivel alto, TTL largo)
+  const withBoss = waveN % 3 === 0;
   for (let i = 0; i < size; i++) {
     const ang = Math.random() * Math.PI * 2;
     const dist = 16 + Math.random() * 24;
@@ -466,7 +482,22 @@ const waveTimer = setInterval(() => {
     mobs.set(id, mob);
     broadcastAll({ t: 'mspawn', mob: mobView(mob) });
   }
-  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z) });
+  if (withBoss) {
+    const ang = Math.random() * Math.PI * 2;
+    let bx = c.x + Math.cos(ang) * 26, bz = c.z + Math.sin(ang) * 26;
+    const dg = Math.hypot(bx - SAFE_X, bz - SAFE_Z);
+    if (dg < SAFE_R + 14) {
+      const k = (SAFE_R + 14) / Math.max(dg, 0.01);
+      bx = SAFE_X + (bx - SAFE_X) * k;
+      bz = SAFE_Z + (bz - SAFE_Z) * k;
+    }
+    const id = nextMobId++;
+    const mob = makeMob(id, { x: bx, z: bz, lvl: Math.min(5, 3 + Math.ceil(power / 2)), zone: 'boss', boss: true });
+    mob._dieAtMs = Date.now() + 240000;
+    mobs.set(id, mob);
+    broadcastAll({ t: 'mspawn', mob: mobView(mob) });
+  }
+  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z), boss: withBoss ? 1 : 0, night: night ? 1 : 0 });
   console.log('oleada zombie sobre', c.name, '@', Math.round(c.x), Math.round(c.z));
 }, WAVE_EVERY_MS);
 if (waveTimer.unref) waveTimer.unref();
@@ -700,6 +731,7 @@ wss.on('connection', (ws, req) => {
         notifyFriendPresence(me.account);
         send(ws, { t: 'flist', friends: friendsPayload(me.account) });
       }
+      if (topStreaks.length) send(ws, { t: 'top', list: topStreaks });
     } else if (m.t === 's') {
       // sanitizar SIEMPRE lo que entra (pos/heading/anim) + vida visible p/ todos
       me.x = clampNum(m.x, -3000, 3000); me.z = clampNum(m.z, -3000, 3000);
@@ -748,6 +780,18 @@ wss.on('connection', (ws, req) => {
       }
 
     // --- PARTY ---
+    } else if (m.t === 'rank') {
+      // reporte de racha del cliente. Top 5 del dia, upsert por nombre.
+      const nowMs = Date.now();
+      if (conn._rankAt && nowMs - conn._rankAt < 4000) return;
+      conn._rankAt = nowMs;
+      const v = clampInt(m.v, 2, 80);
+      const name = clean(conn.name || 'Explorador', 20) || 'Explorador';
+      const cur = topStreaks.find((e) => e.name === name);
+      if (cur) { if (v > cur.v) cur.v = v; } else topStreaks.push({ name, v });
+      topStreaks.sort((a, b) => b.v - a.v);
+      if (topStreaks.length > 5) topStreaks.length = 5;
+      broadcastAll({ t: 'top', list: topStreaks });
     } else if (m.t === 'pskill') {
       // skill de PARTY: reenvia el buff/cura a los miembros del grupo del
       // emisor. Allowlist de tipos + clamps + cooldown anti-spam de 2.5s.
