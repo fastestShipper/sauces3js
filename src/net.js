@@ -3,12 +3,20 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708n';
-import { makeNametag } from './nametag.js?v=20260708n';
-import { cloneSkinned } from './npcs.js?v=20260708n';
-import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708n';
-import { showBubble } from './chat.js?v=20260708n';
-import { WS_URL } from './rpg/account.js?v=20260708n';
+import { sanitizeImported } from './glbutil.js?v=20260708o';
+import { applyCustom } from './rpg/charcustom.js?v=20260708o';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260708o';
+
+// spec de heroe a partir del charFile del remoto (para paleta/piezas)
+function classByChar(charFile) {
+  if (charFile === CERNUNNOS.char) return CERNUNNOS;
+  return CLASS_LIST.find((c) => c.char === charFile) || CLASS_LIST[0];
+}
+import { makeNametag } from './nametag.js?v=20260708o';
+import { cloneSkinned } from './npcs.js?v=20260708o';
+import { equipWeapon, attackClipName, ATTACK_SPEED } from './weapons.js?v=20260708o';
+import { showBubble } from './chat.js?v=20260708o';
+import { WS_URL } from './rpg/account.js?v=20260708o';
 
 const SCALE = 1.9 / 2.54;
 
@@ -92,7 +100,7 @@ export class Net {
     let ws;
     try { ws = new WebSocket(WS_URL); } catch { return; }
     this.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'hi', name: this.player.name || 'Anon', char: this.player.charFile, token: this.token }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'hi', name: this.player.name || 'Anon', char: this.player.charFile, cu: this.player.custom || null, token: this.token }));
     ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } this._onMsg(m); };
     ws.onclose = () => { this.ws = null; setTimeout(() => this._connect(), 3000); };  // reconexion
     ws.onerror = () => {};
@@ -243,6 +251,8 @@ export class Net {
     const ch = cloneSkinned(proto.scene);
     ch.scale.setScalar(SCALE);
     ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    // el remoto se ve COMO SE VE EL: tinte de paleta + piezas ocultas
+    applyCustom(ch, classByChar(charFile), p.cu || {});
     r.root.add(ch);
     if (p.name) r.root.add(makeNametag(p.name));
     r.hp = Number.isFinite(p.hp) ? p.hp : 100;

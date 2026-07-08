@@ -1,9 +1,10 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260708n';
-import { makeNametag } from './nametag.js?v=20260708n';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708n';
+import { sanitizeImported } from './glbutil.js?v=20260708o';
+import { makeNametag } from './nametag.js?v=20260708o';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED } from './weapons.js?v=20260708o';
+import { applyCustom } from './rpg/charcustom.js?v=20260708o';
 
 // Los clips de combate del pack traen ROOT MOTION (el hueso root/hips se traslada
 // dentro del clip). Jugados en el sitio, el personaje se desliza y vuelve de golpe
@@ -25,6 +26,8 @@ export class Player {
     this.heroTint = opts.tint || 0;
     this.heroWeapon = opts.weapon || null;
     this.combatStyle = opts.combatStyle || '';
+    this.heroSpec = opts.heroSpec || null;   // spec completa (paletas/piezas)
+    this.custom = opts.custom || { t: 0, h: [] };
     this.pos = new THREE.Vector3(spawn[0], 0, spawn[1]);
     this.heading = 0;
     this.yaw = 0.6;
@@ -74,16 +77,9 @@ export class Player {
     const sc = 1.9 / 2.54;
     ch.scale.setScalar(sc);
     ch.position.y = 0;
-    const tint = this.heroTint ? new THREE.Color(this.heroTint) : null;
-    ch.traverse(o => {
-      if (!o.isMesh) return;
-      o.castShadow = true;
-      // tinte del heroe: material propio para no pintar caches compartidos
-      if (tint && o.material && o.material.color) {
-        o.material = o.material.clone();
-        o.material.color.multiply(tint);
-      }
-    });
+    ch.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    // look del heroe: paleta elegida + piezas ocultas (charcustom)
+    if (this.heroSpec) applyCustom(ch, this.heroSpec, this.custom);
     sanitizeImported(ch);
     this.char = ch;
     this.root.add(ch);

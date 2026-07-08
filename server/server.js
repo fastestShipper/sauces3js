@@ -208,6 +208,12 @@ function sanitizeChar(raw, account) {
     level: clampInt(raw.level, 1, 200),
     xp: clampNum(raw.xp, 0, 1e9),
     hpMax: clampNum(raw.hpMax, 1, 100000),
+    custom: {
+      t: clampInt(raw.custom && raw.custom.t, 0, 3),
+      h: Array.isArray(raw.custom && raw.custom.h)
+        ? raw.custom.h.filter((x) => ['cape', 'helmet', 'visor', 'hat', 'quiver', 'mask'].includes(x)).slice(0, 4)
+        : [],
+    },
     gold: clampNum(raw.gold, 0, 1e9),
     inv,
     equipId: clean(raw.equipId, 40),
@@ -718,14 +724,20 @@ wss.on('connection', (ws, req) => {
       const wantChar = String(m.char || '');
       me.char = (CHAR_ALLOWLIST.includes(wantChar) && !(wantChar === GOD_CHAR && me.account !== GOD_USER))
         ? wantChar : 'char_knight.glb';
+      // customizacion visual (tinte + piezas ocultas): saneada y rebroadcasteada
+      const VALID_PIECES = ['cape', 'helmet', 'visor', 'hat', 'quiver', 'mask'];
+      me.cu = {
+        t: clampInt(m.cu && m.cu.t, 0, 3),
+        h: Array.isArray(m.cu && m.cu.h) ? m.cu.h.filter((x) => VALID_PIECES.includes(x)).slice(0, 4) : [],
+      };
       const players = [];
       for (const [oid, c] of clients) {
-        if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
+        if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, cu: c.cu, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
       }
       send(ws, { t: 'roster', players });
       // estado actual de los mobs compartidos (server-authoritative).
       send(ws, { t: 'mobs', list: [...mobs.values()].map(mobView) });
-      broadcast(id, { t: 'join', id, name: me.name, char: me.char, x: me.x, z: me.z, h: me.h, a: me.a });
+      broadcast(id, { t: 'join', id, name: me.name, char: me.char, cu: me.cu, x: me.x, z: me.z, h: me.h, a: me.a });
       // presencia: avisa a mis amigos conectados que entre, y mandame mi lista
       if (me.account) {
         notifyFriendPresence(me.account);

@@ -3,36 +3,38 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708n';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708n';
-import { GrassSystem } from './veg/grass.js?v=20260708n';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708n';
-import { Player } from './player.js?v=20260708n';
-import { MiniMap } from './minimap.js?v=20260708n';
-import { StreetLife } from './npcs.js?v=20260708n';
-import { sanitizeImported } from './glbutil.js?v=20260708n';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708n';
-import { Net } from './net.js?v=20260708n';
-import { ChatUI, showBubble } from './chat.js?v=20260708n';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708n';
-import { authRequest } from './rpg/account.js?v=20260708n';
-import { MobField } from './rpg/mobs.js?v=20260708n';
-import { Inventory } from './rpg/loot.js?v=20260708n';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708n';
-import { Combat } from './rpg/combat.js?v=20260708n';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708n';
-import { Effects } from './rpg/effects.js?v=20260708n';
-import { attachWeaponByName } from './weapons.js?v=20260708n';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708n';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708n';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708n';
-import { SocialPanel } from './social.js?v=20260708n';
-import { SkillSystem } from './rpg/skills.js?v=20260708n';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708n';
-import { createSfx } from './sfx.js?v=20260708n';
-import { installTouchControls } from './touch.js?v=20260708n';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708o';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708o';
+import { GrassSystem } from './veg/grass.js?v=20260708o';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708o';
+import { Player } from './player.js?v=20260708o';
+import { MiniMap } from './minimap.js?v=20260708o';
+import { StreetLife } from './npcs.js?v=20260708o';
+import { sanitizeImported } from './glbutil.js?v=20260708o';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708o';
+import { Net } from './net.js?v=20260708o';
+import { ChatUI, showBubble } from './chat.js?v=20260708o';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708o';
+import { applyCustom, sanitizeCustom, PIECES_BY_CHAR, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708o';
+import { equipWeapon } from './weapons.js?v=20260708o';
+import { authRequest } from './rpg/account.js?v=20260708o';
+import { MobField } from './rpg/mobs.js?v=20260708o';
+import { Inventory } from './rpg/loot.js?v=20260708o';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708o';
+import { Combat } from './rpg/combat.js?v=20260708o';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708o';
+import { Effects } from './rpg/effects.js?v=20260708o';
+import { attachWeaponByName } from './weapons.js?v=20260708o';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708o';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708o';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708o';
+import { SocialPanel } from './social.js?v=20260708o';
+import { SkillSystem } from './rpg/skills.js?v=20260708o';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708o';
+import { createSfx } from './sfx.js?v=20260708o';
+import { installTouchControls } from './touch.js?v=20260708o';
 
-const APP_VERSION = '20260708n';
+const APP_VERSION = '20260708o';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -219,35 +221,151 @@ function showAuth() {
 function showClassPick(prefillName) {
   return new Promise(resolve => {
     const ob = document.getElementById('onboard');
+    const card = ob.querySelector('.ob-card');
     const grid = document.getElementById('ob-grid');
     const go = document.getElementById('ob-go');
     const nameI = document.getElementById('ob-name');
     if (prefillName) nameI.value = prefillName;
     grid.replaceChildren();
-    let sel = null;
-    const ACCENTS = { guerrero: '#ff6b5e', mago: '#8f7bff', arquero: '#5fd18a', encapuchado: '#58b6ff' };
+
+    // ===== PREVIEW 3D en vivo: el heroe girando con su look elegido =====
+    let mount = document.getElementById('ob-preview');
+    if (!mount) {
+      mount = document.createElement('div');
+      mount.id = 'ob-preview';
+      card.insertBefore(mount, nameI);
+    }
+    mount.replaceChildren();
+    const PW = Math.min(300, innerWidth - 80), PH = 250;
+    const prr = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    prr.setSize(PW, PH);
+    prr.setPixelRatio(Math.min(devicePixelRatio, 2));
+    prr.outputColorSpace = THREE.SRGBColorSpace;
+    mount.appendChild(prr.domElement);
+    const psc = new THREE.Scene();
+    const pcam = new THREE.PerspectiveCamera(36, PW / PH, 0.1, 20);
+    pcam.position.set(0, 1.5, 3.4);
+    pcam.lookAt(0, 1.0, 0);
+    psc.add(new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 1.2));
+    const pdir = new THREE.DirectionalLight(0xfff1d0, 2.4);
+    pdir.position.set(2.2, 3, 2.4);
+    psc.add(pdir);
+    const ploader = new GLTFLoader();
+    let pgroup = null, pmixer = null, pdisposed = false, pIdle = null, pLoadSeq = 0;
+    ploader.loadAsync('./assets/models/char_anims_general.glb')
+      .then(g => { pIdle = g.animations.find(c => /^Idle/i.test(c.name)) || null; refresh(); })
+      .catch(() => {});
+
+    // ===== estado de customizacion =====
+    let sel = CLASS_LIST[0];
+    let custom = { t: 0, h: [] };
+
+    async function refresh() {
+      const seq = ++pLoadSeq;
+      try {
+        const g = await ploader.loadAsync('./assets/models/' + sel.char);
+        if (pdisposed || seq !== pLoadSeq) return;
+        if (pgroup) psc.remove(pgroup);
+        pgroup = new THREE.Group();
+        const ch = g.scene;
+        ch.scale.setScalar(1.9 / 2.54);
+        applyCustom(ch, sel, custom);
+        pgroup.add(ch);
+        psc.add(pgroup);
+        pmixer = new THREE.AnimationMixer(ch);
+        if (pIdle) pmixer.clipAction(pIdle).play();
+        equipWeapon(ploader, ch, sel.char, sel.weapon).catch(() => {});
+      } catch { /* preview es cosmetico: jamas bloquea el onboarding */ }
+    }
+    const pclock = new THREE.Clock();
+    (function ptick() {
+      if (pdisposed) return;
+      requestAnimationFrame(ptick);
+      const pdt = pclock.getDelta();
+      if (pmixer) pmixer.update(pdt);
+      if (pgroup) pgroup.rotation.y += pdt * 0.7;
+      prr.render(psc, pcam);
+    })();
+
+    // ===== fila de paleta + piezas (se regenera al cambiar de heroe) =====
+    let customRow = document.getElementById('ob-custom');
+    if (!customRow) {
+      customRow = document.createElement('div');
+      customRow.id = 'ob-custom';
+      grid.parentNode.insertBefore(customRow, go);
+    }
+    function renderCustomRow() {
+      customRow.replaceChildren();
+      const pal = PALETTES_BY_CLASS[sel.id] || [];
+      const sw = document.createElement('div');
+      sw.className = 'ob-swatches';
+      pal.forEach((c, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'ob-swatch' + (custom.t === i ? ' on' : '');
+        b.style.background = '#' + (c.tint || 0xffffff).toString(16).padStart(6, '0');
+        b.title = c.name;
+        b.onclick = () => { custom.t = i; renderCustomRow(); refresh(); };
+        sw.appendChild(b);
+      });
+      customRow.appendChild(sw);
+      const pieces = PIECES_BY_CHAR[sel.char] || [];
+      if (pieces.length) {
+        const pc = document.createElement('div');
+        pc.className = 'ob-pieces';
+        for (const piece of pieces) {
+          const on = !custom.h.includes(piece.id);
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'ob-piece' + (on ? ' on' : '');
+          b.textContent = (on ? '✓ ' : '✗ ') + piece.name;
+          b.onclick = () => {
+            custom.h = on ? [...custom.h, piece.id] : custom.h.filter(x => x !== piece.id);
+            renderCustomRow();
+            refresh();
+          };
+          pc.appendChild(b);
+        }
+        customRow.appendChild(pc);
+      }
+    }
+
+    const ACCENTS = { verdugo: '#ff6b5e', piromante: '#ff9a4d', cazadora: '#5fd18a', sombra: '#a98aff' };
     CLASS_LIST.forEach(c => {
-      const card = document.createElement('button');
-      card.className = 'ob-char';
-      card.style.setProperty('--ob-accent', ACCENTS[c.id] || '#ffcf5c');
+      const cardBtn = document.createElement('button');
+      cardBtn.className = 'ob-char';
+      cardBtn.style.setProperty('--ob-accent', ACCENTS[c.id] || '#ffcf5c');
       const eSpan = document.createElement('span'); eSpan.className = 'e'; eSpan.textContent = c.emoji;
       const nSpan = document.createElement('span'); nSpan.className = 'n'; nSpan.textContent = c.name;
       const rSpan = document.createElement('span'); rSpan.className = 'r'; rSpan.textContent = c.rol || '';
-      card.append(eSpan, nSpan, rSpan);
-      card.onclick = () => {
+      cardBtn.append(eSpan, nSpan, rSpan);
+      cardBtn.onclick = () => {
         sel = c;
+        custom = { t: 0, h: [] };
         [...grid.children].forEach(x => x.classList.remove('on'));
-        card.classList.add('on');
+        cardBtn.classList.add('on');
         go.disabled = false;
+        renderCustomRow();
+        refresh();
       };
-      grid.appendChild(card);
+      grid.appendChild(cardBtn);
+      if (c === sel) cardBtn.classList.add('on');
     });
+    renderCustomRow();
+    refresh();
     ob.style.display = 'flex';
-    go.disabled = true;
+    go.disabled = false;
     go.onclick = () => {
       if (!sel) return;
+      pdisposed = true;
+      try { prr.dispose(); } catch { /* liberar GPU del preview */ }
       ob.style.display = 'none';
-      resolve({ char: sel.char, name: (nameI.value.trim() || sel.name).slice(0, 16), className: sel.id });
+      resolve({
+        char: sel.char,
+        name: (nameI.value.trim() || sel.name).slice(0, 16),
+        className: sel.id,
+        custom: sanitizeCustom(custom),
+      });
     };
   });
 }
@@ -761,7 +879,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   } else if (auth.god) {
     choice = { char: CERNUNNOS.char, name: CERNUNNOS.name, className: 'cernunnos', god: true };
   } else if (auth.char && auth.char.charFile) {
-    choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className };
+    choice = { char: auth.char.charFile, name: auth.user, className: auth.char.className, custom: sanitizeCustom(auth.char.custom || {}) };
   } else if (auth.guest) {
     choice = await showClassPick('Explorador');
   } else {
@@ -777,6 +895,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     tint: heroSpec.tint,
     weapon: heroSpec.weapon,
     combatStyle: heroSpec.combatStyle,
+    heroSpec,
+    custom: choice.custom || (auth.char && auth.char.custom) || { t: 0, h: [] },
   });
   await player.load();
   setBootOverlay(0.42, 'Conectando al barrio…');
@@ -1005,6 +1125,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     className: choice.className, charFile: choice.char,
     level: progress.level, xp: progress.xp, hpMax: progress.hpMax,
     gold: wallet.gold,
+    custom: player.custom,
     inv: inventory.items, equipId: inventory.equippedWeapon ? inventory.equippedWeapon.id : null,
   });
   let saveT = null;
