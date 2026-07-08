@@ -3,40 +3,40 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709k';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709k';
-import { GrassSystem } from './veg/grass.js?v=20260709k';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709k';
-import { Player } from './player.js?v=20260709k';
-import { MiniMap } from './minimap.js?v=20260709k';
-import { StreetLife } from './npcs.js?v=20260709k';
-import { sanitizeImported } from './glbutil.js?v=20260709k';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709k';
-import { Net } from './net.js?v=20260709k';
-import { ChatUI, showBubble } from './chat.js?v=20260709k';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709k';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709k';
-import { equipWeapon } from './weapons.js?v=20260709k';
-import { authRequest } from './rpg/account.js?v=20260709k';
-import { MobField } from './rpg/mobs.js?v=20260709k';
-import { Inventory } from './rpg/loot.js?v=20260709k';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709k';
-import { Combat } from './rpg/combat.js?v=20260709k';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709k';
-import { Effects } from './rpg/effects.js?v=20260709k';
-import { attachWeaponByName } from './weapons.js?v=20260709k';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709k';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709k';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709k';
-import { SocialPanel } from './social.js?v=20260709k';
-import { SkillSystem } from './rpg/skills.js?v=20260709k';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260709k';
-import { createSfx } from './sfx.js?v=20260709k';
-import { installTouchControls } from './touch.js?v=20260709k';
-import { createIntroScene } from './introscene.js?v=20260709k';
-import { styleCarShell } from './carstyle.js?v=20260709k';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709l';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709l';
+import { GrassSystem } from './veg/grass.js?v=20260709l';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709l';
+import { Player } from './player.js?v=20260709l';
+import { MiniMap } from './minimap.js?v=20260709l';
+import { StreetLife } from './npcs.js?v=20260709l';
+import { sanitizeImported } from './glbutil.js?v=20260709l';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709l';
+import { Net } from './net.js?v=20260709l';
+import { ChatUI, showBubble } from './chat.js?v=20260709l';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709l';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709l';
+import { equipWeapon } from './weapons.js?v=20260709l';
+import { authRequest } from './rpg/account.js?v=20260709l';
+import { MobField } from './rpg/mobs.js?v=20260709l';
+import { Inventory } from './rpg/loot.js?v=20260709l';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709l';
+import { Combat } from './rpg/combat.js?v=20260709l';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709l';
+import { Effects } from './rpg/effects.js?v=20260709l';
+import { attachWeaponByName } from './weapons.js?v=20260709l';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709l';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709l';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709l';
+import { SocialPanel } from './social.js?v=20260709l';
+import { SkillSystem } from './rpg/skills.js?v=20260709l';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260709l';
+import { createSfx } from './sfx.js?v=20260709l';
+import { installTouchControls } from './touch.js?v=20260709l';
+import { createIntroScene } from './introscene.js?v=20260709l';
+import { styleCarShell } from './carstyle.js?v=20260709l';
 
-const APP_VERSION = '20260709k';
+const APP_VERSION = '20260709l';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -49,6 +49,9 @@ const setProgress = (v, msg) => {
   lbar.style.width = Math.round(v * 100) + '%';
   if (msg && loadingMsg) loadingMsg.textContent = msg;
 };
+// respiro para el navegador entre fases PESADAS del boot: sin esto la
+// construccion sincrona congela la barra y el 3D de fondo (frames muertos)
+const breathe = () => new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
 
 const LS_USER = 'sauces_last_user';
 const LS_TOKEN = 'sauces_session_token';
@@ -436,6 +439,7 @@ async function boot() {
   scene.environmentIntensity = 0.45;
   scene.backgroundIntensity = 1.0;
   setProgress(0.12, 'Amanece en el barrio…');
+  await breathe();
 
   const sun = new THREE.DirectionalLight(0xfff1d0, 2.5);
   worldLights.sun = sun;
@@ -476,9 +480,11 @@ async function boot() {
   cropZoneData(data);
   const publicPoisPromise = loadPublicPois(APP_VERSION, data.pois || []);
   setProgress(0.28, 'Trazando los jirones…');
+  await breathe();
   const city = new City(data, cityGenOptions());
   window.__SAUCES_CITY__ = city;
   setProgress(0.48, 'Levantando las casas…');
+  await breathe();
 
   // edificios
   const W = buildBuildings(city);
@@ -507,6 +513,7 @@ async function boot() {
   addBucket(W.door, new THREE.MeshStandardMaterial({ color: 0x4d3826, vertexColors: true, roughness: 0.65, side: THREE.DoubleSide }));
   addBucket(W.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
   setProgress(0.7);
+  await breathe();
 
   const R = buildRoads(city);
   // calles: superficies toon planas (el color vive en el canvas del kit)
@@ -525,6 +532,7 @@ async function boot() {
   // tableros/parapetos de puentes elevados (trebol): concreto toon, proyecta sombra
   addBucket(R.deck, new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 1, side: THREE.DoubleSide }));
   setProgress(0.8);
+  await breathe();
 
   // parques
   const P = buildParks(city);

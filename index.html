@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏘️%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
 <style>
   :root {
     --ink: #171429;
@@ -93,10 +93,12 @@
   }
   .ginput::placeholder { color: #7d78a0; }
   .ginput:focus { border-color: rgba(108,194,94,.85); box-shadow: 0 0 0 4px rgba(108,194,94,.2); }
-  .glogo { font-size: clamp(46px, 7vw, 82px); font-weight: 700; letter-spacing: 2.5px; line-height: .95;
-    color: #fff;
-    text-shadow: 0 2px 0 rgba(20,14,40,.9), 0 5px 0 rgba(20,14,40,.45), 0 18px 50px rgba(8,6,24,.8), 0 0 70px rgba(150,230,150,.35); }
-  .gpill { display: inline-block; margin-top: 12px; font-size: 12px; font-weight: 700; letter-spacing: 5px;
+  .glogo { font-family: 'Cinzel', serif; font-size: clamp(44px, 6.6vw, 78px); font-weight: 900;
+    letter-spacing: 6px; line-height: .95;
+    background: linear-gradient(180deg, #f4ffe8 0%, #cdeeb2 38%, #7fd07a 62%, #3f9e58 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 3px 0 rgba(10,26,14,.85)) drop-shadow(0 12px 32px rgba(6,18,10,.7)) drop-shadow(0 0 34px rgba(140,230,130,.35)); }
+  .gpill { display: inline-block; margin-top: 12px; font-family: 'Cinzel', serif; font-size: 11px; font-weight: 700; letter-spacing: 6px;
     text-transform: uppercase; color: #b9f0a0; background: rgba(24,52,30,.5);
     border: 1px solid var(--glass-line); padding: 7px 20px; border-radius: 999px;
     backdrop-filter: blur(12px) saturate(1.4); text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 0 14px rgba(140,230,130,.55);
@@ -237,7 +239,7 @@
     color: #ffd9b0; background: rgba(40,24,48,.6); border: 1px solid rgba(255,200,140,.3);
     padding: 6px 18px; border-radius: 999px; backdrop-filter: blur(4px);
   }
-  #loading .ld-msg { font-size: 15px; font-weight: 600; color: #fff; text-shadow: 0 2px 8px rgba(10,6,20,.95), 0 0 24px rgba(10,6,20,.7); }
+  #loading .ld-msg { font-size: 13px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(233,255,225,.92); text-shadow: 0 2px 8px rgba(10,6,20,.95); }
   #loading .bar {
     width: min(380px, 76vw); height: 13px; border-radius: 999px;
     background: rgba(10,24,14,.65); overflow: hidden;
@@ -434,6 +436,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260709k"></script>
+<script type="module" src="./src/app.js?v=20260709l"></script>
 </body>
 </html>
