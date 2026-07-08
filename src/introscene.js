@@ -5,7 +5,7 @@
 // juego cargara despues. Si el GLB falla, queda el fondo CSS de siempre.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createToonSkyTexture } from './worldmat.js?v=20260708x';
+import { createToonSkyTexture } from './worldmat.js?v=20260708y';
 
 export function createIntroScene(appVersion) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -92,9 +92,18 @@ export function createIntroScene(appVersion) {
       for (let i = 0; i < 14; i++) {
         plant(scene, rng() * Math.PI * 2, i < 8 ? 26 + rng() * 12 : 46 + rng() * 50, 5.2 + rng() * 2.8);
       }
-      // carga: BOSQUE DE SAUCES — grandes, por todos lados, cuadro lleno
-      for (let i = 0; i < 30; i++) {
-        plant(forest, rng() * Math.PI * 2, 8 + rng() * 46, 7.5 + rng() * 4.5);
+      // carga: ALAMEDA de sauces — dos filas grandes enmarcando un sendero
+      // con aire al centro y profundidad de niebla (bonito, no saturado)
+      for (let side = -1; side <= 1; side += 2) {
+        for (let i = 0; i < 13; i++) {
+          const t = protos[(rng() * protos.length) | 0].clone(true);
+          const h = 7.5 + rng() * 3.2;
+          t.scale.setScalar(h / 20.6);
+          t.position.set(side * (8.5 + rng() * 4), 0, -14 + i * 10 + rng() * 3);
+          t.rotation.y = rng() * Math.PI * 2;
+          t.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = true; } });
+          forest.add(t);
+        }
       }
     })
     .catch(() => { /* sin arboles: el fondo CSS de respaldo sigue ahi */ });
@@ -127,10 +136,10 @@ export function createIntroScene(appVersion) {
       camera.position.set(Math.sin(a) * 9, 2.3 + Math.sin(t * 0.3) * 0.25, Math.cos(a) * 9);
       camera.lookAt(Math.sin(a + 1.1) * 30, 5.2, Math.cos(a + 1.1) * 30);
     } else {
-      // DENTRO del bosque: sauces gigantes llenando el cuadro por todos lados
-      const a = t * 0.03;
-      camera.position.set(Math.sin(a) * 16, 4.6 + Math.sin(t * 0.2) * 0.6, Math.cos(a) * 16);
-      camera.lookAt(Math.sin(a + 0.8) * 34, 6.5, Math.cos(a + 0.8) * 34);
+      // paseo LENTO por la alameda: sauces grandes a ambos lados, aire al centro
+      const z = -6 + t * 1.05;
+      camera.position.set(Math.sin(t * 0.14) * 1.4, 3.9 + Math.sin(t * 0.22) * 0.35, z);
+      camera.lookAt(0, 5.4, z + 30);
     }
     renderer.render(scene, camera);
   })();
