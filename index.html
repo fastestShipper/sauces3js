@@ -111,6 +111,13 @@
     filter: blur(2px); animation: ld-breathe 6s ease-in-out infinite;
   }
   @keyframes ld-breathe { 50% { transform: translate(-50%, -52%) scale(1.06); } }
+  /* LOS SAUCES: sauces llorones en silueta, meciendose (SVG puro) */
+  .willow { position: absolute; bottom: 9vh; width: 180px; height: 210px;
+    background-repeat: no-repeat; background-size: contain; background-position: bottom;
+    pointer-events: none; transform-origin: 50% 100%; animation: willow-sway 7s ease-in-out infinite; }
+  .willow.night { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20120%20140'%3E%3Cpath%20d%3D'M56%20138%20Q55%20112%2058%2084%20L64%2084%20Q65%20114%2062%20138%20Z'%20fill%3D'%23171426'%2F%3E%3Cpath%20d%3D'M%206%2058%20Q%2010%2016%2060%2010%20Q%20110%2016%20114%2058%20Q%20111%20120%20107%2067%20L%20105%2069%20Q%20102%20100%2098%2077%20L%2096%2079%20Q%2093%20108%2089%2069%20L%2087%2071%20Q%2084%20107%2080%2068%20L%2078%2070%20Q%2075%20123%2071%2067%20L%2069%2069%20Q%2066%20121%2062%2077%20L%2060%2079%20Q%2057%20128%2053%2074%20L%2051%2076%20Q%2048%20102%2044%2075%20L%2042%2077%20Q%2039%20113%2035%2066%20L%2033%2068%20Q%2030%20100%2026%2067%20L%2024%2069%20Q%2021%20106%2017%2069%20L%2015%2071%20Q%2012%20116%208%2075%20Z'%20fill%3D'%23171426'%2F%3E%3C%2Fsvg%3E"); }
+  .willow.day { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20120%20140'%3E%3Cpath%20d%3D'M56%20138%20Q55%20112%2058%2084%20L64%2084%20Q65%20114%2062%20138%20Z'%20fill%3D'%231d4254'%2F%3E%3Cpath%20d%3D'M%206%2058%20Q%2010%2016%2060%2010%20Q%20110%2016%20114%2058%20Q%20111%20120%20107%2067%20L%20105%2069%20Q%20102%20100%2098%2077%20L%2096%2079%20Q%2093%20108%2089%2069%20L%2087%2071%20Q%2084%20107%2080%2068%20L%2078%2070%20Q%2075%20123%2071%2067%20L%2069%2069%20Q%2066%20121%2062%2077%20L%2060%2079%20Q%2057%20128%2053%2074%20L%2051%2076%20Q%2048%20102%2044%2075%20L%2042%2077%20Q%2039%20113%2035%2066%20L%2033%2068%20Q%2030%20100%2026%2067%20L%2024%2069%20Q%2021%20106%2017%2069%20L%2015%2071%20Q%2012%20116%208%2075%20Z'%20fill%3D'%231d4254'%2F%3E%3C%2Fsvg%3E"); }
+  @keyframes willow-sway { 50% { transform: rotate(1.6deg) skewX(1.2deg); } }
   .ld-drift { animation: ld-drift linear infinite; }
   @keyframes ld-drift { from { transform: translateX(-12vw); } to { transform: translateX(112vw); } }
   .ld-skyline-far {
@@ -300,6 +307,10 @@
   <div class="sky-cloud ld-drift" style="width:280px;height:64px;left:74%;top:30%;opacity:.55;animation-duration:44s"></div>
   <div class="ld-skyline-far"></div>
   <div class="sky-skyline"></div>
+  <div class="willow night" style="left:2%;width:230px;height:260px;animation-delay:-2s"></div>
+  <div class="willow night" style="left:16%;width:150px;height:175px;opacity:.85;animation-delay:-5s"></div>
+  <div class="willow night" style="right:4%;width:250px;height:290px;animation-delay:-3.5s"></div>
+  <div class="willow night" style="right:22%;width:130px;height:150px;opacity:.8;animation-delay:0s"></div>
   <div class="ld-horde" aria-hidden="true">
     <span style="animation-duration:26s;animation-delay:0s">🧟</span>
     <span style="animation-duration:31s;animation-delay:-9s;font-size:34px">🧟‍♀️</span>
@@ -323,6 +334,9 @@
   </div>
 </div>
 <div id="onboard" class="sky-scene">
+  <div class="willow day" style="left:1%;bottom:0;width:240px;height:280px;animation-delay:-3s"></div>
+  <div class="willow day" style="right:2%;bottom:0;width:270px;height:310px;animation-delay:-1s"></div>
+  <div class="willow day" style="right:20%;bottom:0;width:140px;height:160px;opacity:.75"></div>
   <div class="sky-cloud" style="width:210px;height:56px;left:10%;top:16%"></div>
   <div class="sky-cloud" style="width:170px;height:46px;left:72%;top:10%;opacity:.8"></div>
   <div class="sky-cloud" style="width:240px;height:60px;left:80%;top:38%;opacity:.65"></div>
@@ -345,6 +359,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260708q"></script>
+<script type="module" src="./src/app.js?v=20260708r"></script>
 </body>
 </html>

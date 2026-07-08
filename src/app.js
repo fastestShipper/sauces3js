@@ -3,38 +3,38 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708q';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708q';
-import { GrassSystem } from './veg/grass.js?v=20260708q';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260708q';
-import { Player } from './player.js?v=20260708q';
-import { MiniMap } from './minimap.js?v=20260708q';
-import { StreetLife } from './npcs.js?v=20260708q';
-import { sanitizeImported } from './glbutil.js?v=20260708q';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708q';
-import { Net } from './net.js?v=20260708q';
-import { ChatUI, showBubble } from './chat.js?v=20260708q';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708q';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708q';
-import { equipWeapon } from './weapons.js?v=20260708q';
-import { authRequest } from './rpg/account.js?v=20260708q';
-import { MobField } from './rpg/mobs.js?v=20260708q';
-import { Inventory } from './rpg/loot.js?v=20260708q';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708q';
-import { Combat } from './rpg/combat.js?v=20260708q';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708q';
-import { Effects } from './rpg/effects.js?v=20260708q';
-import { attachWeaponByName } from './weapons.js?v=20260708q';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708q';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708q';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708q';
-import { SocialPanel } from './social.js?v=20260708q';
-import { SkillSystem } from './rpg/skills.js?v=20260708q';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260708q';
-import { createSfx } from './sfx.js?v=20260708q';
-import { installTouchControls } from './touch.js?v=20260708q';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260708r';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260708r';
+import { GrassSystem } from './veg/grass.js?v=20260708r';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260708r';
+import { Player } from './player.js?v=20260708r';
+import { MiniMap } from './minimap.js?v=20260708r';
+import { StreetLife } from './npcs.js?v=20260708r';
+import { sanitizeImported } from './glbutil.js?v=20260708r';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260708r';
+import { Net } from './net.js?v=20260708r';
+import { ChatUI, showBubble } from './chat.js?v=20260708r';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260708r';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260708r';
+import { equipWeapon } from './weapons.js?v=20260708r';
+import { authRequest } from './rpg/account.js?v=20260708r';
+import { MobField } from './rpg/mobs.js?v=20260708r';
+import { Inventory } from './rpg/loot.js?v=20260708r';
+import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260708r';
+import { Combat } from './rpg/combat.js?v=20260708r';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260708r';
+import { Effects } from './rpg/effects.js?v=20260708r';
+import { attachWeaponByName } from './weapons.js?v=20260708r';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260708r';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260708r';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260708r';
+import { SocialPanel } from './social.js?v=20260708r';
+import { SkillSystem } from './rpg/skills.js?v=20260708r';
+import { rollDrops, Wallet } from './rpg/economy.js?v=20260708r';
+import { createSfx } from './sfx.js?v=20260708r';
+import { installTouchControls } from './touch.js?v=20260708r';
 
-const APP_VERSION = '20260708q';
+const APP_VERSION = '20260708r';
 const trailerConfig = getTrailerConfig();
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
 
@@ -159,6 +159,17 @@ function showAuth() {
       const cl = document.createElement('div'); cl.className = 'sky-cloud'; cl.style.cssText += c; ov.appendChild(cl);
     }
     const skyline = document.createElement('div'); skyline.className = 'sky-skyline'; ov.appendChild(skyline);
+    // LOS SAUCES: sauces llorones enmarcando el login
+    for (const st of [
+      'left:1%;bottom:0;width:250px;height:290px;animation-delay:-4s',
+      'right:2%;bottom:0;width:280px;height:320px;animation-delay:-1.5s',
+      'left:18%;bottom:0;width:140px;height:160px;opacity:.75',
+    ]) {
+      const w = document.createElement('div');
+      w.className = 'willow day';
+      w.style.cssText += st;
+      ov.appendChild(w);
+    }
     const logo = document.createElement('div');
     logo.style.cssText = 'position:relative;text-align:center;line-height:.95';
     logo.innerHTML = '<div style="font-size:clamp(40px,6.4vw,66px);font-weight:700;letter-spacing:1px;color:#fff;text-shadow:0 3px 0 rgba(29,66,84,.55),0 14px 42px rgba(19,46,80,.5)">LOS SAUCES</div>' +
