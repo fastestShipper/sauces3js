@@ -3,41 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g37';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g37';
-import { GrassSystem } from './veg/grass.js?v=20260709g37';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709g37';
-import { Player } from './player.js?v=20260709g37';
-import { MiniMap } from './minimap.js?v=20260709g37';
-import { StreetLife } from './npcs.js?v=20260709g37';
-import { sanitizeImported } from './glbutil.js?v=20260709g37';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g37';
-import { Net } from './net.js?v=20260709g37';
-import { ChatUI, showBubble } from './chat.js?v=20260709g37';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g37';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g37';
-import { equipWeapon } from './weapons.js?v=20260709g37';
-import { authRequest } from './rpg/account.js?v=20260709g37';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g37';
-import { Inventory } from './rpg/loot.js?v=20260709g37';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g37';
-import { Combat } from './rpg/combat.js?v=20260709g37';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g37';
-import { Effects } from './rpg/effects.js?v=20260709g37';
-import { attachWeaponByName } from './weapons.js?v=20260709g37';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g37';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g37';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g37';
-import { SocialPanel } from './social.js?v=20260709g37';
-import { SkillSystem } from './rpg/skills.js?v=20260709g37';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g37';
-import { createSfx } from './sfx.js?v=20260709g37';
-import { installTouchControls } from './touch.js?v=20260709g37';
-import { createIntroScene } from './introscene.js?v=20260709g37';
-import { styleCarShell } from './carstyle.js?v=20260709g37';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g37';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g38';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g38';
+import { GrassSystem } from './veg/grass.js?v=20260709g38';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709g38';
+import { Player } from './player.js?v=20260709g38';
+import { MiniMap } from './minimap.js?v=20260709g38';
+import { StreetLife } from './npcs.js?v=20260709g38';
+import { sanitizeImported } from './glbutil.js?v=20260709g38';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g38';
+import { Net } from './net.js?v=20260709g38';
+import { ChatUI, showBubble } from './chat.js?v=20260709g38';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g38';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g38';
+import { equipWeapon } from './weapons.js?v=20260709g38';
+import { authRequest } from './rpg/account.js?v=20260709g38';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g38';
+import { Inventory } from './rpg/loot.js?v=20260709g38';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g38';
+import { Combat } from './rpg/combat.js?v=20260709g38';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g38';
+import { Effects } from './rpg/effects.js?v=20260709g38';
+import { attachWeaponByName } from './weapons.js?v=20260709g38';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g38';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g38';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g38';
+import { SocialPanel } from './social.js?v=20260709g38';
+import { SkillSystem } from './rpg/skills.js?v=20260709g38';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g38';
+import { createSfx } from './sfx.js?v=20260709g38';
+import { installTouchControls } from './touch.js?v=20260709g38';
+import { createIntroScene } from './introscene.js?v=20260709g38';
+import { styleCarShell } from './carstyle.js?v=20260709g38';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g38';
+import { FrameMeter, fpsBand } from './perf.js?v=20260709g38';
 
-const APP_VERSION = '20260709g37';
+const APP_VERSION = '20260709g38';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -1036,6 +1037,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   window.__game = { player, city, scene, renderer, camera };
   const minimap = new MiniMap(city, document.getElementById('minimap'));
   const coordsEl = document.getElementById('coords');
+  const fpsEl = document.getElementById('fps');
   const daytimeEl = document.getElementById('daytime');
   const net = trailerConfig.enabled && trailerConfig.offline ? createTrailerNet() : new Net(scene, player, auth.token, { assetVersion: APP_VERSION });
   window.__game.net = net;
@@ -1406,6 +1408,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   let streetT = 0;
   let minimapT = 0;
   const clock = new THREE.Clock();
+  const frameMeter = new FrameMeter();
   let firstPlayable = true;
   let heavyDecorStarted = false;
   let streetLifeStarted = false;
@@ -1427,7 +1430,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     }
   };
   renderer.setAnimationLoop(() => {
-    const rawDt = Math.min(clock.getDelta(), 0.05);
+    const wallDt = clock.getDelta();
+    const rawDt = Math.min(wallDt, 0.05);
     // GAME FEEL: hit-stop congela el mundo ~50ms al conectar; racha alta = slow-mo.
     // El factor decae con el dt REAL (si no, el freeze seria eterno).
     const dt = rawDt * (combat.timeFactor ? combat.timeFactor(rawDt) : 1);
@@ -1440,16 +1444,6 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     }
     if (trailer) trailer.beforeFrame(dt);
     player.update(dt, camera);
-    {
-      // zona SELLADA (edificio hueco en 3,-47): empuja al jugador afuera
-      const sdx = player.pos.x - 3, sdz = player.pos.z - (-47);
-      const sd = Math.hypot(sdx, sdz);
-      if (sd < 11) {
-        const k = 11 / Math.max(sd, 0.01);
-        player.pos.x = 3 + sdx * k;
-        player.pos.z = -47 + sdz * k;
-      }
-    }
     {
       // borde del mundo: nada de caminar hacia el vacio fuera del radio
       const dxw = player.pos.x - WORLD_ANCHOR[0], dzw = player.pos.z - WORLD_ANCHOR[1];
@@ -1527,6 +1521,15 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       if (sh) { camera.position.x += sh.x; camera.position.y += sh.y; camera.position.z += sh.z; }
     }
     renderer.render(scene, camera);
+    const perf = frameMeter.sample(wallDt, renderer.info.render);
+    if (perf) {
+      Object.assign(window.__SAUCES_PERF__, perf);
+      if (fpsEl) {
+        fpsEl.textContent = `${perf.fps} FPS`;
+        fpsEl.className = fpsBand(perf.fps);
+        fpsEl.title = `${perf.frameMs.toFixed(1)} ms prom · ${perf.worstFrameMs.toFixed(1)} ms peor · ${perf.calls} llamadas · ${perf.triangles.toLocaleString()} triángulos`;
+      }
+    }
   });
 }
 

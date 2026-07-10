@@ -112,6 +112,7 @@ export class City {
     this.osmBuildingCount = (data.buildings || []).length;
     for (const b of this.data.buildings) b.osm = true;
     this.carColliders = [];
+    this.extraBuildingColliders = [];
     this.buildSegGrid();
     this.cachePolys();
     if (this.genOpts.frontageStrips || this.genOpts.interiorCarpet) {
@@ -232,20 +233,42 @@ export class City {
     });
     this.ringGrid = new Map();
     this.rings = [];
+    this.buildingColliderKeys = new Map();
     for (const b of this.data.buildings) {
-      let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
-      for (const p of b.p) { minx = Math.min(minx, p[0]); minz = Math.min(minz, p[1]); maxx = Math.max(maxx, p[0]); maxz = Math.max(maxz, p[1]); }
-      const idx = this.rings.length;
-      this.rings.push({ ring: b.p, bb: [minx, minz, maxx, maxz], h: b.h ?? 5 });
-      for (let cx = Math.floor((minx - 3) / SEG_CELL); cx <= Math.floor((maxx + 3) / SEG_CELL); cx++) {
-        for (let cz = Math.floor((minz - 3) / SEG_CELL); cz <= Math.floor((maxz + 3) / SEG_CELL); cz++) {
-          const key = cx + ',' + cz;
-          let arr = this.ringGrid.get(key);
-          if (!arr) { arr = []; this.ringGrid.set(key, arr); }
-          arr.push(idx);
-        }
+      this._indexBuildingCollider(b.p, b.h ?? 5);
+    }
+    for (const collider of this.extraBuildingColliders) {
+      const idx = this._indexBuildingCollider(collider.ring, collider.h);
+      if (collider.key) this.buildingColliderKeys.set(collider.key, idx);
+    }
+  }
+
+  _indexBuildingCollider(ring, h) {
+    let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
+    for (const p of ring) { minx = Math.min(minx, p[0]); minz = Math.min(minz, p[1]); maxx = Math.max(maxx, p[0]); maxz = Math.max(maxz, p[1]); }
+    const idx = this.rings.length;
+    this.rings.push({ ring, bb: [minx, minz, maxx, maxz], h });
+    for (let cx = Math.floor((minx - 3) / SEG_CELL); cx <= Math.floor((maxx + 3) / SEG_CELL); cx++) {
+      for (let cz = Math.floor((minz - 3) / SEG_CELL); cz <= Math.floor((maxz + 3) / SEG_CELL); cz++) {
+        const key = cx + ',' + cz;
+        let arr = this.ringGrid.get(key);
+        if (!arr) { arr = []; this.ringGrid.set(key, arr); }
+        arr.push(idx);
       }
     }
+    return idx;
+  }
+
+  addBuildingCollider(ring, h = 5, key = '') {
+    if (!Array.isArray(ring) || ring.length < 3 || ring.some((p) => (
+      !Array.isArray(p) || p.length < 2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])
+    ))) return -1;
+    if (key && this.buildingColliderKeys.has(key)) return this.buildingColliderKeys.get(key);
+    const collider = { ring: ring.map((p) => [p[0], p[1]]), h: Number(h) || 5, key };
+    this.extraBuildingColliders.push(collider);
+    const idx = this._indexBuildingCollider(collider.ring, collider.h);
+    if (key) this.buildingColliderKeys.set(key, idx);
+    return idx;
   }
 
   inAnyGreen(x, z) {

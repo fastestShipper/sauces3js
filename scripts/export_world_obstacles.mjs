@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 
 import { City, cropZoneData } from '../src/citygen.js';
+import { registerLosSauces202Collision } from '../src/landmark.js';
 
 const sourceUrl = new URL('../assets/zone.json', import.meta.url);
 const outputUrl = new URL('../server/world_obstacles.json', import.meta.url);
@@ -10,6 +11,7 @@ const data = JSON.parse(sourceText);
 cropZoneData(data);
 
 const city = new City(data, { frontageStrips: true, interiorCarpet: true });
+registerLosSauces202Collision(city);
 const round = (value) => Math.round(Number(value) * 100) / 100;
 const obstacles = city.rings
   .map(({ bb, ring }) => [

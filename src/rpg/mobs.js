@@ -12,8 +12,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { plantClip } from '../animclip.js?v=20260709g37';
-import { sanitizeImported } from '../glbutil.js?v=20260709g37';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { plantClip } from '../animclip.js?v=20260709g38';
+import { sanitizeImported } from '../glbutil.js?v=20260709g38';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -76,12 +77,10 @@ const PROJECTILE_BY_CHAR = {
 const MOB_GLB_URL = './assets/models/kaykit_skeletons.glb';
 
 // These immutable shapes are shared by every mob. Their mutable materials stay per visual.
-const SHARED_HP_BG_GEOMETRY = new THREE.PlaneGeometry(HP_W, HP_H);
-const SHARED_HP_FILL_GEOMETRY = new THREE.PlaneGeometry(HP_W, HP_H);
+const SHARED_HP_GEOMETRY = new THREE.PlaneGeometry(HP_W, HP_H);
 const SHARED_TARGET_RING_GEOMETRY = new THREE.RingGeometry(0.7, 0.92, 28);
 const SHARED_MOB_GEOMETRIES = new Set([
-  SHARED_HP_BG_GEOMETRY,
-  SHARED_HP_FILL_GEOMETRY,
+  SHARED_HP_GEOMETRY,
   SHARED_TARGET_RING_GEOMETRY,
 ]);
 
@@ -176,28 +175,118 @@ export function plantMobClips(clips) {
   return Array.isArray(clips) ? clips.map(plantClip) : [];
 }
 
-// Barra de vida flotante: fondo oscuro + relleno verde. Dos planos apilados dentro
-// de un grupo que luego se billboardea hacia la camara en update().
+// The KayKit rigs split one skeleton/material into 7-8 skinned primitives. They
+// share parent, bind matrix and vertex layout, so rendering them separately only
+// multiplies draw calls. Merge compatible groups once on the prototype; cloned
+// mobs keep independent skeletons and materials while sharing the merged shape.
+export function mergeMobSkinnedParts(root) {
+  if (!root || !root.traverse) return { groups: 0, before: 0, after: 0 };
+  const buckets = new Map();
+  let before = 0;
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh || !o.parent || !o.skeleton || !o.geometry || Array.isArray(o.material)) return;
+    before++;
+    const attrs = Object.keys(o.geometry.attributes || {}).sort().join(',');
+    const bind = o.bindMatrix?.elements?.join(',') || '';
+    // SkeletonUtils in Three r161 creates one Skeleton wrapper per mesh, while
+    // every wrapper still points at the same ordered bone objects. Group by the
+    // actual bone sequence so the optimization works in the production runtime.
+    const bones = o.skeleton.bones.map((bone) => bone.uuid).join(',');
+    const key = [o.parent.uuid, bones, o.material?.uuid || '', o.geometry.index ? 1 : 0, attrs, bind].join('|');
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(o);
+  });
+
+  let groups = 0;
+  let removed = 0;
+  for (const meshes of buckets.values()) {
+    if (meshes.length < 2) continue;
+    let geometry = null;
+    try { geometry = mergeGeometries(meshes.map((m) => m.geometry), false); } catch {}
+    if (!geometry) continue;
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+
+    const first = meshes[0];
+    const merged = new THREE.SkinnedMesh(geometry, first.material);
+    merged.name = `${first.name.replace(/_[^_]+$/, '')}_Merged`;
+    merged.position.copy(first.position);
+    merged.quaternion.copy(first.quaternion);
+    merged.scale.copy(first.scale);
+    merged.bindMode = first.bindMode;
+    merged.bind(first.skeleton, first.bindMatrix);
+    merged.castShadow = meshes.some((m) => m.castShadow);
+    merged.receiveShadow = meshes.some((m) => m.receiveShadow);
+    merged.frustumCulled = first.frustumCulled;
+    merged.renderOrder = first.renderOrder;
+    merged.layers.mask = first.layers.mask;
+    first.parent.add(merged);
+    for (const mesh of meshes) mesh.parent?.remove(mesh);
+    groups++;
+    removed += meshes.length;
+  }
+  return { groups, before, after: before - removed + groups };
+}
+
+// One shader plane draws both the dark background and colored fill. This keeps
+// the same readable bar while halving its draw-call cost.
 function makeHpBar() {
   const group = new THREE.Group();
   group.position.y = HP_Y;
-  const bg = new THREE.Mesh(SHARED_HP_BG_GEOMETRY, new THREE.MeshBasicMaterial({ color: 0x14161c, depthTest: false, transparent: true, opacity: 0.85 }));
-  bg.renderOrder = 998;
-  const fill = new THREE.Mesh(SHARED_HP_FILL_GEOMETRY, new THREE.MeshBasicMaterial({ color: 0x46d35a, depthTest: false, transparent: true }));
-  fill.position.z = 0.001;         // delante del fondo para evitar z-fighting
-  fill.renderOrder = 999;
-  group.add(bg);
-  group.add(fill);
-  return { group, bg, fill };
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      fillRatio: { value: 1 },
+      fillColor: { value: new THREE.Color(0x46d35a) },
+      bgColor: { value: new THREE.Color(0x14161c) },
+    },
+    vertexShader: `
+      varying vec2 vBarUv;
+      void main() {
+        vBarUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float fillRatio;
+      uniform vec3 fillColor;
+      uniform vec3 bgColor;
+      varying vec2 vBarUv;
+      void main() {
+        float filled = 1.0 - step(fillRatio, vBarUv.x);
+        vec3 color = mix(bgColor, fillColor, filled);
+        float alpha = mix(0.85, 1.0, filled);
+        gl_FragColor = vec4(color, alpha);
+      }
+    `,
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+    toneMapped: false,
+  });
+  const mesh = new THREE.Mesh(SHARED_HP_GEOMETRY, material);
+  mesh.renderOrder = 999;
+  group.add(mesh);
+  return { group, mesh };
 }
 
-// Ajusta el relleno de la barra al ratio hp/hpMax. El plano se ancla a la izquierda
-// (escala desde el centro + corrimiento) y vira de verde a rojo segun la salud.
+// Updates shader uniforms without changing geometry or layout.
 function setHpFill(bar, ratio) {
   const r = Math.min(1, Math.max(0, ratio));
-  bar.fill.scale.x = r || 0.0001;             // evitar escala 0 (degenera la matriz)
-  bar.fill.position.x = -HP_W * 0.5 * (1 - r);
-  bar.fill.material.color.setHSL(0.33 * r, 0.7, 0.5);
+  const uniforms = bar?.mesh?.material?.uniforms;
+  if (!uniforms) return;
+  uniforms.fillRatio.value = r;
+  uniforms.fillColor.value.setHSL(0.33 * r, 0.7, 0.5);
+}
+
+export function shouldShowMobHpBar(v, distance, { mobile = false, lowEnd = false, currentVisible = false } = {}) {
+  if (!v || v.dead) return false;
+  if (!Number.isFinite(distance)) return true;
+  if (v.boss || v.ring?.visible) return true;
+  if (Number(v.hp) < Number(v.hpMax)) return true;
+  const near = lowEnd ? 16 : mobile ? 18 : 24;
+  const activeThreat = v.attackTellT > 0 || v.state === 'attack';
+  const hysteresis = currentVisible ? 2 : 0;
+  return distance <= near + (activeThreat ? 7 : 0) + hysteresis;
 }
 
 const TARGET_RING_SOFT = Object.freeze({ color: 0x83d8bd, opacity: 0.5, scale: 0.9 });
@@ -219,7 +308,6 @@ export class MobField {
     this.scene = scene;
     this.getCamera = getCamera;
     this.net = net;
-    this.loader = createMobLoader();
     this.protos = {};        // 'Minion' -> { scene (solo ese rig), clips }
     this.clips = [];         // clips compartidos del GLB
     this.mobs = new Map();   // id -> visual del mob
@@ -258,6 +346,7 @@ export class MobField {
       // clips usan el nombre BASE (root, hips). Normalizamos para que el mixer matchee
       // por nombre y los esqueletos animen (sin esto quedan en T-pose).
       full.traverse((o) => { if (o.isBone) o.name = o.name.replace(/_\d+$/, ''); });
+      mergeMobSkinnedParts(full);
       this.protos[type] = keep.length ? full : null;
     }
     this._hook();
@@ -561,7 +650,7 @@ export class MobField {
     if (mob.b) actions.Taunt = bind('Taunt_Longer') || bind('Taunt');
     if (actions.Idle) actions.Idle.play();
     const v = {
-      id: mob.id, root, ch, mixer, actions, bar, ring, mats,
+      id: mob.id, root, ch, mixer, actions, bar, ring, mats, boss: !!mob.b,
       hp: mob.hp != null ? mob.hp : (mob.hpMax || 1),
       hpMax: mob.hpMax || mob.hp || 1,
       tx: mob.x || 0, tz: mob.z || 0, th: mob.h || 0, state: mob.state || 'idle',
@@ -943,8 +1032,9 @@ export class MobField {
       let mixerStep = 0;
       let visible = true;
       let becameVisible = false;
+      let dLod = 0;
       if (pp) {
-        const dLod = Math.hypot(v.root.position.x - pp.x, v.root.position.z - pp.z);
+        dLod = Math.hypot(v.root.position.x - pp.x, v.root.position.z - pp.z);
         // histeresis: aparece a VIS-4, se oculta a VIS+4 (sin flicker en el borde)
         const wasVisible = v.root.visible;
         visible = wasVisible ? dLod < VIS + 4 : dLod < VIS - 4;
@@ -981,6 +1071,14 @@ export class MobField {
         }
       }
       const { tellPulse, tellAge } = this._tickAttackTell(v, dt, visible);
+      if (v.bar?.group) {
+        const showBar = visible && shouldShowMobHpBar(v, dLod, {
+          mobile,
+          lowEnd,
+          currentVisible: v.bar.group.visible,
+        });
+        if (v.bar.group.visible !== showBar) v.bar.group.visible = showBar;
+      }
       if (!visible) {
         if (v.busyT > 0) v.busyHidden = true;
         v.mixAcc = 0;
@@ -1046,7 +1144,7 @@ export class MobField {
         const k = Math.max(0, v.flashT / (v.flashMax || 0.14));
         for (const m of v.mats) if (m.emissive) m.emissive.setScalar(k * 0.9);
       }
-      if (cam && v.bar && v.bar.group) v.bar.group.quaternion.copy(cam.quaternion);
+      if (cam && v.bar?.group?.visible) v.bar.group.quaternion.copy(cam.quaternion);
     }
     // mobs muriendo: terminar la pose y retirarlos al expirar el temporizador
     for (let i = this.dying.length - 1; i >= 0; i--) {
@@ -1096,14 +1194,21 @@ export class MobField {
   _disposeMob(v) {
     if (this.net && this.net.mobVisualIds && v && v.id != null) this.net.mobVisualIds.delete(String(v.id));
     this.scene.remove(v.root);
-    for (const m of v.mats || []) { try { m.dispose(); } catch {} }
+    const modelMaterials = new Set(v.mats || []);
+    for (const m of modelMaterials) { try { m.dispose(); } catch {} }
     v.root.traverse((o) => {
       if (o.isMesh && !o.isSkinnedMesh) {
-        if (o.geometry && !SHARED_MOB_GEOMETRIES.has(o.geometry)) {
+        // Cloned GLB accessories share geometry and textures with every live mob.
+        // Only dispose per-mob UI resources here; releasing model assets causes
+        // GPU re-uploads and visible stalls on the next surviving mob render.
+        const sharedModelPart = modelMaterials.has(o.material);
+        if (!sharedModelPart && o.geometry && !SHARED_MOB_GEOMETRIES.has(o.geometry)) {
           try { o.geometry.dispose(); } catch {}
         }
-        try { if (o.material && o.material.map) o.material.map.dispose(); } catch {}
-        try { o.material && o.material.dispose(); } catch {}
+        if (!sharedModelPart) {
+          try { if (o.material && o.material.map) o.material.map.dispose(); } catch {}
+          try { o.material && o.material.dispose(); } catch {}
+        }
       }
       if (o.isSprite && o.material) {
         try { if (o.material.map) o.material.map.dispose(); } catch {}

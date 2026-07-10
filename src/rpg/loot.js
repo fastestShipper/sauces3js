@@ -1,8 +1,8 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260709g37';
-import { actionLabel, keybindChangeEvent } from '../keybinds.js?v=20260709g37';
+import { TIERS } from './fx.js?v=20260709g38';
+import { actionLabel, keybindChangeEvent } from '../keybinds.js?v=20260709g38';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -188,7 +188,7 @@ function injectStyleOnce() {
   background:linear-gradient(180deg,#ffe08a,#ffbe4d)}
 .rpg-shop-row button:disabled{opacity:.4;cursor:not-allowed}
 .rpg-cons{position:fixed;left:50%;right:auto;
-  top:auto;bottom:calc(166px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);z-index:46;display:flex;flex-direction:row;
+  top:auto;bottom:calc(166px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);scale:.5;transform-origin:50% 100%;z-index:46;display:flex;flex-direction:row;
   align-items:center;gap:8px;
   font-family:'Fredoka',system-ui,'Segoe UI',sans-serif;pointer-events:auto;contain:layout style}
 body.ui-panel-open .rpg-cons,

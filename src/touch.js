@@ -1,4 +1,4 @@
-import { actionLabel, keybindChangeEvent } from './keybinds.js?v=20260709g37';
+import { actionLabel, keybindChangeEvent } from './keybinds.js?v=20260709g38';
 
 // Controles tactiles: joystick virtual (mitad izquierda) + botones ATK/SALTO
 // (derecha) + drag de camara en la mitad derecha. Solo se monta en dispositivos
@@ -62,7 +62,7 @@ function injectStyle() {
   conic-gradient(from 225deg, #6c3f16, #fff0a8, #c37a25, #6c3f16) border-box}
 .tc-jmp{right:clamp(18px,5vw,34px);bottom:calc(196px + env(safe-area-inset-bottom, 0px));
   width:62px;height:62px;font-size:11px;color:#ffe9b3}
-.tc-pot{width:78px;height:78px;font-size:21px;color:#f4ffd7;
+.tc-pot{width:78px;height:78px;scale:.5;transform-origin:100% 100%;font-size:21px;color:#f4ffd7;
   background:radial-gradient(circle at 34% 24%, rgba(235,255,202,.38), transparent 34%) padding-box,
   linear-gradient(180deg, rgba(52,86,42,.9), rgba(18,34,22,.92)) padding-box,
   conic-gradient(from 225deg, rgba(79,126,48,.96), rgba(238,255,176,.95), rgba(104,150,55,.94), rgba(45,80,31,.96)) border-box;

@@ -2,18 +2,14 @@ const { SAFE_X, SAFE_Z, SAFE_R } = require('./mob_balance');
 const { pointBlocked } = require('./world_obstacles');
 
 const MOB_CLEARANCE = 0.85;
-const SEAL_X = 3;
-const SEAL_Z = -47;
-const SEAL_R = 11;
 const SIDE_STEP_ANGLES = Object.freeze([0, 0.58, -0.58, 1.05, -1.05, 1.48, -1.48]);
 
 function finitePoint(x, z) {
   return Number.isFinite(Number(x)) && Number.isFinite(Number(z));
 }
 
-function outsideProtectedZones(x, z, safeRadius = SAFE_R - 3, sealRadius = SEAL_R) {
-  return Math.hypot(x - SAFE_X, z - SAFE_Z) >= safeRadius
-    && Math.hypot(x - SEAL_X, z - SEAL_Z) >= sealRadius;
+function outsideProtectedZones(x, z, safeRadius = SAFE_R - 3) {
+  return Math.hypot(x - SAFE_X, z - SAFE_Z) >= safeRadius;
 }
 
 function mobPointAllowed(x, z, options = {}) {
@@ -26,10 +22,7 @@ function mobPointAllowed(x, z, options = {}) {
   const safeRadius = Number.isFinite(Number(options.safeRadius))
     ? Math.max(0, Number(options.safeRadius))
     : SAFE_R - 3;
-  const sealRadius = Number.isFinite(Number(options.sealRadius))
-    ? Math.max(0, Number(options.sealRadius))
-    : SEAL_R;
-  return outsideProtectedZones(px, pz, safeRadius, sealRadius)
+  return outsideProtectedZones(px, pz, safeRadius)
     && !pointBlocked(px, pz, clearance);
 }
 
@@ -100,9 +93,6 @@ function findWanderTarget(spawnX, spawnZ, radius, random = Math.random) {
 
 module.exports = {
   MOB_CLEARANCE,
-  SEAL_X,
-  SEAL_Z,
-  SEAL_R,
   mobPointAllowed,
   chooseMobStep,
   findOpenSpawnAround,

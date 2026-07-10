@@ -168,15 +168,21 @@
     box-shadow: 0 18px 44px rgba(10,8,24,.5), inset 0 0 0 3px rgba(255,255,255,.08),
       0 0 0 1px rgba(10,8,24,.36);
   }
-  #coords {
+  #world-metrics {
     position: fixed; right: var(--ui-rail-right); top: var(--ui-coords-top); z-index: 30;
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  }
+  #coords, #fps {
     padding: 5px 12px; border-radius: 9px;
     background: rgba(8,18,23,.78); backdrop-filter: blur(10px) saturate(1.4);
     border: 1px solid rgba(255,232,177,.24);
     box-shadow: 0 10px 26px rgba(10,8,24,.4), inset 0 1px 0 rgba(255,255,255,.1); color: #fff0bf;
     font-family: var(--font); font-weight: 700; font-size: 12px;
-    letter-spacing: .5px; user-select: text; cursor: text;
+    letter-spacing: 0; user-select: text; cursor: text;
   }
+  #fps { min-width: 48px; padding-inline: 9px; text-align: center; user-select: none; cursor: default; color: #b9f59a; }
+  #fps.warn { color: #ffd66b; }
+  #fps.bad { color: #ff7668; border-color: rgba(255,118,104,.5); }
   #daytime {
     position: fixed; right: var(--ui-rail-right); top: var(--ui-daytime-top); z-index: 30;
     padding: 5px 12px; border-radius: 9px;
@@ -458,7 +464,8 @@
       --ui-panel-top: calc(var(--ui-daytime-top) + 58px);
     }
     #minimap { width: 118px; height: 118px; border-radius: 14px; }
-    #coords { font-size: 11px; padding: 4px 9px; }
+    #coords, #fps { font-size: 11px; padding: 4px 8px; }
+    #fps { min-width: 43px; }
     #hint { display: none; }
     #hud .title { font-size: 14px; padding: 5px 11px; }
     /* movil: el cluster se APILA al centro (vida abajo, skills encima) para no
@@ -536,7 +543,7 @@
   <div id="hint"><span class="key">WASD</span> moverse · clic/ATQ pega · <span class="key">X</span> modo auto · <span class="key">Q E R F</span> habilidades · <span class="key">1 2 3</span> pociones · <span class="key">I</span> inventario · <span class="key">B</span> gruta</div>
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
-<div id="coords">X 0 · Z 0</div>
+<div id="world-metrics"><div id="fps" class="good">-- FPS</div><div id="coords">X 0 · Z 0</div></div>
 <div id="daytime">Día</div>
 <div id="chat-log"></div>
 <input id="chat-input" maxlength="200" autocomplete="off" placeholder="Escribe y Enter para enviar…">
@@ -582,6 +589,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260709g37"></script>
+<script type="module" src="./src/app.js?v=20260709g38"></script>
 </body>
 </html>

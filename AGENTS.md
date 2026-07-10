@@ -408,6 +408,18 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Production state after deploy: service active, health clean and 86 mobs. Root disk remains critical at 99% with about 2.0 GB free.
   - Backup: `/root/deploy-backups/sauces-web-20260710T043102Z-before-20260709g37.tar.gz`.
 
+- **Production patch 20260709g38**: `sauces.controla.group` runs `APP_VERSION=20260709g38`.
+  - Live performance meter: the compact FPS counter samples uncapped wall-clock frame time instead of gameplay `dt`. Its tooltip exposes average/worst frame time, draw calls and triangles, and `window.__SAUCES_PERF__` keeps the latest sample for diagnostics.
+  - Mob draw-call consolidation: compatible KayKit body parts merge once per prototype while preserving every vertex, weight, material, bone and animation. In production Three.js r161, four representative mobs dropped from 42 to 16 calls with the same 20,900 triangles and active mixers.
+  - Mob UI cost: HP background/fill now render in one shader plane. Full-health distant bars use a two-meter hysteresis band; bosses, targets, damaged mobs and nearby attacking threats remain visible. Target rings and the target HUD are unchanged.
+  - Stable shared assets: corpse cleanup no longer disposes GLB accessory geometry or textures still shared by living mobs, preventing death-time GPU re-uploads.
+  - Los Sauces 202 collision: the rendered landmark now registers its exact oriented footprint in both client collision and the exported server obstacle map. The obsolete circular workaround at `3,-47`, which blocked the wrong zone, was removed.
+  - Spawn repair: seven fixed spawns inside the previously hollow landmark were relocated, including the guardian boss from `(0.9,-59.1)` to `(8,-59)`. The server now has 28,484 exact obstacle polygons; all 86 fixed spawns pass one-meter clearance.
+  - Consumables: desktop and touch quick-consumable controls render at exactly 50% of their previous visual and interactive size, preserving safe-area anchoring, labels, counts, feedback, clicking/tapping and rebinding.
+  - QA: 46 JavaScript syntax checks, 77 selected pure smokes, TypeScript `--noEmit`, exact GLB draw-call measurement in Three.js r161, five consumable viewports (714x522, 967x546, 1366x768, 390x844 and 896x414), collision/navigation/spawn audits, clean production desktop browser console, zero overflow, external `WSS_OPEN`, 22/22 web hashes and 3/3 server hashes.
+  - Production state after deploy: service active, health clean and 86 mobs. Root disk remains critical at 99% with about 2.2 GB free.
+  - Backups: `/root/deploy-backups/sauces-web-20260710T051527Z-before-20260709g38.tar.gz` and `/root/deploy-backups/sauces-server-20260710T051527Z-before-20260709g38.tar.gz`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.

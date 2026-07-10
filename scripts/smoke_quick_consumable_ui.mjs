@@ -85,6 +85,18 @@ async function inspectViewport(browser, base, cfg) {
     hasTouch: !!cfg.mobile,
   });
   const page = await context.newPage();
+  const armFeedbackProbe = (targetSelector, feedbackClass) => page.evaluate(({ targetSelector, feedbackClass }) => {
+    window.__consumableFeedbackProbe?.observer?.disconnect();
+    const seen = { target: false, rail: false };
+    const sample = () => {
+      seen.target ||= !!document.querySelector(`${targetSelector}.${feedbackClass}`);
+      seen.rail ||= !!document.querySelector(`.rpg-cons.${feedbackClass}`);
+    };
+    const observer = new MutationObserver(sample);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
+    window.__consumableFeedbackProbe = { observer, sample, seen };
+    sample();
+  }, { targetSelector, feedbackClass });
   const errors = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(msg.text());
@@ -134,6 +146,11 @@ async function inspectViewport(browser, base, cfg) {
   if (cfg.mobile) {
     assert.equal(snap.quickDisplay, 'none', `${cfg.name} hides duplicate keyboard quickbar on touch screens`);
   } else {
+    assert.deepEqual(
+      snap.buttons.map(({ width, height }) => [width, height]),
+      cfg.quickSizes.map(size => [size, size]),
+      `${cfg.name} quick consumables render at exactly half size`,
+    );
     assert.equal(intersects(snap.consumables, snap.skills, 8), false, `${cfg.name} consumables overlap skills`);
     assert.equal(intersects(snap.consumables, snap.hud, 8), false, `${cfg.name} consumables overlap HUD`);
     assert.equal(intersects(snap.consumables, snap.keybinds, 8), false, `${cfg.name} consumables overlap keybind button`);
@@ -150,17 +167,19 @@ async function inspectViewport(browser, base, cfg) {
   }, expectedBuild);
   assert.equal((cfg.mobile ? reboundKeys.touch : reboundKeys.quick)[0], 'Z', `${cfg.name} consumable key label updates after rebind`);
 
-  const prepared = await page.evaluate((mobile) => {
+  const prepared = await page.evaluate(async (mobile) => {
     const { inventory, combat, hud } = window.__game.rpg;
     inventory.items = [
       { id: 'smoke_potion_strong', name: 'Poción de prueba fuerte', kind: 'potion', heal: 80, count: 3 },
       { id: 'smoke_potion_minor', name: 'Poción de prueba menor', kind: 'potion', heal: 35, count: 1 },
     ];
+    window.__game.player.pos.set(combat.safeCenter[0] + 40, 0, combat.safeCenter[1]);
     combat.hpMax = 200;
     combat.hp = 20;
     hud.setHP(combat.hp, combat.hpMax);
     inventory._render();
     inventory.onChange();
+    await new Promise(resolve => requestAnimationFrame(resolve));
     window.__game.player.locked = false;
     const readQuick = () => [...document.querySelectorAll('.rpg-cons-btn')].map((el) => ({
       state: el.dataset.state,
@@ -199,21 +218,22 @@ async function inspectViewport(browser, base, cfg) {
     assert.deepEqual(prepared.touch.map(slot => slot.healText), ['+80', '+35', 'POT'], `${cfg.name} syncs touch healing states`);
   }
 
+  const reboundTargetSelector = cfg.mobile ? '.tc-pot-0' : '.rpg-cons-btn[data-slot="0"]';
+  await armFeedbackProbe(reboundTargetSelector, 'is-use-feedback');
   await page.keyboard.press('KeyZ');
-  await page.waitForFunction(() => (
-    window.__game?.rpg?.combat?.hp === 100
-    && document.querySelector('.rpg-cons-btn[data-slot="0"]')?.dataset.count === '2'
-  ), null, { timeout: 5000 });
   const keyboardUse = await page.evaluate((mobile) => {
     const target = document.querySelector(mobile ? '.tc-pot-0' : '.rpg-cons-btn[data-slot="0"]');
     const quick = document.querySelector('.rpg-cons-btn[data-slot="0"]');
     const toast = document.querySelector('.rpg-hud-toast');
+    const probe = window.__consumableFeedbackProbe;
+    probe?.sample();
+    probe?.observer?.disconnect();
     return {
       hp: window.__game.rpg.combat.hp,
       count: Number(quick?.dataset.count),
       countText: quick?.querySelector('.c-count')?.textContent || '',
-      targetFeedback: target?.classList.contains('is-use-feedback') || false,
-      railFeedback: document.querySelector('.rpg-cons')?.classList.contains('is-use-feedback') || false,
+      targetFeedback: probe?.seen.target || target?.classList.contains('is-use-feedback') || false,
+      railFeedback: probe?.seen.rail || document.querySelector('.rpg-cons')?.classList.contains('is-use-feedback') || false,
       toastOn: toast?.classList.contains('is-on') || false,
       toastText: toast?.textContent || '',
     };
@@ -241,19 +261,19 @@ async function inspectViewport(browser, base, cfg) {
   const primarySelector = cfg.mobile ? '.tc-pot-0' : '.rpg-cons-btn[data-slot="0"]';
   const primaryBox = await page.locator(primarySelector).boundingBox();
   assert.ok(primaryBox, `${cfg.name} primary pointer target is visible`);
+  await armFeedbackProbe(primarySelector, 'is-use-feedback');
   if (cfg.mobile) await page.touchscreen.tap(primaryBox.x + primaryBox.width / 2, primaryBox.y + primaryBox.height / 2);
   else await page.mouse.click(primaryBox.x + primaryBox.width / 2, primaryBox.y + primaryBox.height / 2);
-  await page.waitForFunction(() => (
-    window.__game?.rpg?.combat?.hp === 180
-    && document.querySelector('.rpg-cons-btn[data-slot="0"]')?.dataset.count === '1'
-  ), null, { timeout: 5000 });
   const pointerUse = await page.evaluate((mobile) => {
     const target = document.querySelector(mobile ? '.tc-pot-0' : '.rpg-cons-btn[data-slot="0"]');
     const quick = document.querySelector('.rpg-cons-btn[data-slot="0"]');
+    const probe = window.__consumableFeedbackProbe;
+    probe?.sample();
+    probe?.observer?.disconnect();
     return {
       hp: window.__game.rpg.combat.hp,
       count: Number(quick?.dataset.count),
-      targetFeedback: target?.classList.contains('is-use-feedback') || false,
+      targetFeedback: probe?.seen.target || target?.classList.contains('is-use-feedback') || false,
       width: target?.offsetWidth || 0,
       height: target?.offsetHeight || 0,
     };
@@ -270,19 +290,22 @@ async function inspectViewport(browser, base, cfg) {
   const emptySelector = cfg.mobile ? '.tc-pot-2' : '.rpg-cons-btn[data-slot="2"]';
   const emptyBox = await page.locator(emptySelector).boundingBox();
   assert.ok(emptyBox, `${cfg.name} empty pointer target is visible`);
+  await armFeedbackProbe(emptySelector, 'is-empty-feedback');
   if (cfg.mobile) await page.touchscreen.tap(emptyBox.x + emptyBox.width / 2, emptyBox.y + emptyBox.height / 2);
   else await page.mouse.click(emptyBox.x + emptyBox.width / 2, emptyBox.y + emptyBox.height / 2);
-  await page.waitForFunction(() => document.querySelector('.rpg-hud-toast')?.textContent === 'No tienes pociones listas', null, { timeout: 5000 });
   const emptyUse = await page.evaluate((mobile) => {
     const usedTarget = document.querySelector(mobile ? '.tc-pot-0' : '.rpg-cons-btn[data-slot="0"]');
     const emptyTarget = document.querySelector(mobile ? '.tc-pot-2' : '.rpg-cons-btn[data-slot="2"]');
     const emptyQuick = document.querySelector('.rpg-cons-btn[data-slot="2"]');
+    const probe = window.__consumableFeedbackProbe;
+    probe?.sample();
+    probe?.observer?.disconnect();
     return {
       hp: window.__game.rpg.combat.hp,
       state: emptyQuick?.dataset.state || '',
       count: Number(emptyQuick?.dataset.count),
       heal: Number(emptyQuick?.dataset.heal),
-      emptyFeedback: emptyTarget?.classList.contains('is-empty-feedback') || false,
+      emptyFeedback: probe?.seen.target || emptyTarget?.classList.contains('is-empty-feedback') || false,
       staleUseFeedback: usedTarget?.classList.contains('is-use-feedback') || false,
       toastOn: document.querySelector('.rpg-hud-toast')?.classList.contains('is-on') || false,
     };
@@ -317,8 +340,12 @@ async function inspectViewport(browser, base, cfg) {
     for (const pot of snap.touchPotions) {
       assert.equal(intersects(pot, snap.skills, 6), false, `${cfg.name} touch potion ${pot.label} overlaps skills`);
       assert.equal(intersects(pot, snap.hud, 6), false, `${cfg.name} touch potion ${pot.label} overlaps HUD`);
-    assert.ok(pot.width >= 62 && pot.height >= 62, `${cfg.name} touch potion ${pot.label} is too small`);
     }
+    assert.deepEqual(
+      snap.touchPotions.map(({ width, height }) => [width, height]),
+      cfg.touchSizes.map(size => [size, size]),
+      `${cfg.name} touch consumables render at exactly half size`,
+    );
     for (let i = 0; i < snap.touchPotions.length; i++) {
       for (let j = i + 1; j < snap.touchPotions.length; j++) {
         assert.equal(intersects(snap.touchPotions[i], snap.touchPotions[j], 3), false, `${cfg.name} touch potion buttons overlap each other`);
@@ -327,7 +354,6 @@ async function inspectViewport(browser, base, cfg) {
   }
   for (let i = 0; i < snap.buttons.length; i++) {
     const btn = snap.buttons[i];
-    if (!cfg.mobile) assert.ok(btn.width >= cfg.minButton && btn.height >= cfg.minButton, `${cfg.name} consumable button is too small`);
     assert.ok(btn.label.startsWith('Consumible ' + (i + 1) + ','), `${cfg.name} consumable button has slot aria label`);
     assert.ok(btn.shortcut.length > 0, `${cfg.name} consumable button exposes aria-keyshortcuts`);
     assert.ok(btn.disabled === 'true' || btn.disabled === 'false', `${cfg.name} consumable button exposes aria-disabled`);
@@ -485,11 +511,11 @@ const base = `http://127.0.0.1:${address.port}`;
 
 try {
   const browser = await chromium.launch({ headless: true });
-  await inspectViewport(browser, base, { name: 'desktop low 714x522', width: 714, height: 522, minButton: 74, minKeyPanelHeight: 250 });
-  await inspectViewport(browser, base, { name: 'compact screenshot 967x546', width: 967, height: 546, minButton: 74, minKeyPanelHeight: 250 });
-  await inspectViewport(browser, base, { name: 'desktop 1366x768', width: 1366, height: 768, minButton: 82, minKeyPanelHeight: 250 });
-  await inspectViewport(browser, base, { name: 'mobile 390x844', width: 390, height: 844, mobile: true, minButton: 54, minKeyPanelHeight: 420 });
-  await inspectViewport(browser, base, { name: 'touch landscape 896x414', width: 896, height: 414, mobile: true, minButton: 54, minKeyPanelHeight: 140 });
+  await inspectViewport(browser, base, { name: 'desktop low 714x522', width: 714, height: 522, quickSizes: [44, 37, 37], minKeyPanelHeight: 250 });
+  await inspectViewport(browser, base, { name: 'compact screenshot 967x546', width: 967, height: 546, quickSizes: [44, 37, 37], minKeyPanelHeight: 250 });
+  await inspectViewport(browser, base, { name: 'desktop 1366x768', width: 1366, height: 768, quickSizes: [55, 44, 44], minKeyPanelHeight: 250 });
+  await inspectViewport(browser, base, { name: 'mobile 390x844', width: 390, height: 844, mobile: true, touchSizes: [49, 38, 38], minKeyPanelHeight: 420 });
+  await inspectViewport(browser, base, { name: 'touch landscape 896x414', width: 896, height: 414, mobile: true, touchSizes: [41, 34, 34], minKeyPanelHeight: 140 });
   await browser.close();
 } finally {
   await new Promise(resolve => server.close(resolve));

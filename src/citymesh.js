@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709g37';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260709g37';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709g38';
+import { heroPlacement, buildLosSauces202, registerLosSauces202Collision } from './landmark.js?v=20260709g38';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -99,7 +99,10 @@ export function buildBuildings(city) {
     if (skip(blds[bi])) continue;
     extrude(W, city, blds[bi], bi);
   }
-  if (hero) buildLosSauces202(W, hero.cx, hero.cz, hero.AX, hero.FZ);
+  if (hero) {
+    registerLosSauces202Collision(city, hero);
+    buildLosSauces202(W, hero.cx, hero.cz, hero.AX, hero.FZ);
+  }
   return W;
 }
 

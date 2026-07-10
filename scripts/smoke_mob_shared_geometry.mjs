@@ -11,6 +11,10 @@ const net = { player: { pos: { x: 0, z: 0 } }, mobs: new Map(), mobVisualIds: ne
 const field = new MobField(scene, () => null, net);
 field.ready = true;
 field.protos.Minion = new THREE.Group();
+const accessoryGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+const accessoryTexture = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+const accessoryMaterial = new THREE.MeshStandardMaterial({ map: accessoryTexture });
+field.protos.Minion.add(new THREE.Mesh(accessoryGeometry, accessoryMaterial));
 
 function create(id) {
   const mob = { id, x: id, z: 0, hp: 10, hpMax: 10, kind: 0 };
@@ -22,27 +26,39 @@ const first = create(1);
 const second = create(2);
 const third = create(3);
 
-assert.equal(first.bar.bg.geometry, second.bar.bg.geometry, 'HP backgrounds share geometry');
-assert.equal(first.bar.fill.geometry, second.bar.fill.geometry, 'HP fills share geometry');
+const firstAccessory = first.ch.children.find((o) => o.isMesh);
+const secondAccessory = second.ch.children.find((o) => o.isMesh);
+assert.equal(firstAccessory.geometry, secondAccessory.geometry, 'mob accessories share immutable geometry');
+assert.notEqual(firstAccessory.material, secondAccessory.material, 'mob accessories keep independent tint materials');
+
+assert.equal(first.bar.mesh.geometry, second.bar.mesh.geometry, 'HP bars share geometry');
 assert.equal(first.ring.geometry, second.ring.geometry, 'target rings share geometry');
-assert.notEqual(first.bar.fill.material, second.bar.fill.material, 'HP fill materials remain independent');
+assert.notEqual(first.bar.mesh.material, second.bar.mesh.material, 'HP bar materials remain independent');
+assert.notEqual(first.bar.mesh.material.uniforms, second.bar.mesh.material.uniforms, 'HP bar uniforms remain independent');
 assert.notEqual(first.ring.material, second.ring.material, 'ring materials remain independent');
 
 const geometryDisposeCalls = new Map();
-for (const geometry of [first.bar.bg.geometry, first.bar.fill.geometry, first.ring.geometry]) {
+for (const geometry of [first.bar.mesh.geometry, first.ring.geometry]) {
   geometryDisposeCalls.set(geometry, 0);
   geometry.dispose = () => geometryDisposeCalls.set(geometry, geometryDisposeCalls.get(geometry) + 1);
 }
-let fillMaterialDisposed = 0;
+let barMaterialDisposed = 0;
 let ringMaterialDisposed = 0;
-first.bar.fill.material.addEventListener('dispose', () => fillMaterialDisposed++);
+let accessoryGeometryDisposed = 0;
+let accessoryTextureDisposed = 0;
+first.bar.mesh.material.addEventListener('dispose', () => barMaterialDisposed++);
 first.ring.material.addEventListener('dispose', () => ringMaterialDisposed++);
+accessoryGeometry.addEventListener('dispose', () => accessoryGeometryDisposed++);
+accessoryTexture.addEventListener('dispose', () => accessoryTextureDisposed++);
 field._disposeMob(first);
 
-assert.deepEqual([...geometryDisposeCalls.values()], [0, 0, 0], 'disposing one mob preserves shared geometries');
-assert.equal(fillMaterialDisposed, 1, 'disposing one mob releases its fill material');
+assert.deepEqual([...geometryDisposeCalls.values()], [0, 0], 'disposing one mob preserves shared geometries');
+assert.equal(barMaterialDisposed, 1, 'disposing one mob releases its bar material');
 assert.equal(ringMaterialDisposed, 1, 'disposing one mob releases its ring material');
-assert.equal(second.bar.fill.geometry, first.bar.fill.geometry, 'remaining mobs retain the shared fill geometry');
+assert.equal(accessoryGeometryDisposed, 0, 'disposing one mob preserves shared model geometry');
+assert.equal(accessoryTextureDisposed, 0, 'disposing one mob preserves shared model textures');
+assert.equal(second.bar.mesh.geometry, first.bar.mesh.geometry, 'remaining mobs retain the shared bar geometry');
+assert.equal(secondAccessory.geometry, accessoryGeometry, 'remaining mobs retain valid accessory geometry');
 
 const writes = new Map([[first.id, 0], [second.id, 0], [third.id, 0]]);
 for (const visual of [first, second, third]) {

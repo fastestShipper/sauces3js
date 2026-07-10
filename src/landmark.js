@@ -35,6 +35,8 @@ const WX = 11.4, DZ = 12.4, FRONT = DZ / 2;
 const CORE_W = 4.0, CORE_CX = WX / 2 - CORE_W / 2 + 0.2;   // +0.2: monolito PROUD en el lateral (mata z-fight con la masa blanca)
 const SETBACK = 12.5;    // building center, meters from the Los Sauces centerline
 const WEST_SHIFT = 14.0; // slide off the Poussin corner, west along Los Sauces
+const COLLISION_PAD = 0.75;
+const COLLIDER_KEY = 'los-sauces-202';
 
 // nearest point + unit direction on a "...Sauces..." road to a target point
 function nearestSauces(city, tx, tz) {
@@ -87,6 +89,26 @@ export function heroPlacement(city) {
   let set = SETBACK;
   for (let i = 0; i < 8 && !footprintClear(city, P.x + perp[0] * set, P.z + perp[1] * set, AX, FZ); i++) set += 1.5;
   return { cx: P.x + perp[0] * set, cz: P.z + perp[1] * set, AX, FZ };
+}
+
+export function losSauces202CollisionRing(placement, padding = COLLISION_PAD) {
+  if (!placement) return null;
+  const pad = Math.max(0, Number(padding) || 0);
+  const hx = WX / 2 + pad;
+  const hz = DZ / 2 + pad;
+  const { cx, cz, AX, FZ } = placement;
+  const point = (sx, sz) => [
+    cx + sx * hx * AX[0] + sz * hz * FZ[0],
+    cz + sx * hx * AX[1] + sz * hz * FZ[1],
+  ];
+  return [point(-1, -1), point(1, -1), point(1, 1), point(-1, 1)];
+}
+
+export function registerLosSauces202Collision(city, placement = heroPlacement(city)) {
+  if (!placement || typeof city?.addBuildingCollider !== 'function') return null;
+  const ring = losSauces202CollisionRing(placement);
+  const index = city.addBuildingCollider(ring, H, COLLIDER_KEY);
+  return { placement, ring, index };
 }
 
 // emit an oriented box (6 quads) into a bucket. AX/AZ are horizontal unit axes.

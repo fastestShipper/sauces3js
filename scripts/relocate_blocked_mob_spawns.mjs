@@ -9,9 +9,6 @@ const MIN_SEPARATION = 1.8;
 const SAFE_X = -62;
 const SAFE_Z = -7;
 const SAFE_RADIUS = 30;
-const SEAL_X = 3;
-const SEAL_Z = -47;
-const SEAL_RADIUS = 11;
 const GOLDEN_ANGLE = 2.399963229728653;
 const sourceUrl = new URL('../server/mob_spawns.json', import.meta.url);
 
@@ -25,7 +22,6 @@ const relocated = [];
 function validCandidate(x, z, movingIndex) {
   if (pointBlocked(x, z, SPAWN_CLEARANCE)) return false;
   if (Math.hypot(x - SAFE_X, z - SAFE_Z) < SAFE_RADIUS + 2) return false;
-  if (Math.hypot(x - SEAL_X, z - SEAL_Z) < SEAL_RADIUS + 1) return false;
   return spawns.every((other, index) => (
     index === movingIndex || Math.hypot(x - other.x, z - other.z) >= MIN_SEPARATION
   ));
