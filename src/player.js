@@ -1,15 +1,14 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260710g49';
-import { makeNametag } from './nametag.js?v=20260710g49';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g49';
-import { composeCharacter } from './rpg/charcustom.js?v=20260710g49';
-import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g49';
-import { isActionDown } from './keybinds.js?v=20260710g49';
-import { plantClip } from './animclip.js?v=20260710g49';
+import { sanitizeImported } from './glbutil.js?v=20260710g50';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g50';
+import { composeCharacter } from './rpg/charcustom.js?v=20260710g50';
+import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g50';
+import { isActionDown } from './keybinds.js?v=20260710g50';
+import { plantClip } from './animclip.js?v=20260710g50';
 
-export { isRootMotionPositionTrack, plantClip } from './animclip.js?v=20260710g49';
+export { isRootMotionPositionTrack, plantClip } from './animclip.js?v=20260710g50';
 
 const BASE_SPEED = 10.75;
 const SPRINT_MULT = 1.75;
@@ -331,7 +330,8 @@ export class Player {
     sanitizeImported(ch);
     this.char = ch;
     this.root.add(ch);
-    if (this.name) this.root.add(makeNametag(this.name));
+    // el heroe local NO lleva nametag propio: tapa la pantalla y nadie quiere ver
+    // su propio nombre. Los nametags de OTROS jugadores los pone net.js.
     await equipWeapon(loader, ch, this.charFile, this.heroWeapon);
     this.mixer = new THREE.AnimationMixer(ch);
     // las animaciones del rig KayKit viven en archivos aparte (mismo Rig_Medium,

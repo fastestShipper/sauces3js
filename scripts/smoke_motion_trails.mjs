@@ -27,6 +27,8 @@ globalThis.document = {
 };
 
 import * as THREE from 'three';
+// el pool fijo de luces vive en la escena toda la sesion; contamos solo nodos de efecto
+const nonLightCount = (s) => s.children.filter((c) => !c.isLight).length;
 
 const { Combat } = await import('../src/rpg/combat.js');
 const { Effects } = await import('../src/rpg/effects.js');
@@ -125,11 +127,11 @@ function makeCombat(mobs = [], playerPatch = {}) {
     effects.dashTrail({ x: i, z: 0 }, { x: i + 1, z: 0 }, 0xff4a3c);
   }
   if (effects.trails.length !== 18) throw new Error(`motion trail cap mismatch: ${effects.trails.length}`);
-  if (scene.children.length !== 18) throw new Error(`motion trail scene cap mismatch: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 18) throw new Error(`motion trail scene cap mismatch: ${nonLightCount(scene)}`);
   effects.update(0.1);
   effects.update(0.1);
   effects.update(0.1);
-  if (effects.trails.length !== 0 || scene.children.length !== 0) {
+  if (effects.trails.length !== 0 || nonLightCount(scene) !== 0) {
     throw new Error('motion trails did not clean up after life expired');
   }
   console.log('PASS: Effects dashTrail caps and cleans up');
@@ -142,10 +144,10 @@ function makeCombat(mobs = [], playerPatch = {}) {
     effects.clawArc({ x: i * 0.1, y: 0.9, z: 0 }, 0, 0xff3c22);
   }
   if (effects.arcs.length !== 22) throw new Error(`claw arc cap mismatch: ${effects.arcs.length}`);
-  if (scene.children.length !== 22) throw new Error(`claw arc scene cap mismatch: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 22) throw new Error(`claw arc scene cap mismatch: ${nonLightCount(scene)}`);
   effects.update(0.1);
   effects.update(0.1);
-  if (effects.arcs.length !== 0 || scene.children.length !== 0) {
+  if (effects.arcs.length !== 0 || nonLightCount(scene) !== 0) {
     throw new Error('claw arcs did not clean up after life expired');
   }
   console.log('PASS: Effects clawArc caps and cleans up');

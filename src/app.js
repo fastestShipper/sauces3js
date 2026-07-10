@@ -3,42 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g49';
-import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g49';
-import { GrassSystem } from './veg/grass.js?v=20260710g49';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260710g49';
-import { Player } from './player.js?v=20260710g49';
-import { MiniMap } from './minimap.js?v=20260710g49';
-import { StreetLife } from './npcs.js?v=20260710g49';
-import { sanitizeImported } from './glbutil.js?v=20260710g49';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g49';
-import { Net } from './net.js?v=20260710g49';
-import { ChatUI, showBubble } from './chat.js?v=20260710g49';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g49';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g49';
-import { equipWeapon } from './weapons.js?v=20260710g49';
-import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g49';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g49';
-import { Inventory } from './rpg/loot.js?v=20260710g49';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g49';
-import { Combat } from './rpg/combat.js?v=20260710g49';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g49';
-import { Effects } from './rpg/effects.js?v=20260710g49';
-import { attachWeaponByName } from './weapons.js?v=20260710g49';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g49';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g49';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g49';
-import { SocialPanel, showSocialInvite } from './social.js?v=20260710g49';
-import { SkillSystem } from './rpg/skills.js?v=20260710g49';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g49';
-import { createSfx } from './sfx.js?v=20260710g49';
-import { installTouchControls } from './touch.js?v=20260710g49';
-import { createIntroScene } from './introscene.js?v=20260710g49';
-import { styleCarShell } from './carstyle.js?v=20260710g49';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g49';
-import { FrameMeter, fpsBand } from './perf.js?v=20260710g49';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g50';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g50';
+import { GrassSystem } from './veg/grass.js?v=20260710g50';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260710g50';
+import { Player } from './player.js?v=20260710g50';
+import { MiniMap } from './minimap.js?v=20260710g50';
+import { StreetLife } from './npcs.js?v=20260710g50';
+import { sanitizeImported } from './glbutil.js?v=20260710g50';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g50';
+import { Net } from './net.js?v=20260710g50';
+import { ChatUI, showBubble } from './chat.js?v=20260710g50';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g50';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g50';
+import { equipWeapon } from './weapons.js?v=20260710g50';
+import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g50';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g50';
+import { Inventory } from './rpg/loot.js?v=20260710g50';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g50';
+import { Combat } from './rpg/combat.js?v=20260710g50';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g50';
+import { Effects } from './rpg/effects.js?v=20260710g50';
+import { attachWeaponByName } from './weapons.js?v=20260710g50';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g50';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g50';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g50';
+import { SocialPanel, showSocialInvite } from './social.js?v=20260710g50';
+import { SkillSystem } from './rpg/skills.js?v=20260710g50';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g50';
+import { createSfx } from './sfx.js?v=20260710g50';
+import { installTouchControls } from './touch.js?v=20260710g50';
+import { createIntroScene } from './introscene.js?v=20260710g50';
+import { styleCarShell } from './carstyle.js?v=20260710g50';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g50';
+import { FrameMeter, fpsBand } from './perf.js?v=20260710g50';
 
-const APP_VERSION = '20260710g49';
+const APP_VERSION = '20260710g50';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -1570,6 +1570,12 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
 
   // tecla B: teletransporte a la gruta con 2s de CHANNELING + aura magica
   let teleCh = 0, aura = null;
+  // luz azul del recall: PERSISTENTE en la escena (intensity 0 en reposo). Crear o
+  // quitar una luz por cada recall recompilaria todos los shaders iluminados. Aqui
+  // solo se reposiciona y se pulsa su intensidad; nunca se agrega ni se quita.
+  const recallLight = new THREE.PointLight(0x4fb8ff, 0, 9, 2);
+  recallLight.position.set(0, -1000, 0);
+  scene.add(recallLight);
   // blending NORMAL (no additive): el aditivo se lava sobre la plaza blanca.
   const auraMat = (c) => new THREE.MeshBasicMaterial({
     color: c, transparent: true, opacity: 0.5,
@@ -1589,12 +1595,14 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       cyl.scale.set(1 + prog * 0.5, 1, 1 + prog * 0.5);
       cyl.position.y = 1.6 + prog * 0.7;                     // la energia sube
       ring.scale.setScalar(1 + prog * 1.3);                 // el anillo se expande
-      // la luz azul crece con el progreso del canaleo
-      if (aura.userData.light) aura.userData.light.intensity = (1.5 + prog * 3) * pulse;
+      // la luz azul crece con el progreso del canaleo (luz persistente, sigue al heroe)
+      recallLight.position.set(player.pos.x, 1.4, player.pos.z);
+      recallLight.intensity = (1.5 + prog * 3) * pulse;
     }
     if (teleCh <= 0) {                                       // fin del channel: tepea
       if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; player.heading = Math.PI; }
       if (aura) { scene.remove(aura); aura.traverse(o => { o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); }); aura = null; }
+      recallLight.intensity = 0;                             // apagar SIN quitar de la escena
       player.locked = false;
     }
   };
@@ -1610,12 +1618,12 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       cyl.position.y = 1.6;
       const ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.7, 40), auraMat(0x9a52ff));
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06;
-      // luz azul que pulsa: el canalizeo ILUMINA al heroe mientras carga
-      const teleLight = new THREE.PointLight(0x4fb8ff, 0, 9, 2);
-      teleLight.position.y = 1.4;
-      aura.add(cyl, ring, teleLight);
-      aura.userData.light = teleLight;
+      // el aura additive (cyl+ring) usa MeshBasicMaterial: no participa en la
+      // iluminacion, se puede crear/quitar sin recompilar shaders. La luz real la
+      // aporta recallLight, que es persistente.
+      aura.add(cyl, ring);
       aura.position.set(player.pos.x, 0, player.pos.z);
+      recallLight.position.set(player.pos.x, 1.4, player.pos.z);
       scene.add(aura);
     });
   }

@@ -27,6 +27,8 @@ globalThis.document = {
 };
 
 import * as THREE from 'three';
+// el pool fijo de luces vive en la escena toda la sesion; contamos solo nodos de efecto
+const nonLightCount = (s) => s.children.filter((c) => !c.isLight).length;
 
 const { Effects } = await import('../src/rpg/effects.js');
 
@@ -43,7 +45,7 @@ function makeEffects(focus = { x: 0, z: 0 }) {
   if (effects.particles.length < 45) throw new Error(`near goreBurst created too few particles: ${effects.particles.length}`);
   if (effects.pools.length < 2) throw new Error(`near goreBurst should keep full blood pools: ${effects.pools.length}`);
   if (effects.flashes.length < 1) throw new Error('near goreBurst should keep hit flash');
-  if (scene.children.length <= 0) throw new Error('near goreBurst did not add scene feedback');
+  if (nonLightCount(scene) <= 0) throw new Error('near goreBurst did not add scene feedback');
   console.log('PASS: near VFX keeps full impact');
 }
 
@@ -54,7 +56,7 @@ function makeEffects(focus = { x: 0, z: 0 }) {
   if (effects.damageNumber({ x: 120, y: 0, z: 0 }, 40)) throw new Error('far damageNumber was not skipped');
   if (effects.nova({ x: 120, y: 0, z: 0 }, 0xff7a1e, 4)) throw new Error('far nova was not skipped');
   if (effects.projectile({ x: 120, y: 1, z: 0 }, { x: 124, y: 1, z: 0 }, 'fireball')) throw new Error('far projectile was not skipped');
-  if (scene.children.length !== 0) throw new Error(`far VFX added scene nodes: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 0) throw new Error(`far VFX added scene nodes: ${nonLightCount(scene)}`);
   console.log('PASS: far VFX is skipped');
 }
 
@@ -76,7 +78,7 @@ function makeEffects(focus = { x: 0, z: 0 }) {
   const scene = new THREE.Scene();
   const effects = new Effects(scene, () => null);
   if (!effects.goreBurst({ x: 120, y: 0, z: 0 }, 1.4)) throw new Error('Effects without focus should preserve full-detail compatibility');
-  if (scene.children.length <= 0) throw new Error('Effects without focus did not create VFX');
+  if (nonLightCount(scene) <= 0) throw new Error('Effects without focus did not create VFX');
   console.log('PASS: no-focus callers keep previous full-detail behavior');
 }
 
@@ -84,7 +86,7 @@ function makeEffects(focus = { x: 0, z: 0 }) {
   window.__SAUCES_MOBILE__ = true;
   const { scene, effects } = makeEffects();
   if (effects.goreBurst({ x: 60, y: 0, z: 0 }, 1.4)) throw new Error('mobile far goreBurst was not skipped');
-  if (scene.children.length !== 0) throw new Error(`mobile far VFX added scene nodes: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 0) throw new Error(`mobile far VFX added scene nodes: ${nonLightCount(scene)}`);
   window.__SAUCES_MOBILE__ = false;
   console.log('PASS: mobile VFX uses shorter ranges');
 }

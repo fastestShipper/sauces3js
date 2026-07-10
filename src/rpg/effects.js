@@ -3,7 +3,7 @@
 // de modulo, materiales clonados por particula para opacidad independiente, y caps
 // duros de cantidad para no acumular nodos en la escena.
 import * as THREE from 'three';
-import { ParticleBatch } from './particles.js?v=20260710g49';
+import { ParticleBatch } from './particles.js?v=20260710g50';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
@@ -198,8 +198,20 @@ export class Effects {
     this.trails = [];     // { mesh, life, max } estelas de movimiento
     this.chunks = [];     // { mesh, vel, spin, life, max } pedazos de zombie volando
     // luces dinamicas: lo que hace que un efecto ILUMINE la escena en vez de ser
-    // un calco pegado. Pool corto; en movil se apaga (fillrate).
-    this.lights = [];     // { light, life, max, peak }
+    // un calco pegado. POOL FIJO: se agregan a la escena UNA sola vez y jamas se
+    // quitan ni se agregan luces despues. Cambiar el numero de luces de la escena
+    // obliga a Three.js a recompilar TODOS los shaders iluminados (edificios, mobs,
+    // suelo...), un stall sincrono de varios ms que se dispara en cada cast/impacto
+    // y se derrumba con hordas. Con el conteo de luces constante = cero
+    // recompilaciones. En movil/low-end el pool queda vacio (fillrate del forward).
+    this.lights = [];     // pool fijo: { light, life, max, peak, active }
+    const lightPoolSize = (isMobileProfile() || isLowEndProfile()) ? 0 : 4;
+    for (let i = 0; i < lightPoolSize; i++) {
+      const light = new THREE.PointLight(0xffffff, 0, 9, 2);
+      light.position.set(0, -1000, 0); // fuera de vista hasta que se use
+      this.scene.add(light);
+      this.lights.push({ light, life: 0, max: 1, peak: 0, active: false });
+    }
     this.shakeT = 0;      // screen shake restante (s)
     this.shakeAmp = 0;    // amplitud actual del shake (unidades de mundo)
     this.shakeMaxT = 0;
@@ -471,22 +483,22 @@ export class Effects {
   // que separa un efecto "real" de un decal additive. Se apaga en movil/low-end
   // (cuesta fillrate por cada luz extra en el forward renderer).
   flashLight(pos, colorHex, peak = 6, radius = 9, life = 0.34) {
-    if (isMobileProfile() || isLowEndProfile()) return false;
+    if (!this.lights.length) return false; // pool vacio (movil/low-end)
     const p = readPos(pos);
     if (this._vfxDetail(p) < 2) return false;
-    const cap = 6;
-    if (this.lights.length >= cap) { const old = this.lights.shift(); if (old) this._killLight(old); }
-    const light = new THREE.PointLight(new THREE.Color(colorHex != null ? colorHex : 0xff9a3c), 0, radius, 2);
-    light.position.set(p.x, (p.y || 0) + 1.0, p.z);
-    this.scene.add(light);
-    this.lights.push({ light, life, max: life, peak });
+    // tomar una luz libre del pool; si todas estan ocupadas, reciclar la que
+    // menos vida le queda. Nunca se agrega ni se quita del scene graph.
+    let slot = null;
+    for (const e of this.lights) { if (!e.active) { slot = e; break; } }
+    if (!slot) {
+      slot = this.lights[0];
+      for (const e of this.lights) if (e.life < slot.life) slot = e;
+    }
+    slot.light.color.set(colorHex != null ? colorHex : 0xff9a3c);
+    slot.light.distance = radius;
+    slot.light.position.set(p.x, (p.y || 0) + 1.0, p.z);
+    slot.life = life; slot.max = life; slot.peak = peak; slot.active = true;
     return true;
-  }
-
-  _killLight(e) {
-    if (!e || !e.light) return;
-    if (e.light.parent) e.light.parent.remove(e.light);
-    e.light.dispose?.();
   }
 
   // Nucleo brillante que crece y se apaga: el corazon de una explosion/nova.
@@ -836,11 +848,14 @@ export class Effects {
       }
     }
 
-    // LUCES dinamicas: suben rapido y decaen (curva de flash real, no lineal)
-    for (let i = this.lights.length - 1; i >= 0; i--) {
+    // LUCES dinamicas: suben rapido y decaen (curva de flash real, no lineal).
+    // El pool es fijo: al expirar se apaga (intensity 0) pero NO se quita de la
+    // escena, para no recompilar shaders.
+    for (let i = 0; i < this.lights.length; i++) {
       const e = this.lights[i];
+      if (!e.active) continue;
       e.life -= d;
-      if (e.life <= 0) { this._killLight(e); this.lights.splice(i, 1); continue; }
+      if (e.life <= 0) { e.active = false; e.light.intensity = 0; continue; }
       const t = e.life / e.max;              // 1 -> 0
       // pico temprano: brilla fuerte al nacer y cae con t^2
       e.light.intensity = e.peak * t * t * (0.6 + 0.4 * Math.min(1, (1 - t) * 6));

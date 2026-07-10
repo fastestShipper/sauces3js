@@ -26,6 +26,8 @@ globalThis.document = {
 };
 
 import * as THREE from 'three';
+// el pool fijo de luces vive en la escena toda la sesion; contamos solo nodos de efecto
+const nonLightCount = (s) => s.children.filter((c) => !c.isLight).length;
 
 const { Effects } = await import('../src/rpg/effects.js');
 
@@ -60,6 +62,6 @@ firstMap.dispose = function disposeSpy() {
 for (let i = 0; i < 10; i++) effects.update(0.1);
 if (effects.numbers.length !== 0) throw new Error(`damage numbers did not expire: ${effects.numbers.length}`);
 if (disposed !== 0) throw new Error('cached damage texture was disposed when sprites expired');
-if (scene.children.length !== 0) throw new Error(`damage number sprites were not removed: ${scene.children.length}`);
+if (nonLightCount(scene) !== 0) throw new Error(`damage number sprites were not removed: ${nonLightCount(scene)}`);
 
 console.log('PASS: damage number textures are cached and preserved');

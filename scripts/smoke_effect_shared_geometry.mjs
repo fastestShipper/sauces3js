@@ -26,6 +26,8 @@ globalThis.document = {
 };
 
 import * as THREE from 'three';
+// el pool fijo de luces vive en la escena toda la sesion; contamos solo nodos de efecto
+const nonLightCount = (s) => s.children.filter((c) => !c.isLight).length;
 
 const { Effects } = await import('../src/rpg/effects.js');
 
@@ -53,7 +55,7 @@ function spyDispose(geometry) {
   const clawDisposed = spyDispose(clawGeo);
   for (let i = 0; i < 3; i++) effects.update(0.1);
   if (effects.arcs.length !== 0) throw new Error(`arcs did not expire: ${effects.arcs.length}`);
-  if (scene.children.length !== 0) throw new Error(`arc meshes were not removed: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 0) throw new Error(`arc meshes were not removed: ${nonLightCount(scene)}`);
   if (slashDisposed() !== 0 || clawDisposed() !== 0) throw new Error('shared arc geometry was disposed');
   console.log('PASS: arc geometries are shared and preserved');
 }
@@ -71,7 +73,7 @@ function spyDispose(geometry) {
   const trailDisposed = spyDispose(trailGeo);
   for (let i = 0; i < 3; i++) effects.update(0.1);
   if (effects.trails.length !== 0) throw new Error(`trails did not expire: ${effects.trails.length}`);
-  if (scene.children.length !== 0) throw new Error(`trail meshes were not removed: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 0) throw new Error(`trail meshes were not removed: ${nonLightCount(scene)}`);
   if (trailDisposed() !== 0) throw new Error('shared trail geometry was disposed');
   console.log('PASS: trail geometry is shared, scaled and preserved');
 }
@@ -96,7 +98,7 @@ function spyDispose(geometry) {
   const coreDisposed = spyDispose(coreGeo);
   const arrowDisposed = spyDispose(arrowGeo);
   while (effects.projectiles.length) effects._killEntry(effects.projectiles.shift());
-  if (scene.children.length !== 0) throw new Error(`projectile groups were not removed: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 0) throw new Error(`projectile groups were not removed: ${nonLightCount(scene)}`);
   if (coreDisposed() !== 0 || arrowDisposed() !== 0) throw new Error('shared projectile geometry was disposed');
   console.log('PASS: projectile geometries are shared and preserved');
 }
@@ -111,7 +113,7 @@ function spyDispose(geometry) {
 
   const dangerDisposed = spyDispose(dangerGeo);
   while (effects.rings.length) effects._killEntry(effects.rings.shift());
-  if (scene.children.length !== 0) throw new Error(`danger rings were not removed: ${scene.children.length}`);
+  if (nonLightCount(scene) !== 0) throw new Error(`danger rings were not removed: ${nonLightCount(scene)}`);
   if (dangerDisposed() !== 0) throw new Error('shared danger geometry was disposed');
   console.log('PASS: danger ring geometry is shared and preserved');
 }
