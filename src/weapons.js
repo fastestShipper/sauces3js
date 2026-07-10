@@ -103,7 +103,12 @@ const COMBO_BY_STYLE = {
   '1h': ['Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop', 'Melee_1H_Attack_Slice_Horizontal'],
   '2h': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spinning'],
   'dual': ['Melee_Dualwield_Attack_Slice', 'Melee_Dualwield_Attack_Chop', 'Melee_Dualwield_Attack_Stab'],
-  'magic': ['Ranged_Magic_Shoot'],
+  // magia: dos casts que alternan (0.93s / 0.67s), ambos cortos como los melee.
+  // Raise (2.1s), Spellcasting_Long (2.5s) y Summon (4.3s) rompen la cadencia de
+  // ataque, van solo en skills.
+  'magic': ['Ranged_Magic_Shoot', 'Ranged_Magic_Spellcasting'],
+  // arco: un solo ciclo (Draw -> Release como followup). Las variantes "_Up"
+  // apuntan al CIELO; alternarlas haria que la Cazadora dispare hacia arriba.
   'bow': ['Ranged_Bow_Draw'],
 };
 const STYLE_BY_CHAR = {

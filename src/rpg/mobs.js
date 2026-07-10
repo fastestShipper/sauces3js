@@ -13,7 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { plantClip } from '../animclip.js?v=20260710g42';
+import { plantClip, retargetRotationOnly } from '../animclip.js?v=20260710g42';
 import { PROJECTILE_BY_CHAR } from '../animmap.js?v=20260710g42';
 import { sanitizeImported } from '../glbutil.js?v=20260710g42';
 
@@ -69,9 +69,14 @@ const ATTACK_CONTACT_FRACTION = Object.freeze({
   '1H_Melee_Attack_Slice_Horizontal': 0.24,
   '1H_Melee_Attack_Stab': 0.263,
 });
+// El Gigante pega a dos manos: golpes largos y leibles que se pueden esquivar.
+// PENDIENTE: sus fracciones de contacto NO estan medidas en Blender todavia; caen
+// al fallback de 0.42 en attackWindow(). Medir antes del tuning fino del boss.
+const GIANT_ATTACK_POOL = ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Spin'];
 const IDLE_POOL = ['Idle_Combat', 'Idle', 'Idle_B', 'Unarmed_Idle'];
 const DEATH_POOL = ['Death_A', 'Death_B', 'Death_C_Skeletons'];
 const MOB_GLB_URL = './assets/models/kaykit_skeletons.glb';
+const GIANT_GLB_URL = './assets/models/boss_giant.glb';
 
 // These immutable shapes are shared by every mob. Their mutable materials stay per visual.
 const SHARED_TARGET_RING_GEOMETRY = new THREE.RingGeometry(0.7, 0.92, 28);
@@ -80,6 +85,7 @@ const SHARED_MOB_GEOMETRIES = new Set([
 ]);
 
 let sharedMobGltfPromise = null;
+let sharedGiantGltfPromise = null;
 
 function canWarmLoadInThisRuntime() {
   return typeof window !== 'undefined'
@@ -106,6 +112,21 @@ export function warmMobAssets() {
     });
   }
   return sharedMobGltfPromise;
+}
+
+// El Gigante del Parque tiene su propio rig (Rig_Large): mismos nombres de hueso
+// que los esqueletos, pero huesos MAS LARGOS. Comparte los clips del pack via
+// retarget rotation-only (ver animclip.retargetRotationOnly).
+export function warmGiantAsset() {
+  if (!canWarmLoadInThisRuntime()) return Promise.reject(new Error('Giant GLB warmup requires browser APIs'));
+  if (!sharedGiantGltfPromise) {
+    const loader = createMobLoader();
+    sharedGiantGltfPromise = loader.loadAsync(GIANT_GLB_URL).catch((err) => {
+      sharedGiantGltfPromise = null;
+      throw err;
+    });
+  }
+  return sharedGiantGltfPromise;
 }
 
 // hash determinista barato del id (numero o string) para repartir variantes estables
@@ -556,8 +577,9 @@ export class MobField {
     this.scene = scene;
     this.getCamera = getCamera;
     this.net = net;
-    this.protos = {};        // 'Minion' -> { scene (solo ese rig), clips }
+    this.protos = {};        // 'Minion' -> { scene (solo ese rig), clips }; 'Giant' -> Rig_Large
     this.clips = [];         // clips compartidos del GLB
+    this.giantClips = [];    // los mismos clips, rotation-only (rig de otras proporciones)
     this.mobs = new Map();   // id -> visual del mob
     this.dying = [];         // [{ id, t }] mobs en su ventana de muerte antes de quitarse
     this.spawnQueue = [];
@@ -597,6 +619,22 @@ export class MobField {
       full.traverse((o) => { if (o.isBone) o.name = o.name.replace(/_\d+$/, ''); });
       mergeMobSkinnedParts(full);
       this.protos[type] = keep.length ? full : null;
+    }
+    // EL GIGANTE (Rig_Large). Falla SUAVE: si su GLB no carga, el boss sigue
+    // naciendo como esqueleto grande, que es el comportamiento de siempre.
+    try {
+      const giantGltf = await warmGiantAsset();
+      sanitizeImported(giantGltf.scene);
+      const giant = cloneSkeleton(giantGltf.scene);
+      giant.traverse((o) => { if (o.isBone) o.name = o.name.replace(/_\d+$/, ''); });
+      mergeMobSkinnedParts(giant);
+      this.protos.Giant = giant;
+      // Sus huesos son mas largos: solo las ROTACIONES de los clips le sirven.
+      // Las traslaciones del clip lo colapsarian a proporciones de esqueleto.
+      this.giantClips = (gltf.animations || []).map(retargetRotationOnly);
+    } catch {
+      this.protos.Giant = null;
+      this.giantClips = [];
     }
     this._hook();
     this.ready = true;
@@ -830,7 +868,9 @@ export class MobField {
     if (!this.ready || !mob || mob.id == null) return null;
     if (this.mobs.has(mob.id)) return this.mobs.get(mob.id);
     const type = KIND_TO_TYPE[((mob.kind | 0) % 4 + 4) % 4];
-    const proto = this.protos[type] || this.protos.Minion;
+    // El Gigante usa su propio rig si cargo; si no, cae al esqueleto de siempre.
+    const isGiant = !!mob.g && !!this.protos.Giant;
+    const proto = isGiant ? this.protos.Giant : (this.protos[type] || this.protos.Minion);
     if (!proto) return null;
     const root = new THREE.Group();
     root.position.set(mob.x || 0, 0, mob.z || 0);
@@ -840,8 +880,11 @@ export class MobField {
     try { ch = cloneSkeleton(proto); }
     catch { return null; }
     shareMobSkeletons(ch);
-    // ABOMINACION (boss de oleada): mole de 1.5x que impone
-    const baseScale = mob.b ? SCALE * 1.5 : SCALE;
+    // El Gigante ya mide 1.91x un esqueleto DE FABRICA (4.14 vs 2.17 unidades):
+    // no lleva el x1.5 de boss encima o atraviesa las fachadas. Queda en ~3.1m
+    // contra los ~1.6m de un zombie.
+    // ABOMINACION (boss de oleada): mole de 1.5x que impone.
+    const baseScale = isGiant ? SCALE : (mob.b ? SCALE * 1.5 : SCALE);
     ch.scale.setScalar(baseScale);
     const tint = levelTint(mob.lvl);
     if (mob.b) tint.multiplyScalar(0.7);   // mas podrida y oscura
@@ -852,9 +895,13 @@ export class MobField {
       // tinte por nivel: clonar el material para no pintar el prototipo compartido
       if (o.material && o.material.color) {
         o.material = o.material.clone();
-        o.material.color.multiply(tint);
-        if (!/glow|eye/i.test(`${o.name || ''} ${o.material.name || ''}`)) {
-          applyMobFlagPalette(o.material, o.geometry, (mob.kind | 0) + idHash(mob.id));
+        // el Gigante NO es un muerto: conserva su piel y su pelaje, sin el verde
+        // de nivel ni la paleta de banderas de los esqueletos.
+        if (!isGiant) {
+          o.material.color.multiply(tint);
+          if (!/glow|eye/i.test(`${o.name || ''} ${o.material.name || ''}`)) {
+            applyMobFlagPalette(o.material, o.geometry, (mob.kind | 0) + idHash(mob.id));
+          }
         }
         mats.push(o.material);
       }
@@ -867,8 +914,10 @@ export class MobField {
     // mixer con Idle en loop por defecto
     const mixer = new THREE.AnimationMixer(ch);
     const actions = {};
+    // el Gigante liga contra SUS clips (rotation-only), no contra los del esqueleto
+    const clipSet = isGiant ? this.giantClips : this.clips;
     const bind = (name) => {
-      const clip = this.clips.find(c => c.name === name);
+      const clip = clipSet.find(c => c.name === name);
       return clip ? mixer.clipAction(clip) : null;
     };
     // VARIEDAD determinista por id: idle, ataque y muerte salen de pools con
@@ -876,7 +925,11 @@ export class MobField {
     const h = idHash(mob.id);
     actions.Idle = bind(IDLE_POOL[(h >> 4) % IDLE_POOL.length]) || bind('Idle_Combat') || bind('Idle');
     actions.Hit = bind('Hit_A') || bind('Hit_B');
-    actions.Attack = bind(ATTACK_POOL[h % ATTACK_POOL.length]) || bind('Unarmed_Melee_Attack_Punch_A');
+    // El Gigante pega a DOS MANOS y lento: golpes leibles que se pueden esquivar.
+    actions.Attack = isGiant
+      ? (bind(GIANT_ATTACK_POOL[h % GIANT_ATTACK_POOL.length]) || bind('2H_Melee_Attack_Chop'))
+      : bind(ATTACK_POOL[h % ATTACK_POOL.length]);
+    actions.Attack = actions.Attack || bind('Unarmed_Melee_Attack_Punch_A');
     actions.Death = bind(DEATH_POOL[(h >> 2) % DEATH_POOL.length]) || bind('Death_A') || bind('Death_B');
     // ANDAR por personalidad (k2 del server): 0=arrastre normal, 1=corredor, 2=tanque
     const k2 = mob.k2 | 0;

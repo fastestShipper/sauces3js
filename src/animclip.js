@@ -36,6 +36,39 @@ export function isRootMotionPositionTrack(trackOrName) {
   }
 }
 
+function trackProperty(name) {
+  try {
+    return THREE.PropertyBinding.parseTrackName(name).propertyName;
+  } catch {
+    const dot = String(name || '').lastIndexOf('.');
+    return dot < 0 ? '' : String(name).slice(dot + 1);
+  }
+}
+
+// RETARGET a un rig de otras PROPORCIONES (el gigante: Rig_Large).
+//
+// Los rigs de KayKit comparten nombres y jerarquia de huesos, pero el gigante
+// tiene huesos mas largos. Los clips traen tracks de `position` ABSOLUTOS en los
+// 41 huesos: reproducirlos tal cual le pisa las longitudes y lo colapsa a las
+// proporciones del heroe normal a mitad del golpe.
+//
+// Una rotacion es independiente de la proporcion; una traslacion no. Nos
+// quedamos solo con las rotaciones: el gigante conserva su cuerpo y adopta la
+// pose. `scale` tambien se descarta (los clips no la usan de verdad).
+//
+// OJO: esto NO reemplaza a plantClip. plantClip quita el DESPLAZAMIENTO del root
+// (el controller mueve al personaje) y conserva el salto vertical y el detalle
+// de miembros. Esta funcion quita la PROPORCION. Un gigante necesita las dos.
+export function retargetRotationOnly(clip) {
+  const tracks = [];
+  for (const track of clip.tracks || []) {
+    if (trackProperty(track.name) !== 'quaternion') continue;
+    tracks.push(track.clone());
+  }
+  if (!tracks.length) return clip.clone();
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks, clip.blendMode);
+}
+
 export function plantClip(clip) {
   const c = clip.clone();
   for (const track of c.tracks || []) {

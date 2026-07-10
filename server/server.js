@@ -376,7 +376,7 @@ function loadMobSpawns() {
       const lvl = clampInt(s.lvl, 1, 5);
       if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
       if (!mobPointAllowed(x, z, { clearance: 1 })) continue;
-      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28), boss: !!s.boss, fodder: !!s.fodder });
+      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28), boss: !!s.boss, fodder: !!s.fodder, giant: !!s.giant });
     }
   } catch {
     mobSpawns = [];
@@ -401,6 +401,9 @@ function makeMob(id, spawn) {
     hp: hpMax,
     hpMax,
     boss: !!spawn.boss,
+    // El Gigante del Parque: rig propio (Rig_Large). Si este flag no se propaga,
+    // nace como esqueleto normal (el mismo bug que ya tuvo `boss` una vez).
+    giant: !!spawn.giant,
     kind: spawn.lvl - 1,
     zone: spawn.zone || '',
     targetId: null,
@@ -430,7 +433,7 @@ function makeMob(id, spawn) {
 // k2 = personalidad (0 normal, 1 corredor, 2 tanque) por si el cliente quiere pintarla.
 function mobView(m) {
   const k2 = m.persona === 'corredor' ? 1 : (m.persona === 'tanque' ? 2 : 0);
-  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, k2, zone: m.zone, b: m.boss ? 1 : 0 };
+  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, k2, zone: m.zone, b: m.boss ? 1 : 0, g: m.giant ? 1 : 0 };
 }
 
 // spawnea hasta MOB_CAP mobs en spawns DISTINTOS (toma los primeros N).
