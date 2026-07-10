@@ -54,55 +54,30 @@ export class MiniMap {
     if (name) this.street = name;
   }
 
-  draw(px, pz, heading, remotes = null, extras = null) {
-    // redibujar al moverme/zoom; si hay entidades dinamicas EN VISTA (humanos o
-    // mobs), a lo mas cada 140ms — NUNCA cada frame: el minimapa es vectorial
-    // (332 calles + edificios) y redibujarlo 60x/s tira TODO a 1fps.
-    const moved = Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) >= 0.4 || this.radius !== this.lastRadius;
-    const hasRemotes = remotes && remotes.size > 0;
-    let hasDyn = hasRemotes;
-    if (!hasDyn && extras && extras.mobs) {
-      for (const m of extras.mobs.values()) {
-        if (m.hp > 0 && Math.abs(m.x - px) < this.radius && Math.abs(m.z - pz) < this.radius) { hasDyn = true; break; }
-      }
-    }
-    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    if (!moved && !(hasDyn && now - (this._lastT || 0) > 140)) return;
-    this._lastT = now;
-    this.lastPos = [px, pz];
-    this.lastRadius = this.radius;
-    const ctx = this.ctx, S = this.cv.width;
-    const half = S / 2;
-    const sc = (half - 16) / this.radius;
-    const X = (x) => half + (x - px) * sc;
-    const Z = (z) => half + (z - pz) * sc;
+  // Renderiza la capa ESTATICA (fondo, parques, manzanas, calles, POIs) a un
+  // canvas aparte. Solo se llama cuando cambias de posicion/zoom, no cada frame.
+  _renderStatic(ctx, S, half, sc, px, pz, X, Z, extras) {
     ctx.clearRect(0, 0, S, S);
-    // fondo tactico oscuro, recorte CIRCULAR (no papel crema)
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(half, half, half - 2, 0, 7);
-    ctx.clip();
-    ctx.fillStyle = '#0d1510';
-    ctx.fillRect(0, 0, S, S);
+    ctx.beginPath(); ctx.arc(half, half, half - 2, 0, 7); ctx.clip();
+    ctx.fillStyle = '#0d1510'; ctx.fillRect(0, 0, S, S);
     const view = this.radius * 1.3;
-    // parques: verde oscuro apagado
+    // parques
     ctx.fillStyle = '#1c3020';
     for (const g of this.city.data.green) {
       if (g.p.length < 3) continue;
-      ctx.beginPath();
-      ctx.moveTo(X(g.p[0][0]), Z(g.p[0][1]));
+      ctx.beginPath(); ctx.moveTo(X(g.p[0][0]), Z(g.p[0][1]));
       for (let i = 1; i < g.p.length; i++) ctx.lineTo(X(g.p[i][0]), Z(g.p[i][1]));
       ctx.fill();
     }
-    // manzanas por buckets: slate oscuro
+    // manzanas por buckets
     const BC = 64;
     ctx.fillStyle = '#232a33';
     for (let cx = Math.floor((px - view) / BC); cx <= Math.floor((px + view) / BC); cx++) {
       for (let cz = Math.floor((pz - view) / BC); cz <= Math.floor((pz + view) / BC); cz++) {
         for (const i of (this.bcells.get(cx + ',' + cz) || [])) {
           const b = this.blds[i];
-          ctx.beginPath();
-          ctx.moveTo(X(b.p[0][0]), Z(b.p[0][1]));
+          ctx.beginPath(); ctx.moveTo(X(b.p[0][0]), Z(b.p[0][1]));
           for (let k = 1; k < b.p.length; k++) ctx.lineTo(X(b.p[k][0]), Z(b.p[k][1]));
           ctx.fill();
         }
@@ -116,42 +91,72 @@ export class MiniMap {
         const r = this.city.data.roads[ri];
         const w = Math.max((r.w ?? 6) * sc, 3);
         ctx.lineWidth = pass === 0 ? w + 3 : w;
-        // calles luminosas sobre el fondo oscuro: avenidas ambar, resto gris claro
         ctx.strokeStyle = pass === 0 ? '#0a0f0c'
           : (r.w >= 12 ? '#e8b74e' : (r.bridge ? '#7f97c4' : '#5a6470'));
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(X(r.p[0][0]), Z(r.p[0][1]));
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.moveTo(X(r.p[0][0]), Z(r.p[0][1]));
         for (let i = 1; i < r.p.length; i++) ctx.lineTo(X(r.p[i][0]), Z(r.p[i][1]));
         ctx.stroke();
       }
     }
-    // POIs (tiendas/lugares reales): rombo dorado
+    // POIs (interest points): rombo dorado con halo
     if (extras && extras.pois) {
-      ctx.fillStyle = '#d99a1b';
       for (const poi of extras.pois) {
         const mx = X(poi.x), mz = Z(poi.z);
         if (mx < 8 || mx > S - 8 || mz < 8 || mz > S - 8) continue;
+        ctx.fillStyle = 'rgba(232,183,78,.3)';
+        ctx.beginPath(); ctx.arc(mx, mz, 8, 0, 7); ctx.fill();
+        ctx.fillStyle = '#e8b74e';
         ctx.beginPath();
         ctx.moveTo(mx, mz - 6); ctx.lineTo(mx + 6, mz); ctx.lineTo(mx, mz + 6); ctx.lineTo(mx - 6, mz);
         ctx.closePath(); ctx.fill();
       }
     }
-    // mobs vivos: punto rojo chico
-    if (extras && extras.mobs) {
-      ctx.save();
-      ctx.fillStyle = '#ff4433';
-      ctx.shadowColor = '#ff2a1a'; ctx.shadowBlur = 6;   // los mobs BRILLAN de rojo
-      for (const m of extras.mobs.values()) {
-        if (m.hp <= 0) continue;
-        const mx = X(m.x), mz = Z(m.z);
-        if (mx < 6 || mx > S - 6 || mz < 6 || mz > S - 6) continue;
-        const r = (m.b || m.g) ? 6 : 3.5;   // boss/gigante = punto mas grande
-        ctx.beginPath(); ctx.arc(mx, mz, r, 0, 7); ctx.fill();
-      }
-      ctx.restore();
+    ctx.restore();
+  }
+
+  draw(px, pz, heading, remotes = null, extras = null) {
+    // redibujar al moverme/zoom; si hay entidades dinamicas EN VISTA (humanos o
+    // mobs), a lo mas cada 140ms — NUNCA cada frame: el minimapa es vectorial
+    // (332 calles + edificios) y redibujarlo 60x/s tira TODO a 1fps.
+    const moved = Math.hypot(px - this.lastPos[0], pz - this.lastPos[1]) >= 0.4 || this.radius !== this.lastRadius;
+    // solo los HUMANOS son dinamicos ahora (los enemigos no van al minimapa). Sin
+    // mobs, estar quieto peleando ya no fuerza redibujos: cero stutter de combate.
+    const hasDyn = remotes && remotes.size > 0;
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (!moved && !(hasDyn && now - (this._lastT || 0) > 140)) return;
+    this._lastT = now;
+    this.lastPos = [px, pz];
+    this.lastRadius = this.radius;
+    const ctx = this.ctx, S = this.cv.width;
+    const half = S / 2;
+    const sc = (half - 16) / this.radius;
+    const X = (x) => half + (x - px) * sc;
+    const Z = (z) => half + (z - pz) * sc;
+
+    // CAPA ESTATICA cacheada. El mapa vectorial (332 calles + edificios) es lo caro;
+    // cuando estas quieto peleando NO cambia, solo se mueven los blips. Se renderiza
+    // a un canvas aparte y se reusa hasta que te muevas o hagas zoom. Antes se
+    // redibujaban las 332 calles en CADA refresco (cada 140ms) = el stutter.
+    if (!this._static) {
+      this._static = (typeof OffscreenCanvas !== 'undefined')
+        ? new OffscreenCanvas(S, S) : (() => { const c = document.createElement('canvas'); c.width = c.height = S; return c; })();
+      this._sctx = this._static.getContext('2d');
     }
+    const staticKey = Math.round(px * 4) + ',' + Math.round(pz * 4) + ',' + this.radius.toFixed(1);
+    if (staticKey !== this._staticKey) {
+      this._staticKey = staticKey;
+      this._renderStatic(this._sctx, S, half, sc, px, pz, X, Z, extras);
+    }
+    ctx.clearRect(0, 0, S, S);
+    ctx.drawImage(this._static, 0, 0);   // blit del mapa cacheado = 1 draw
+
+    // dinamicos sobre el mapa (recorte circular). Los enemigos NO van al minimapa
+    // (por gusto y por perf: sin mobs, el mapa solo se redibuja al moverte tu o
+    // los humanos, no en cada frame de pelea). Solo POIs (en la capa estatica) y
+    // otros jugadores.
+    ctx.save();
+    ctx.beginPath(); ctx.arc(half, half, half - 2, 0, 7); ctx.clip();
     // otros HUMANOS (multiplayer): celeste; miembros de mi PARTY: verde
     if (remotes) {
       const partyIds = (extras && extras.partyIds) || null;
@@ -169,15 +174,15 @@ export class MiniMap {
         ctx.beginPath(); ctx.arc(mx, mz - 1.5, 2.2, 0, 7); ctx.fill();
       }
     }
-    // flecha del jugador: verde lima brillante con halo
+    // flecha del jugador: verde lima con halo BARATO (circulo translucido, sin blur)
     ctx.translate(half, half);
     ctx.rotate(Math.PI - heading);   // norte-arriba: el char (forward +Z) mira (sin h, cos h) en canvas
-    ctx.shadowColor = 'rgba(140,230,130,.9)'; ctx.shadowBlur = 10;
+    ctx.fillStyle = 'rgba(140,230,130,.28)';
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.fill();
     ctx.fillStyle = '#8ce682';
     ctx.beginPath();
     ctx.moveTo(0, -13); ctx.lineTo(9, 9); ctx.lineTo(0, 3.5); ctx.lineTo(-9, 9);
     ctx.closePath(); ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.restore();
     ctx.restore();   // cerrar el clip circular
     // borde interior y strip de calle (fuera del clip, sobre el marco)

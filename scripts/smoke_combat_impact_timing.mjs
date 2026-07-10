@@ -105,7 +105,13 @@ const basicKindOk = basicKind === undefined || basicKind === 'heavy';
 if (hits.length !== 1 || hits[0].id !== 7 || !basicKindOk) {
   throw new Error('basic impact did not apply one delayed mob hit');
 }
-if (combat.hitStopT <= 0) throw new Error('impact did not trigger hit-stop');
+// hit-stop nuevo: solo el REMATE (crit/finisher = kind 'heavy') congela; un
+// golpe normal NO. Antes freezaba en cada golpe y se sentia como un tiron.
+{
+  const wasRemate = basicKind === 'heavy';
+  if (wasRemate && combat.hitStopT <= 0) throw new Error('el remate deberia congelar');
+  if (!wasRemate && combat.hitStopT > 0) throw new Error('un golpe normal NO deberia congelar');
+}
 if (combat.attackCd > 0.161) throw new Error(`basic combo momentum did not open next swing soon enough: ${combat.attackCd}`);
 if (combat.player.attackT > 0.091) throw new Error(`basic combo momentum left attack lock too high: ${combat.player.attackT}`);
 if (combat.player.comboT < 0.58) throw new Error(`basic combo momentum did not carry combo window: ${combat.player.comboT}`);

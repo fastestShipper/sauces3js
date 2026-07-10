@@ -3,11 +3,11 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g45';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g45';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g45';
-import { matchesAction } from '../keybinds.js?v=20260710g45';
-import { BloodCoat } from './bloodcoat.js?v=20260710g45';
+import { projectileSpeed } from './effects.js?v=20260710g46';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g46';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g46';
+import { matchesAction } from '../keybinds.js?v=20260710g46';
+import { BloodCoat } from './bloodcoat.js?v=20260710g46';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -27,7 +27,13 @@ const CRIT_CHANCE = 0.18;    // golpes criticos x2 (numeros dorados grandes)
 const CLEAVE_RANGE = 3.0;    // el tajo melee barre en arco a los cercanos
 const CLEAVE_ARC = 1.25;     // ± rad respecto al heading (~140 grados)
 const IMPACT_FALLBACK_RANGE = RANGE_MELEE + 0.35;
-const FINISHER_HIT_STOP = 0.07;
+// HIT-STOP: el freeze fuerte y satisfactorio, pero NO en cada golpe (eso se
+// sentia como un tiron). Solo se dispara en el REMATE de un combo largo (o crit/
+// ejecucion), UNA vez, y con cooldown para que un combo rapido no lo apile.
+const HITSTOP_FREEZE = 0.12;   // qué tan lento va el mundo durante el impacto
+const HITSTOP_DUR = 0.10;      // cuánto dura el freeze (s)
+const HITSTOP_CD = 1.6;        // cooldown entre freezes (s): "solo una vez"
+const HITSTOP_COMBO_MIN = 3;   // hits de combo necesarios para que valga el remate
 const FINISHER_SHAKE = 0.020;
 const STREAK_WINDOW = 7;     // s para encadenar kills en racha
 const XP_STREAK_MULT_SCALE = 0.18;
@@ -153,7 +159,8 @@ export class Combat {
     this.streakT = 0;
     this.dmgBuffT = 0;       // buff de dano temporal (Grito de Guerra)
     this.dmgBuffMult = 1;
-    this.hitStopT = 0;       // congela el mundo unos ms al conectar (game feel)
+    this.hitStopT = 0;       // congela el mundo unos ms en el REMATE (game feel)
+    this._hitStopCdT = 0;    // cooldown del hit-stop: cae UNA vez por combo
     this.slowMoT = 0;        // micro camara-lenta en kills con racha alta
     this.targetLocked = false; // true = target FIJADO por TAB/clic (opcional)
     this._targetHudState = null;
@@ -464,12 +471,26 @@ export class Combat {
     this.hud.toast(this.autoAttack ? '\u2694\ufe0f Auto-pelea ACTIVADA (X apaga)' : '\ud83d\udd90\ufe0f Combate MANUAL: cada clic es un golpe (X reactiva)');
   }
 
-  // factor de tiempo del mundo: hit-stop (freeze corto) > slow-mo (racha) > 1.
+  // factor de tiempo del mundo: hit-stop (impacto) > slow-mo (racha) > 1.
   // Se llama con el dt REAL del frame; decae los timers aqui mismo.
+  //
+  // ANTES el hit-stop congelaba el mundo al 12% en CADA golpe: se sentia como un
+  // TIRON/freno molesto en la pelea. Ahora es un peso leve (65%), no un freno.
+  // `sauces_hitstop` en localStorage: 'light' (default) | 'off' | 'heavy'.
   timeFactor(rawDt) {
-    if (this.hitStopT > 0) { this.hitStopT -= rawDt; return 0.12; }
-    if (this.slowMoT > 0) { this.slowMoT -= rawDt; return 0.3; }
+    if (this._hitStopCdT > 0) this._hitStopCdT -= rawDt;   // decae el cooldown siempre
+    if (this.hitStopT > 0) { this.hitStopT -= rawDt; return HITSTOP_FREEZE; }
+    if (this.slowMoT > 0) { this.slowMoT -= rawDt; return 0.55; }
     return 1;
+  }
+
+  // Dispara el hit-stop del REMATE. Solo si paso el cooldown: asi cae UNA vez por
+  // combo, no en cada golpe. Devuelve true si de verdad congelo.
+  _bigHitStop() {
+    if (this._hitStopCdT > 0) return false;
+    this.hitStopT = HITSTOP_DUR;
+    this._hitStopCdT = HITSTOP_CD;
+    return true;
   }
 
   _playerAtk() {
@@ -552,7 +573,7 @@ export class Combat {
     }
     if (hits) {
       this._breakSpawnGrace();
-      this.hitStopT = Math.max(this.hitStopT, 0.035);
+      // dash strike: sin freeze (no es el remate del combo)
       if (this.sfx) this.sfx.hit?.(false);
       if (this.effects) {
         this.effects.slashArc(this.player.pos, this.player.heading, (this.classSpec && this.classSpec.auraColor) || 0xfff2d8);
@@ -581,7 +602,7 @@ export class Combat {
     this.player.dashCd = Math.min(Math.max(0, this.player.dashCd || 0), PERFECT_DODGE_DASH_CD);
     this.player.speedBuffT = Math.max(this.player.speedBuffT || 0, PERFECT_DODGE_HASTE_T);
     this.player.speedBuffMult = Math.max(this.player.speedBuffMult || 1, PERFECT_DODGE_HASTE);
-    this.hitStopT = Math.max(this.hitStopT, 0.055);
+    this._bigHitStop();   // contra de esquiva perfecta: momento de payoff
     if (!this.targetId) this._setSoftTarget(mob.id);
     if (this.sfx) this.sfx.hit?.(false);
     if (this.effects) {
@@ -715,7 +736,9 @@ export class Combat {
   _skillImpactFeedback(hitCount, heavy = false, origin = null) {
     const hits = Math.max(0, Number(hitCount) || 0);
     if (!hits) return;
-    this.hitStopT = Math.max(this.hitStopT, heavy || hits >= 3 ? 0.075 : 0.05);
+    // castear un skill es un momento grande: freeze una vez (el cooldown lo gatea,
+    // y los skills ya tienen su propio cooldown, asi que no se siente spam).
+    this._bigHitStop();
     if (this.sfx) this.sfx.hit?.(heavy || hits >= 3);
     this._localShake(origin, heavy || hits >= 3 ? 0.058 : 0.034, heavy || hits >= 3 ? 0.095 : 0.07);
   }
@@ -937,7 +960,7 @@ export class Combat {
     this._markManualAttackStarted('player', this.pvpId);
     this.attackCd = this._attackCooldown();
     if (this.sfx) { this.sfx.swing?.(); this.sfx.hit?.(false); }
-    this.hitStopT = 0.045;
+    // golpe PvP normal: sin freeze
     const atk = this._playerAtk();
     if (this.effects) {
       const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
@@ -1382,10 +1405,9 @@ export class Combat {
           const hx = Number.isFinite(live.x) ? live.x : target.x;
           const hz = Number.isFinite(live.z) ? live.z : target.z;
           if (this.sfx) this.sfx.hit?.(crit);
-          // GAME FEEL: micro-freeze al conectar; el finisher del combo pesa mas
-          // aunque no sea critico, para que el 1-2-3 se lea en pantalla.
-          this.hitStopT = crit ? 0.09 : (finisher ? FINISHER_HIT_STOP : 0.045);
-          if (crit || finisher) this._localShake({ x: hx, z: hz }, crit ? 0.085 : FINISHER_SHAKE, crit ? 0.12 : 0.085);
+          // GAME FEEL: el freeze cae SOLO en el remate (crit o finisher del combo),
+          // una vez por cooldown. Los golpes 1 y 2 del combo no frenan nada.
+          if (crit || finisher) { this._bigHitStop(); this._localShake({ x: hx, z: hz }, crit ? 0.085 : FINISHER_SHAKE, crit ? 0.12 : 0.085); }
           if (this.effects) {
             this.effects.bloodHit({ x: hx, y: 1.0, z: hz });
             // los CRITS y finishers revientan carne y hueso (mini gore burst)
@@ -1408,7 +1430,8 @@ export class Combat {
           const cleaveHits = !ptype ? this._cleave(impactId, atk) : 0;
           if (!ptype) this._comboMomentum({ finisher, crit, cleaveHits });
           if (cleaveHits > 0) {
-            this.hitStopT = Math.max(this.hitStopT, Math.min(0.095, 0.055 + cleaveHits * 0.012));
+            // barrer un pack pesa: freeze una vez si corto 2+ (remate de manada)
+            if (cleaveHits >= 2) this._bigHitStop();
             if (this.effects) {
               this._localShake({ x: hx, z: hz }, 0.038 + cleaveHits * 0.011, 0.08 + cleaveHits * 0.016);
               if (cleaveHits >= 2) this.effects.goreBurst({ x: hx, y: 0.85, z: hz }, 0.45 + cleaveHits * 0.1);
