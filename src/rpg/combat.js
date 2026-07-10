@@ -170,6 +170,10 @@ export class Combat {
     this.attackIntentT = 0;  // manual intent: keeps one click alive while closing distance
     this.attackIntentId = null;
     this._pvpPunchT = 0;
+    this._manualAttackHeld = false;
+    this._manualAttackPointerId = null;
+    this._manualAttackTarget = null;
+    this._manualAttackFirstPending = false;
     this.skillPriorityT = 0;  // evita que el autoataque ensucie una skill recien lanzada
     this._hitTimers = new Map(); // timer -> tipo de impacto pendiente
     this._actionSeq = 0;
@@ -199,7 +203,17 @@ export class Combat {
     this.hp = this.hpMax;
     this.ray = new THREE.Raycaster();
 
-    addEventListener('mousedown', (e) => this._onPointerAttack(e));
+    addEventListener('pointerdown', (e) => this._onPointerAttack(e));
+    addEventListener('pointerup', (e) => this._releaseManualAttack(e));
+    addEventListener('pointercancel', (e) => this._cancelManualAttack(e));
+    addEventListener('pointermove', (e) => this._onManualAttackPointerMove(e));
+    addEventListener('blur', () => this._cancelManualAttack());
+    this.inputSurface?.addEventListener?.('pointerleave', (e) => this._cancelManualAttack(e));
+    if (typeof document !== 'undefined') {
+      document.addEventListener?.('visibilitychange', () => {
+        if (document.hidden) this._cancelManualAttack();
+      });
+    }
     addEventListener('keydown', (e) => {
       if (matchesAction(e, 'targetNext') && !this.player.locked) { e.preventDefault(); this._cycleTarget(); }
     });
@@ -219,17 +233,88 @@ export class Combat {
   }
 
   _isGameplayPointer(e) {
-    if (!e || e.button !== 0 || !this.inputSurface) return false;
+    if (!e || e.button !== 0 || e.isPrimary === false || !this.inputSurface) return false;
+    return this._isInsideInputSurface(e);
+  }
+
+  _isInsideInputSurface(e) {
     const target = e.target;
     return target === this.inputSurface || !!this.inputSurface.contains?.(target);
   }
 
   _onPointerAttack(e) {
     if (!this._isGameplayPointer(e) || this.player.locked || this.dead) return false;
+    this._manualAttackHeld = true;
+    this._manualAttackPointerId = e.pointerId ?? null;
+    this._manualAttackFirstPending = true;
     this._onClick(e);
+    this._manualAttackTarget = this.pvpId != null
+      ? { type: 'player', id: this.pvpId }
+      : (this.targetId != null ? { type: 'mob', id: this.targetId } : null);
     // PvP requires an explicit click. A world click without a rival buffers one mob strike.
     if (!this.manualAttack() && this.pvpId == null) this.pokeAttack();
     return true;
+  }
+
+  _matchesManualAttackPointer(e) {
+    if (!e || this._manualAttackPointerId == null || e.pointerId == null) return true;
+    return e.pointerId === this._manualAttackPointerId;
+  }
+
+  _stopManualAttack({ preserveFirst = false } = {}) {
+    if (!this._manualAttackHeld) return false;
+    const keepClick = preserveFirst && this._manualAttackFirstPending;
+    this._manualAttackHeld = false;
+    this._manualAttackPointerId = null;
+    this._manualAttackTarget = null;
+    this._manualAttackFirstPending = false;
+    if (!keepClick) {
+      this._punchT = 0;
+      this._pvpPunchT = 0;
+      this._clearAttackIntent();
+    }
+    return true;
+  }
+
+  _releaseManualAttack(e) {
+    if (!this._matchesManualAttackPointer(e)) return false;
+    if (!this._isInsideInputSurface(e)) return this._cancelManualAttack(e);
+    return this._stopManualAttack({ preserveFirst: true });
+  }
+
+  _cancelManualAttack(e = null) {
+    if (!this._matchesManualAttackPointer(e)) return false;
+    return this._stopManualAttack();
+  }
+
+  _onManualAttackPointerMove(e) {
+    if (!this._manualAttackHeld || !this._matchesManualAttackPointer(e)) return false;
+    if (!this._isInsideInputSurface(e)) return this._cancelManualAttack(e);
+    return false;
+  }
+
+  _markManualAttackStarted(type, id) {
+    if (!this._manualAttackHeld) return;
+    const held = this._manualAttackTarget;
+    if (held && (held.type !== type || !Object.is(held.id, id))) return;
+    if (!held) this._manualAttackTarget = { type, id };
+    this._manualAttackFirstPending = false;
+  }
+
+  _refreshManualAttackHold() {
+    if (!this._manualAttackHeld) return false;
+    if (this.dead || this.player.locked) return this._cancelManualAttack();
+    const held = this._manualAttackTarget;
+    if (held?.type === 'player') {
+      const rival = this.net.remotes.get(held.id);
+      if (this.pvpId !== held.id || !rival || !rival.ready || rival.dead) return this._cancelManualAttack();
+      return this.manualAttack();
+    }
+    if (held?.type === 'mob') {
+      const mob = this.net.mobs.get(held.id);
+      if (this.targetId !== held.id || !mob || (mob.hp ?? 0) <= 0) return this._cancelManualAttack();
+    }
+    return this.pokeAttack();
   }
 
   _onClick(e) {
@@ -854,6 +939,7 @@ export class Combat {
     this._breakSpawnGrace();
     this.net.sendAttack?.('', { type: 'player', id: this.pvpId, x: rival.x, z: rival.z, animSpeed });
     this._pvpPunchT = 0;
+    this._markManualAttackStarted('player', this.pvpId);
     this.attackCd = this._attackCooldown();
     if (this.sfx) { this.sfx.swing?.(); this.sfx.hit?.(false); }
     this.hitStopT = 0.045;
@@ -1103,7 +1189,9 @@ export class Combat {
 
   update(dt) {
     this.bloodCoat.update(dt);
+    if (this.player.locked) this._cancelManualAttack();
     if (this.dead) {
+      this._cancelManualAttack();
       this._clearImpacts();
       this.respawnT -= dt;
       this.hud.setDeathCount(this.respawnT);
@@ -1174,6 +1262,7 @@ export class Combat {
       if (best) {
         if (this.targetId !== best.id || this.targetLocked || this.pvpId != null) this._setSoftTarget(best.id);
         if (hasAttackIntent && this.attackIntentId == null) this.attackIntentId = best.id;
+        if (this._manualAttackHeld && !this._manualAttackTarget) this._manualAttackTarget = { type: 'mob', id: best.id };
       }
       else if (this.targetId && !this.targetLocked) { this._clearMobTarget(); this._hideTarget(); }
     }
@@ -1199,6 +1288,7 @@ export class Combat {
     this.attackCd -= dt;
     if (this.chainShotT > 0) this.chainShotT = Math.max(0, this.chainShotT - dt);
     if (this.skillPriorityT > 0) this.skillPriorityT = Math.max(0, this.skillPriorityT - dt);
+    this._refreshManualAttackHold();
     if (this._punchT > 0) this._punchT = Math.max(0, this._punchT - dt);
     if (this._pvpPunchT > 0) this._pvpPunchT = Math.max(0, this._pvpPunchT - dt);
     this._dashStrike();
@@ -1262,6 +1352,7 @@ export class Combat {
         this._breakSpawnGrace();
         this.net.sendAttack?.('', { type: 'mob', id: target.id, x: target.x, z: target.z, animSpeed });
         this._punchT = 0;
+        this._markManualAttackStarted('mob', target.id);
         this._clearAttackIntent();
         this.attackCd = this._attackCooldown();
         // crit + finisher: el 3er golpe del combo pega mas fuerte
@@ -1907,6 +1998,7 @@ export class Combat {
   }
 
   _die() {
+    this._cancelManualAttack();
     this._clearImpacts();
     this.bloodCoat.clear();
     this.dead = true;
