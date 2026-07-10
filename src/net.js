@@ -3,22 +3,22 @@
 // interpolated, with a floating nametag). No prediction — a casual shared world.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260710g47';
-import { composeCharacter } from './rpg/charcustom.js?v=20260710g47';
-import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260710g47';
+import { sanitizeImported } from './glbutil.js?v=20260710g48';
+import { composeCharacter } from './rpg/charcustom.js?v=20260710g48';
+import { CLASS_LIST, CERNUNNOS } from './rpg/classes.js?v=20260710g48';
 
 // spec de heroe a partir del charFile del remoto (para paleta/piezas)
 function classByChar(charFile) {
   if (charFile === CERNUNNOS.char) return CERNUNNOS;
   return CLASS_LIST.find((c) => c.char === charFile) || CLASS_LIST[0];
 }
-import { makeNametag } from './nametag.js?v=20260710g47';
-import { cloneSkinned } from './npcs.js?v=20260710g47';
-import { equipWeapon, attackClipName, comboClips, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g47';
-import { showBubble } from './chat.js?v=20260710g47';
-import { WS_URL } from './rpg/account.js?v=20260710g47';
-import { PROJECTILE_BY_CHAR, combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g47';
-import { plantClip } from './animclip.js?v=20260710g47';
+import { makeNametag } from './nametag.js?v=20260710g48';
+import { cloneSkinned } from './npcs.js?v=20260710g48';
+import { equipWeapon, attackClipName, comboClips, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g48';
+import { showBubble } from './chat.js?v=20260710g48';
+import { WS_URL } from './rpg/account.js?v=20260710g48';
+import { PROJECTILE_BY_CHAR, combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g48';
+import { plantClip } from './animclip.js?v=20260710g48';
 
 const SCALE = 1.9 / 2.54;
 const REMOTE_DODGE_SPEED = 1.65;

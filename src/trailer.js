@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from './glbutil.js?v=20260710g47';
-import { equipWeapon } from './weapons.js?v=20260710g47';
-import { CLASS_LIST } from './rpg/classes.js?v=20260710g47';
+import { sanitizeImported } from './glbutil.js?v=20260710g48';
+import { equipWeapon } from './weapons.js?v=20260710g48';
+import { CLASS_LIST } from './rpg/classes.js?v=20260710g48';
 
 const TRAILER_DURATION = 42;
 const HORDE_SIZE = 22;

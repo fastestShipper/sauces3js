@@ -3,11 +3,11 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g47';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g47';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g47';
-import { matchesAction } from '../keybinds.js?v=20260710g47';
-import { BloodCoat } from './bloodcoat.js?v=20260710g47';
+import { projectileSpeed } from './effects.js?v=20260710g48';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g48';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g48';
+import { matchesAction } from '../keybinds.js?v=20260710g48';
+import { BloodCoat } from './bloodcoat.js?v=20260710g48';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -1606,6 +1606,12 @@ export class Combat {
     }
     if (target && !(this.targetLocked && this.targetId === target.id)) this._setSoftTarget(target.id);
     if (target && ['strike', 'stab', 'execute'].includes(s.type)) this._skillLungeTo(target);
+    // CAST FLASH: energia del color del skill juntandose en el heroe. Hace que
+    // cada casteo se LEA aunque el efecto caiga lejos.
+    if (fx) {
+      fx._energyCore?.({ x: p.x, y: 1.1, z: p.z }, aura, 1.3, 0.24);
+      fx.flashLight?.({ x: p.x, y: 1.1, z: p.z }, aura, 3.5, 6, 0.22);
+    }
     const targetHeading = target
       ? Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z)
       : null;

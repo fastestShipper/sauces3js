@@ -3,7 +3,7 @@
 // de modulo, materiales clonados por particula para opacidad independiente, y caps
 // duros de cantidad para no acumular nodos en la escena.
 import * as THREE from 'three';
-import { ParticleBatch } from './particles.js?v=20260710g47';
+import { ParticleBatch } from './particles.js?v=20260710g48';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
@@ -582,9 +582,12 @@ export class Effects {
     this._pushCapped(this.rings, { mesh, life: 2.0, max: 2.0, radius: 1, pillar: true },
       isLowEndProfile() ? 12 : isMobileProfile() ? 18 : 30);
     this.nova({ x: p.x, y: 0, z: p.z }, 0xffd24a, 5);
+    // resplandor dorado FUERTE que baña al heroe: subir de nivel se SIENTE
+    this.flashLight({ x: p.x, y: 1.2, z: p.z }, 0xffdf8a, 9, 12, 0.6);
+    this._energyCore({ x: p.x, y: 1.0, z: p.z }, 0xffe6a0, 2.6, 0.5);
     // chispas doradas subiendo en espiral
-    for (let i = 0; i < 3; i++) {
-      this._spurt({ x: p.x, y: 0.4 + i * 0.8, z: p.z }, 10, 3.2, 1.1, 0xffe08a);
+    for (let i = 0; i < 4; i++) {
+      this._spurt({ x: p.x, y: 0.4 + i * 0.8, z: p.z }, 12, 3.2, 1.2, 0xffe08a);
     }
     this.hitFlash({ x: p.x, y: 1.4, z: p.z }, 0xffd875);
     return true;
