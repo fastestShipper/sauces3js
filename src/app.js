@@ -1463,6 +1463,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     addEventListener('keydown', (e) => {
       if (!matchesAction(e, 'teleportHome') || teleCh > 0 || player.locked) return;
       teleCh = 2.0;
+      net.startRecall?.();    // el server cronometra la canalizacion y autoriza la gruta
       sfx.teleport();
       player.locked = true;                                  // channeling: no te mueves
       aura = new THREE.Group();

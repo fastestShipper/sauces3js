@@ -37,13 +37,27 @@ const { Net } = await import('../src/net.js');
 }
 
 {
+  // CON permiso del server (respawn, o canalizacion de la tecla B completada)
   const state = { x: 200, z: -150, lastMoveAt: 1000, moveCredit: 0 };
-  const result = guardMovement(state, SAFE_X, SAFE_Z, 1100);
-  assert.equal(result.corrected, false, 'teleport home should remain legal');
+  const result = guardMovement(state, SAFE_X, SAFE_Z, 1100, { homeGrant: true });
+  assert.equal(result.corrected, false, 'authorized teleport home should remain legal');
   assert.equal(result.home, true);
   assert.equal(result.x, SAFE_X);
   assert.equal(result.z, SAFE_Z);
   assert.ok(HOME_TELEPORT_RADIUS >= 1);
+}
+
+{
+  // SIN permiso: el recall instantaneo de un cliente modificado se clampea como
+  // cualquier otro salto imposible. Escapar de un PvP teleportandose no vale.
+  const state = { x: 200, z: -150, lastMoveAt: 1000, moveCredit: 0 };
+  const result = guardMovement(state, SAFE_X, SAFE_Z, 1100);
+  assert.equal(result.home, false, 'unauthorized home teleport must not be granted');
+  assert.equal(result.corrected, true, 'unauthorized home teleport must be corrected');
+  assert.ok(
+    Math.hypot(result.x - SAFE_X, result.z - SAFE_Z) > 100,
+    'the cheater stays where he was',
+  );
 }
 
 {

@@ -10,7 +10,12 @@ function finiteNumber(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function guardMovement(state, requestedX, requestedZ, nowMs = Date.now()) {
+// `opts.homeGrant` es la AUTORIZACION del server para aparecer en la gruta.
+// Sin ella, saltar a la gruta se trata como cualquier otro salto imposible y se
+// clampea por velocidad. El teleport (tecla B) y el respawn siguen funcionando
+// porque el server los autoriza explicitamente; el recall instantaneo del
+// cliente modificado, no.
+function guardMovement(state, requestedX, requestedZ, nowMs = Date.now(), opts = {}) {
   const prevX = finiteNumber(state && state.x, SAFE_X);
   const prevZ = finiteNumber(state && state.z, SAFE_Z);
   const nextX = finiteNumber(requestedX, prevX);
@@ -26,7 +31,7 @@ function guardMovement(state, requestedX, requestedZ, nowMs = Date.now()) {
   if (state) state.lastMoveAt = now;
 
   const home = Math.hypot(nextX - SAFE_X, nextZ - SAFE_Z) <= HOME_TELEPORT_RADIUS;
-  if (home) {
+  if (home && opts && opts.homeGrant) {
     if (state) state.moveCredit = 0;
     return { x: nextX, z: nextZ, corrected: false, home: true, allowance: credit };
   }

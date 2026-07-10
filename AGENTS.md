@@ -33,6 +33,18 @@ index.html  (importmap CDN, sin bundler)    server/server.js  (relay WS, autorit
 
 **Clave**: NO hay bundler. `index.html` trae un `<script type="importmap">` que apunta a `three@0.161.0` en jsDelivr. Los módulos `src/*.js` se importan con un sufijo de versión `?v=YYYYMMDD<letra>` (cache-busting). **Cada deploy debe re-estampar ese sufijo en TODOS los imports** (ver §5).
 
+### ⚠️ Árboles PARALELOS que NO son el juego live
+
+El repo contiene tres stacks. **Solo el de arriba es el que corre en producción.** Los otros dos son exploraciones sin commitear:
+
+| Árbol | Qué es | Estado |
+|-------|--------|--------|
+| `index.html` + `src/` + `server/` | **EL JUEGO LIVE** (vanilla JS, sin bundler) | producción |
+| `modern/` + `src-modern/` + `server-modern/` + `mcp-modern/` + `package.json`/`tsconfig.json`/`vite.config.ts` | rewrite TypeScript/Vite. Simulación determinista separada del render | vertical slice técnico, NO conectado al server live. Ver `docs/modern-rewrite-reality-check.md` |
+| `godot/` (~26MB) | prototipo en Godot; su `websocket_client.gd` habla con el relay Node de `:8456` | exploratorio. Su propio audit (`docs/godot-premium-asset-audit.md`) dice que **ningún asset pasa el gate premium** |
+
+**Trampa de commit:** el deploy usa `git add -A -- index.html src/ server/` (acotado, seguro). Un `git add .` distraído se traga los ~9000 archivos de los otros dos árboles. El `package.json` de la raíz pertenece al rewrite, **no** al juego live: el juego live no tiene build step.
+
 **El server es autoritativo de los mobs**: decide HP, posición, spawn, muerte, daño. El cliente solo dibuja lo que el server manda (interpola posiciones, reproduce animaciones). El jugador es semi-autoritativo (manda su pos/hp; el server sanea y rebroadcast).
 
 ### Puertos (local)

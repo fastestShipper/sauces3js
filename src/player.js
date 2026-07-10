@@ -817,6 +817,9 @@ export class Player {
 
   update(dt, camera) {
     if (this.locked) this.releaseMouseCapture();
+    // OJO: estos guards NO son codigo muerto. Los smokes llaman a
+    // `Player.prototype.update.call(fake, ...)` sobre objetos duck-typed que no
+    // traen `actionDown` ni `_movePlanar`. Quitarlos rompe el harness de tests.
     const down = (action) => this.actionDown ? this.actionDown(action) : isActionDown(this.keys, action);
     const movePlanar = (sx, sz) => {
       if (typeof this._movePlanar === 'function') return this._movePlanar(sx, sz);

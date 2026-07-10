@@ -10,6 +10,7 @@ const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { MAX_WEAPON_ATK, MAX_PLAYER_LEVEL, maxPlayerHit } = require('./combat_limits');
 const {
   SAFE_X,
   SAFE_Z,
@@ -31,7 +32,10 @@ const {
 const { obstacleStats } = require('./world_obstacles');
 
 const PORT = Number(process.env.SAUCES_PORT) || 8456;
-const wss = new WebSocketServer({ port: PORT, host: '127.0.0.1' });
+// maxPayload: el default de `ws` es 100MB. Ningun mensaje legitimo pasa de unos
+// KB (el mas grande es un save con 60 items), y el frame se bufferea entero
+// antes de que corra cualquier validacion.
+const wss = new WebSocketServer({ port: PORT, host: '127.0.0.1', maxPayload: 64 * 1024 });
 
 let nextId = 1;
 const clients = new Map();   // id -> { ws, name, char, x, z, h, a, account }
@@ -57,6 +61,29 @@ const CHAR_ALLOWLIST = [
   'char_cernunnos.glb',
 ];
 const GOD_CHAR = 'char_cernunnos.glb';
+
+// Guard de progresion del save (ver sanitizeChar). Los niveles se ganan de a uno;
+// +2 tolera un doble level-up entre saves. El oro tolera una venta grande de
+// inventario, pero no un salto a 1e9.
+const MAX_LEVEL_GAIN_PER_SAVE = 2;
+const MAX_GOLD_GAIN_PER_SAVE = 20000;
+// MITIGACION, no cura: el oro sigue siendo client-authoritative. El cap por save
+// solo sirve junto a este rate limit (si no, spameas saves y sumas el maximo cada
+// vez). La cura real es una economia server-side que cuente kills y ventas.
+const SAVE_MIN_INTERVAL_MS = 3000;
+
+// Recall a la gruta (tecla B). El cliente canaliza 2s; el server valida que la
+// canalizacion haya pasado de verdad y que no estes en combate. Solo entonces
+// autoriza la aparicion en la gruta (ver movement_guard.homeGrant).
+const RECALL_CHANNEL_MS = 1800;        // margen bajo los 2s del cliente
+const RECALL_COMBAT_LOCK_MS = 5000;    // no se recalla huyendo de un golpe
+const RECALL_GRANT_MS = 4000;          // ventana para usar el permiso
+const RESPAWN_GRANT_MS = 15000;        // morir siempre te devuelve a la gruta
+const RECALL_CD_MS = 8000;
+
+// Los skills de party tienen cd 28-30s en classes.js. 24s deja margen a la
+// latencia y al haste, pero mata la rotacion infinita de buffs.
+const PSKILL_CD_MS = 24000;
 
 // Cuenta dios desde el ENTORNO (no en el codigo). El server guarda solo el HASH,
 // nunca la contrasena en texto plano. Si faltan las vars, el camino dios queda
@@ -235,20 +262,37 @@ function sanitizeChar(raw, account) {
       weaponName: clean(it.weaponName, 40),
       tier: clean(it.tier, 40),
       classReq: clean(it.classReq, 40),
-      atk: clampNum(it.atk, 0, 100000),
+      // el atk del arma alimenta _playerAtk(): sin este techo el cliente se
+      // fabrica un arma de 100000 y el techo de dano por nivel no sirve de nada.
+      atk: clampNum(it.atk, 0, MAX_WEAPON_ATK),
       kind: clean(it.kind, 12),
       heal: clampNum(it.heal, 0, 10000),
     });
   }
 
+  // GUARD DE PROGRESION: el save es client-authoritative, asi que un cliente
+  // modificado se declara nivel 200 con 1e9 de oro. Los niveles llegan de a uno:
+  // acotamos el CRECIMIENTO contra lo ya persistido, no solo el valor absoluto.
+  const prev = (store.accounts[account] && store.accounts[account].char) || null;
+  const prevLevel = prev ? clampInt(prev.level, 1, MAX_PLAYER_LEVEL) : 1;
+  const prevGold = prev ? clampNum(prev.gold, 0, 1e9) : 0;
+  const level = Math.min(
+    clampInt(raw.level, 1, MAX_PLAYER_LEVEL),
+    prevLevel + MAX_LEVEL_GAIN_PER_SAVE,
+  );
+  const gold = Math.min(
+    clampNum(raw.gold, 0, 1e9),
+    prevGold + MAX_GOLD_GAIN_PER_SAVE,
+  );
+
   return {
     className: clean(raw.className, 20),
     charFile,
-    level: clampInt(raw.level, 1, 200),
+    level,
     xp: clampNum(raw.xp, 0, 1e9),
     hpMax: clampNum(raw.hpMax, 1, 100000),
     custom: sanitizeCu(raw.custom),
-    gold: clampNum(raw.gold, 0, 1e9),
+    gold,
     inv,
     equipId: clean(raw.equipId, 40),
   };
@@ -602,6 +646,7 @@ function commitMobAttackWindup(mob, c) {
     const d = Math.hypot(c.x - mob.x, c.z - mob.z);
     if (d <= MOB_ATTACK_COMMIT_RANGE) {
       faceMobTarget(mob, c);
+      c.lastDamagedAt = Date.now();   // combat lock: no se recalla bajo fuego
       send(c.ws, { t: 'phit', id: mob.id, dmg: mob.attackDmg || mobDamage(mob), hp: null, told: 1 });
     } else {
       send(c.ws, { t: 'pmiss', id: mob.id, told: 1 });
@@ -849,6 +894,22 @@ function inSafeZone(c) {
   return Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R;
 }
 
+// Nivel en el que el server CREE al jugador, para calcular su techo de dano.
+// Cuentas: el nivel persistido (ya protegido por el guard de progresion), con
+// tolerancia para los niveles ganados desde el ultimo save.
+// Invitados: no persisten nada, asi que el nivel que reportan se acota por el
+// tiempo que llevan conectados. Nadie llega a nivel 99 en tres segundos.
+const GUEST_MINUTES_PER_LEVEL = 0.75;
+function authoritativeLevel(c) {
+  if (!c) return 1;
+  const acc = c.account && store.accounts[c.account];
+  const stored = acc && acc.char ? clampInt(acc.char.level, 1, MAX_PLAYER_LEVEL) : 0;
+  if (stored) return Math.min(MAX_PLAYER_LEVEL, stored + MAX_LEVEL_GAIN_PER_SAVE);
+  const minutes = Math.max(0, (Date.now() - (c.joinedAt || 0)) / 60000);
+  const ceiling = 1 + Math.floor(minutes / GUEST_MINUTES_PER_LEVEL);
+  return Math.max(1, Math.min(clampInt(c.lv || 1, 1, MAX_PLAYER_LEVEL), ceiling));
+}
+
 function samePartyIds(a, b) {
   const pa = partyOf.get(a);
   return !!pa && pa === partyOf.get(b);
@@ -913,6 +974,7 @@ wss.on('connection', (ws, req) => {
   const me = {
     ws, name: 'Anon', char: 'char_knight.glb', x: SAFE_X, z: SAFE_Z, h: 0, a: 'Idle', account: null,
     lastMoveAt: Date.now(), moveCredit: MOVEMENT_MAX_CREDIT,
+    joinedAt: Date.now(), greeted: false, alive: true,
   };
   clients.set(id, me);
   console.log('conn', id, 'from', req && req.socket && req.socket.remoteAddress, '| total', clients.size);
@@ -976,6 +1038,11 @@ wss.on('connection', (ws, req) => {
 
     if (m.t === 'save') {
       if (!me.account) return;   // solo cuentas logueadas guardan
+      // rate limit: sin esto, el cap de crecimiento por save no acota nada
+      // (spameas saves y sumas el maximo cada vez), y cada save ensucia el store.
+      const nowSave = Date.now();
+      if (nowSave - (me.lastSaveAt || 0) < SAVE_MIN_INTERVAL_MS) return;
+      me.lastSaveAt = nowSave;
       const sanitized = sanitizeChar(m.char, me.account);
       if (!sanitized) return;    // save invalido o anti-cheat: ignorar
       if (!store.accounts[me.account]) return;
@@ -985,6 +1052,11 @@ wss.on('connection', (ws, req) => {
     }
 
     if (m.t === 'hi') {
+      // UN saludo por conexion. Repetirlo reenviaba roster+mobs y broadcasteaba
+      // `join` a todos: amplificacion O(N) gratis, y ademas teleportaba a la
+      // gruta sin permiso. Un reconnect abre un socket nuevo, no reusa este.
+      if (me.greeted) return;
+      me.greeted = true;
       // si trae token valido, atamos la conexion a la cuenta (para los saves).
       if (m.token && tokens.has(m.token)) me.account = tokens.get(m.token);
       me.name = clean(m.name, 16) || 'Anon';
@@ -1020,19 +1092,42 @@ wss.on('connection', (ws, req) => {
         send(ws, { t: 'flist', friends: friendsPayload(me.account) });
       }
       if (topStreaks.length) send(ws, { t: 'top', list: publicTopStreaks() });
+    } else if (m.t === 'recall') {
+      // el cliente EMPIEZA la canalizacion de la tecla B. El server la cronometra.
+      const now = Date.now();
+      if (me.recallStartAt && now - me.recallStartAt < RECALL_CD_MS) return;
+      if (now - (me.lastDamagedAt || 0) < RECALL_COMBAT_LOCK_MS) {
+        send(ws, { t: 'recallfail', reason: 'combat' });
+        return;
+      }
+      me.recallStartAt = now;
+
     } else if (m.t === 's') {
       // Position remains responsive locally, but impossible jumps are corrected server-side.
+      const now = Date.now();
+      me.hp = clampInt(m.hp, 0, 100000); me.hm = clampInt(m.hm ?? 100, 1, 100000);
+      me.lv = clampInt(m.lv ?? 1, 1, 99);
+
+      // AUTORIZACION de aparicion en la gruta. Dos caminos legitimos:
+      //  1. moriste: el server lo ve (hp<=0) y te deja volver.
+      //  2. canalizaste la tecla B el tiempo completo sin recibir dano.
+      if (me.hp <= 0) me.homeGrantUntil = now + RESPAWN_GRANT_MS;
+      else if (me.recallStartAt && now - me.recallStartAt >= RECALL_CHANNEL_MS) {
+        me.recallStartAt = 0;
+        me.homeGrantUntil = now + RECALL_GRANT_MS;
+      }
+      const homeGrant = (me.homeGrantUntil || 0) > now;
+
       const rawX = Number(m.x), rawZ = Number(m.z);
       const requestedX = Number.isFinite(rawX) ? clampNum(rawX, -3000, 3000) : me.x;
       const requestedZ = Number.isFinite(rawZ) ? clampNum(rawZ, -3000, 3000) : me.z;
-      const movement = guardMovement(me, requestedX, requestedZ, Date.now());
+      const movement = guardMovement(me, requestedX, requestedZ, now, { homeGrant });
       me.x = movement.x; me.z = movement.z;
+      if (movement.home) me.homeGrantUntil = 0;   // el permiso se consume de una
       if (movement.corrected) {
         send(ws, { t: 'corr', x: me.x, z: me.z, reason: 'speed' });
       }
       me.h = clampNum(m.h, -10, 10); me.a = clean(m.a, 12) || 'Idle';
-      me.hp = clampInt(m.hp, 0, 100000); me.hm = clampInt(m.hm ?? 100, 1, 100000);
-      me.lv = clampInt(m.lv ?? 1, 1, 99);
       const stateMsg = { t: 's', id, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm, lv: me.lv };
       const dk = me.a === 'Dash' ? cleanDodgeKey(m.dk) : '';
       if (dk) stateMsg.dk = dk;
@@ -1080,7 +1175,10 @@ wss.on('connection', (ws, req) => {
         const cutoff = now - 5000;
         for (const [oldKey, t] of me.lastMobHitAt) if (t < cutoff) me.lastMobHitAt.delete(oldKey);
       }
-      const dmg = clampNum(m.dmg, 0, MOB_DMG_MAX);
+      // El cliente propone el dano; el server lo acota a lo que un jugador de
+      // ese nivel puede producir. Sin esto, dmg=3000 mata cualquier boss.
+      const dmgCap = Math.min(MOB_DMG_MAX, maxPlayerHit(authoritativeLevel(me), hitKind));
+      const dmg = clampNum(m.dmg, 0, dmgCap);
       const hpBefore = mob.hp;
       mob.hp -= dmg;
       const staggered = mob.hp > 0
@@ -1160,8 +1258,11 @@ wss.on('connection', (ws, req) => {
       const kind = String(m.kind || '');
       if (!PSKILL_KINDS.has(kind)) return;
       const nowMs = Date.now();
-      if (me._pskillAt && nowMs - me._pskillAt < 2500) return;
-      me._pskillAt = nowMs;
+      // cooldown POR TIPO. Uno solo de 2.5s dejaba rotar haste/shield/heal y
+      // mantener al party buffeado permanentemente (los CD reales son 28-30s).
+      if (!me._pskillAt) me._pskillAt = new Map();
+      if (nowMs - (me._pskillAt.get(kind) || 0) < PSKILL_CD_MS) return;
+      me._pskillAt.set(kind, nowMs);
       const v = Math.max(0, Math.min(kind === 'shield' ? 60 : 1, Number(m.v) || 0));
       const dur = Math.max(0, Math.min(12, Number(m.dur) || 0));
       const fromName = me.name || me.account || 'aliado';
@@ -1224,10 +1325,13 @@ wss.on('connection', (ws, req) => {
       const now = Date.now();
       if (me.lastPvpMs && now - me.lastPvpMs < PVP_CD_MS) return;
       me.lastPvpMs = now;
-      const dmg = clampNum(m.dmg, 0, PVP_DMG_MAX);
+      const pvpCap = Math.min(PVP_DMG_MAX, maxPlayerHit(authoritativeLevel(me), 'basic'));
+      const dmg = clampNum(m.dmg, 0, pvpCap);
       // registrar el atacante en la VICTIMA: pvpdead solo vale contra esto
       target.lastAttackerId = id;
       target.lastAttackerMs = now;
+      target.lastDamagedAt = now;      // combat lock del recall
+      target.recallStartAt = 0;        // recibir un golpe CANCELA la canalizacion
       send(target.ws, { t: 'pvph', from: id, name: me.name, dmg });
       broadcastAll({ t: 'pvpi', from: id, to, dmg });
 
@@ -1285,6 +1389,8 @@ wss.on('connection', (ws, req) => {
     }
   });
 
+  ws.on('pong', () => { me.alive = true; });
+
   ws.on('close', () => {
     // limpieza de party: sacar al que se va y refrescar a los que quedan.
     const stillPid = removeFromParty(id);
@@ -1295,6 +1401,20 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('error', () => {});
 });
+
+// HEARTBEAT. `ws` no chequea liveness solo: una conexion medio abierta (laptop
+// suspendida, wifi cortado sin FIN) nunca dispara 'close', asi que el jugador
+// quedaba de FANTASMA en el roster de todos, y su party nunca se disolvia.
+const HEARTBEAT_MS = 30000;
+const heartbeat = setInterval(() => {
+  for (const c of clients.values()) {
+    if (!c.ws) continue;
+    if (c.alive === false) { try { c.ws.terminate(); } catch {} continue; }
+    c.alive = false;
+    try { c.ws.ping(); } catch {}
+  }
+}, HEARTBEAT_MS);
+if (heartbeat.unref) heartbeat.unref();
 
 const http = require('http');
 const healthServer = http.createServer((req, res) => {

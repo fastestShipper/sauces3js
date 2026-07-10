@@ -13,6 +13,11 @@ const NUMBER_RISE = 1.2;         // cuanto sube el numero en su vida (u)
 const FLASH_LIFE = 0.15;         // vida del fogonazo de impacto (s)
 const MOTION_TRAIL_LIFE = 0.24;  // estela corta de dash/lunge (s)
 const BLOOD_COLOR = 0x8a0e0e;    // rojo sangre oscuro
+// El gore NUNCA hereda el tinte de piel del mob: un zombie verde no sangra verde.
+// Tres materiales distintos, como en un cuerpo real.
+const GORE_MEAT_COLORS = [0x6b0d10, 0x8a1216, 0x520a0c, 0x7a1712];
+const GORE_ORGAN_COLORS = [0x4a0a12, 0x5e1018];
+const GORE_BONE_COLOR = 0xe3dccb;
 const SHAKE_INTENSITY_MULT = 0.14;
 const SHAKE_DURATION_MULT = 0.62;
 const VFX_NEAR_RANGE = 24;
@@ -559,30 +564,44 @@ export class Effects {
     };
   }
 
-  // DESMEMBRAMIENTO fake: pedazos del zombie (tintados) salen volando con
-  // fisica simple y se hunden. Violencia visual del kill.
-  dismember(pos, tintHex) {
+  // DESMEMBRAMIENTO: carne, viscera y hueso salen volando con fisica simple,
+  // manchan el piso al caer y se hunden. Cada material tiene su rugosidad:
+  // la viscera brilla (humeda), la carne menos, el hueso es mate.
+  dismember(pos, opts = {}) {
     const p = readPos(pos);
     const detail = this._vfxDetail(p);
     if (detail < 2) return false;
-    const tint = new THREE.Color(tintHex != null ? tintHex : 0x7da364);
+    const intensity = Math.min(2, Math.max(0.6, Number(opts.intensity) || 1));
     const n = detail === 2 ? 3 : isLowEndProfile() ? 3 : isMobileProfile() ? 4 : 6 + ((Math.random() * 3) | 0);
     for (let i = 0; i < n; i++) {
-      const head = i === 0;   // el primero es "la cabeza": mas grande y redondo
-      const geo = head
-        ? new THREE.SphereGeometry(0.3, 8, 6)
-        : new THREE.BoxGeometry(0.16 + Math.random() * 0.2, 0.14 + Math.random() * 0.16, 0.15);
-      const mat = new THREE.MeshStandardMaterial({ color: tint.clone().multiplyScalar(0.75 + Math.random() * 0.4), roughness: 0.9 });
+      const kind = i === 0 ? 'organ' : (i % 4 === 3 ? 'bone' : 'meat');
+      let geo, color, roughness;
+      if (kind === 'bone') {
+        geo = new THREE.BoxGeometry(0.07, 0.24 + Math.random() * 0.16, 0.07);
+        color = GORE_BONE_COLOR;
+        roughness = 0.95;
+      } else if (kind === 'organ') {
+        geo = new THREE.IcosahedronGeometry(0.21 + Math.random() * 0.1, 0);
+        color = GORE_ORGAN_COLORS[(Math.random() * GORE_ORGAN_COLORS.length) | 0];
+        roughness = 0.3;
+      } else {
+        geo = new THREE.IcosahedronGeometry(0.1 + Math.random() * 0.09, 0);
+        color = GORE_MEAT_COLORS[(Math.random() * GORE_MEAT_COLORS.length) | 0];
+        roughness = 0.55;
+      }
+      const mat = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, flatShading: true });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(p.x, 0.8 + Math.random() * 0.5, p.z);
+      mesh.scale.set(1, 0.72 + Math.random() * 0.5, 1);
       const ang = Math.random() * Math.PI * 2;
-      const v = 3.2 + Math.random() * 3.6;
+      const v = (3.2 + Math.random() * 3.6) * intensity;
       this.scene.add(mesh);
       this.chunks.push({
         mesh,
-        vel: new THREE.Vector3(Math.cos(ang) * v, 3.4 + Math.random() * 3, Math.sin(ang) * v),
+        vel: new THREE.Vector3(Math.cos(ang) * v, (3.4 + Math.random() * 3) * intensity, Math.sin(ang) * v),
         spin: new THREE.Vector3(Math.random() * 9, Math.random() * 9, Math.random() * 9),
         life: 4.2, max: 4.2,
+        splat: kind !== 'bone',
       });
     }
     this._capArray(this.chunks, isLowEndProfile() ? 20 : isMobileProfile() ? 32 : 60);
@@ -784,6 +803,16 @@ export class Effects {
       c.mesh.rotation.y += c.spin.y * d;
       if (c.mesh.position.y < 0.06) {
         c.mesh.position.y = 0.06;
+        // el primer golpe seco contra el suelo mancha; el hueso no sangra
+        if (c.splat && c.vel.y < -2.2) {
+          c.splat = false;
+          this._pool({ x: c.mesh.position.x, y: 0, z: c.mesh.position.z }, {
+            radius: 0.22 + Math.random() * 0.2,
+            opacity: 0.62,
+            startScale: 0.4,
+            life: poolLife() * 0.6,
+          });
+        }
         c.vel.y = Math.abs(c.vel.y) * 0.3;
         c.vel.x *= 0.6; c.vel.z *= 0.6;
         c.spin.multiplyScalar(0.5);

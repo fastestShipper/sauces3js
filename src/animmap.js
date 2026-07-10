@@ -17,6 +17,15 @@ export const SKILL_TYPES = [
   'partybuff', 'partyheal', 'partyshield', 'partyhaste', 'veil', 'heal',
 ];
 
+// Proyectil por personaje. Fuente UNICA: vivia copiado en combat.js, mobs.js y
+// net.js, asi que agregar una clase a distancia dejaba a los remotos o a los
+// mobs sin VFX de proyectil, en silencio.
+export const PROJECTILE_BY_CHAR = Object.freeze({
+  'char_mage.glb': 'fireball',
+  'char_cernunnos.glb': 'magic',
+  'char_ranger.glb': 'arrow',
+});
+
 export function skillClipCandidates(type, style, charFile) {
   const s = style || '';
   const rangedMagic = s === 'magic' || charFile === 'char_mage.glb' || charFile === 'char_cernunnos.glb';

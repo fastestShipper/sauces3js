@@ -3,13 +3,16 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkTo } from './lib/walk.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 const require = createRequire(import.meta.url);
 const WebSocket = require(path.join(root, 'server/node_modules/ws'));
 let WS_URL = process.env.SMOKE_WS_URL || '';
-const TIMEOUT_MS = Number(process.env.SMOKE_MOB_DEATH_TIMEOUT_MS || 7000);
+// caminar hasta el mob toma segundos (antes se teleportaba); 7s no alcanzaba.
+const TIMEOUT_MS = Number(process.env.SMOKE_MOB_DEATH_TIMEOUT_MS || 30000);
+const { SAFE_X, SAFE_Z } = require(path.join(root, 'server/mob_balance.js'));
 let serverChild = null;
 
 function fail(message) {
@@ -110,11 +113,21 @@ function runDeathCase(kind) {
           return;
         }
         if (msg.t === 'mobs' && phase === 'wait-mobs') {
-          target = (msg.list || []).find((m) => m.hp > 5 && !m.b);
+          // mob matable mas cercano al spawn: hay que CAMINAR hasta el
+          const start = { x: SAFE_X, z: SAFE_Z };
+          target = (msg.list || [])
+            .filter((m) => m.hp > 5 && !m.b)
+            .map((m) => ({ m, d: Math.hypot(m.x - start.x, m.z - start.z) }))
+            .sort((a, b) => a.d - b.d)
+            .map((e) => e.m)[0];
           if (!target) fail('no killable mob found');
           phase = 'wait-death';
-          send(ws, { t: 's', x: target.x + 0.8, z: target.z, h: 0, a: 'Idle', hp: 100, hm: 100, lv: 1 });
-          send(ws, { t: 'mhit', id: target.id, dmg: target.hp + 9, k: kind });
+          const dx = target.x - start.x, dz = target.z - start.z;
+          const dd = Math.hypot(dx, dz) || 1;
+          const stop = { x: target.x - (dx / dd) * 10, z: target.z - (dz / dd) * 10 };
+          walkTo({ send: (o) => send(ws, o) }, start, stop)
+            .then(() => { send(ws, { t: 'mhit', id: target.id, dmg: target.hp + 9, k: kind }); })
+            .catch((e) => finish(e));
           return;
         }
         if (msg.t !== 'mdead' || !target || msg.id !== target.id) return;

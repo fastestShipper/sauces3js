@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkTo } from './lib/walk.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -123,6 +124,9 @@ try {
   if (!picked) throw new Error('no suitable mob pair for combat noise smoke');
 
   const { victim, witness, player } = picked;
+  // CAMINAR hasta el punto elegido: el movement guard clampea los teleports, y
+  // sin llegar de verdad el mhit cae fuera del gate de 20m y el relay lo ignora.
+  await walkTo(c, { x: SAFE_X, z: SAFE_Z }, player);
   const hold = setInterval(() => c.send({ t: 's', x: player.x, z: player.z, h: 0, a: 'Idle', hp: 100, hm: 100, lv: 1 }), 80);
   if (hold.unref) hold.unref();
   c.send({ t: 's', x: player.x, z: player.z, h: 0, a: 'Idle', hp: 100, hm: 100, lv: 1 });

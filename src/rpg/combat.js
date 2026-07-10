@@ -4,7 +4,7 @@
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
 import { projectileSpeed } from './effects.js?v=20260710g42';
-import { skillReleaseDelay } from '../animmap.js?v=20260710g42';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g42';
 import { attackReleaseDelay } from '../weapons.js?v=20260710g42';
 import { matchesAction } from '../keybinds.js?v=20260710g42';
 import { BloodCoat } from './bloodcoat.js?v=20260710g42';
@@ -128,11 +128,6 @@ const EXECUTE_TARGET_WOUNDED_BONUS = 3.2;
 const EXECUTE_TARGET_THRESHOLD_BONUS = 5.5;
 
 // clases a distancia disparan un proyectil visible al atacar
-const PROJECTILE_BY_CHAR = {
-  'char_mage.glb': 'fireball',
-  'char_cernunnos.glb': 'magic',
-  'char_ranger.glb': 'arrow',
-};
 
 export class Combat {
   constructor(opts) {
@@ -1922,7 +1917,7 @@ export class Combat {
     if (this.effects && m) {
       this.effects.goreBurst({ x: m.x, y: 0.7, z: m.z }, 1 + Math.min(1.25, this.streak * 0.1 + (heavyKill ? 0.25 : 0) + Math.min(0.25, dmgRatio * 0.12)));
       // VIOLENCIA: el zombie se parte en pedazos que vuelan y rebotan
-      this.effects.dismember({ x: m.x, y: 0.8, z: m.z }, 0x7da364);
+      this.effects.dismember({ x: m.x, y: 0.8, z: m.z }, { intensity: heavyKill ? 1.35 : 1 });
       this._localShake(m, 0.05 + Math.min(0.045, this.streak * 0.007), 0.12);
     }
     this._killRupture(m, meta);

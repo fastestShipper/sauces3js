@@ -6,8 +6,12 @@
 //  4. pvp legitimo -> pvph llega -> pvpdead broadcastea pvpkill
 import { WebSocket } from '../server/node_modules/ws/wrapper.mjs';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkTo } from './lib/walk.mjs';
+
+const { SAFE_X, SAFE_Z } = createRequire(import.meta.url)('../server/mob_balance.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
@@ -79,8 +83,14 @@ await wait(400);
 A.send({ t: 'hi', name: A.name, char: 'char_knight.glb' });
 B.send({ t: 'hi', name: B.name, char: 'char_mage.glb' });
 await wait(300);
-A.send({ t: 's', x: -4, z: 47, h: 0, a: 'Idle', hp: 100, hm: 100 });
-B.send({ t: 's', x: -5, z: 47, h: 0, a: 'Idle', hp: 80, hm: 120 });
+// CAMINAR, no teleportar: el movement guard clampea los saltos imposibles, y si
+// los dos se quedan pegados al spawn siguen dentro de la gruta = zona segura,
+// donde el PvP se rechaza por diseno.
+const spawnPos = { x: SAFE_X, z: SAFE_Z };
+await Promise.all([
+  walkTo(A, spawnPos, { x: -4, z: 47 }, { hp: 100, hm: 100 }),
+  walkTo(B, spawnPos, { x: -5, z: 47 }, { hp: 80, hm: 120 }),
+]);
 await wait(300);
 
 // --- caso 0: HP visible entre jugadores (el estado 's' lleva hp/hm) ---

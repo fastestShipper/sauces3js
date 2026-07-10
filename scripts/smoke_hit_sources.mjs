@@ -1,13 +1,16 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkTo } from './lib/walk.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 const require = createRequire(import.meta.url);
 const WebSocket = require(path.join(root, 'server/node_modules/ws'));
 const WS_URL = process.env.SMOKE_WS_URL || 'ws://127.0.0.1:8456';
-const TIMEOUT_MS = Number(process.env.SMOKE_HIT_SOURCES_TIMEOUT_MS || 6000);
+// caminar hasta el mob toma segundos (antes se teleportaba); 6s no alcanzaba.
+const TIMEOUT_MS = Number(process.env.SMOKE_HIT_SOURCES_TIMEOUT_MS || 30000);
+const { SAFE_X, SAFE_Z } = require(path.join(root, 'server/mob_balance.js'));
 
 let ok = true;
 let settled = false;
@@ -54,12 +57,23 @@ ws.on('message', (buf) => {
     return;
   }
   if (msg.t === 'mobs' && phase === 'wait-mobs') {
-    target = (msg.list || []).find((m) => m.hp > 10);
+    // el mob VIVO mas cercano al spawn: hay que caminar hasta el, no teleportarse
+    const start = { x: SAFE_X, z: SAFE_Z };
+    target = (msg.list || [])
+      .filter((m) => m.hp > 10)
+      .map((m) => ({ m, d: Math.hypot(m.x - start.x, m.z - start.z) }))
+      .sort((a, b) => a.d - b.d)
+      .map((e) => e.m)[0];
     if (!target) { fail('no mob with enough hp'); finish(ws); return; }
     baseHp = target.hp;
     phase = 'wait-basic';
-    send(ws, { t: 's', x: target.x + 0.8, z: target.z, h: 0, a: 'Idle', hp: 100, hm: 100, lv: 1 });
-    send(ws, { t: 'mhit', id: target.id, dmg: 2, k: 'basic' });
+    // El movement guard clampea los teleports. Caminamos hasta 10m (gate: 20m).
+    const dx = target.x - start.x, dz = target.z - start.z;
+    const dd = Math.hypot(dx, dz) || 1;
+    const stop = { x: target.x - (dx / dd) * 10, z: target.z - (dz / dd) * 10 };
+    walkTo({ send: (o) => send(ws, o) }, start, stop)
+      .then(() => { send(ws, { t: 'mhit', id: target.id, dmg: 2, k: 'basic' }); })
+      .catch((e) => { fail('walk failed: ' + e.message); finish(ws); });
     return;
   }
   if (msg.t !== 'mhp' || !target || msg.id !== target.id) return;

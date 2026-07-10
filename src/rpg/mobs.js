@@ -14,6 +14,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { plantClip } from '../animclip.js?v=20260710g42';
+import { PROJECTILE_BY_CHAR } from '../animmap.js?v=20260710g42';
 import { sanitizeImported } from '../glbutil.js?v=20260710g42';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
@@ -70,11 +71,6 @@ const ATTACK_CONTACT_FRACTION = Object.freeze({
 });
 const IDLE_POOL = ['Idle_Combat', 'Idle', 'Idle_B', 'Unarmed_Idle'];
 const DEATH_POOL = ['Death_A', 'Death_B', 'Death_C_Skeletons'];
-const PROJECTILE_BY_CHAR = {
-  'char_mage.glb': 'fireball',
-  'char_cernunnos.glb': 'magic',
-  'char_ranger.glb': 'arrow',
-};
 const MOB_GLB_URL = './assets/models/kaykit_skeletons.glb';
 
 // These immutable shapes are shared by every mob. Their mutable materials stay per visual.
@@ -959,8 +955,10 @@ export class MobField {
         const impulse = Math.min(HIT_RECOIL_MAX, (heavy ? 0.5 : 0.28) + Math.min(0.22, dmg / Math.max(1, v.hpMax)));
         const wx = (dx / dd) * impulse;
         const wz = (dz / dd) * impulse;
-        const rot = -(v.root.rotation.y || 0);
-        const c = Math.cos(rot), s = Math.sin(rot);
+        // mundo -> local del rig. Misma convencion que player._pulseBodyLean:
+        // heading = atan2(dx,dz), asi que NO se niega el angulo.
+        const h = v.root.rotation.y || 0;
+        const c = Math.cos(h), s = Math.sin(h);
         const localX = wx * c - wz * s;
         const localZ = wx * s + wz * c;
         v.recoilX = Math.max(-HIT_RECOIL_MAX, Math.min(HIT_RECOIL_MAX, (v.recoilX || 0) + localX));
@@ -1081,7 +1079,7 @@ export class MobField {
     const p = { x, y: 0.75, z };
     fx.bloodHit?.(p);
     fx.goreBurst?.(p, intensity);
-    if (heavy) fx.dismember?.({ x, y: 0.8, z }, meta.boss ? 0x5d7448 : 0x7da364);
+    if (heavy) fx.dismember?.({ x, y: 0.8, z }, { intensity: meta.boss ? 1.5 : intensity });
     this._localShake({ x, z }, heavy ? 0.024 : 0.014, heavy ? 0.052 : 0.034);
   }
 

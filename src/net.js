@@ -17,7 +17,7 @@ import { cloneSkinned } from './npcs.js?v=20260710g42';
 import { equipWeapon, attackClipName, comboClips, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g42';
 import { showBubble } from './chat.js?v=20260710g42';
 import { WS_URL } from './rpg/account.js?v=20260710g42';
-import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g42';
+import { PROJECTILE_BY_CHAR, combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g42';
 import { plantClip } from './animclip.js?v=20260710g42';
 
 const SCALE = 1.9 / 2.54;
@@ -41,11 +41,6 @@ const REMOTE_BODY_LEAN_MAX = 0.14;
 const REMOTE_ACTION_BLEND = 0.08;
 const REMOTE_LOCOMOTION_BLEND = 0.12;
 const REMOTE_ACTION_STOP_PAD = 0.035;
-const REMOTE_PROJECTILE_BY_CHAR = {
-  'char_mage.glb': 'fireball',
-  'char_cernunnos.glb': 'magic',
-  'char_ranger.glb': 'arrow',
-};
 const REMOTE_MELEE_SKILL_TYPES = new Set(['strike', 'stab', 'execute', 'spin', 'bladedance', 'leap']);
 const REMOTE_SELF_AREA_SKILLS = new Set(['spin', 'bladedance', 'nova', 'warcry', 'partybuff', 'partyhaste', 'partyshield']);
 const REMOTE_HEAL_SKILLS = new Set(['partyheal', 'heal', 'veil']);
@@ -92,7 +87,7 @@ function cleanDodgeKey(value) {
 }
 
 function remoteIsRanged(r) {
-  return !!REMOTE_PROJECTILE_BY_CHAR[r?.charFile];
+  return !!PROJECTILE_BY_CHAR[r?.charFile];
 }
 
 function remoteDodgeVector(r, key = 'Forward') {
@@ -427,6 +422,11 @@ export class Net {
     this._send({ t: 'pskill', kind, v, dur });
   }
 
+  // avisa que empieza la canalizacion de la gruta (tecla B). El server la
+  // cronometra y solo entonces autoriza la aparicion; sin este aviso el salto
+  // lo clampea el guard de velocidad.
+  startRecall() { this._send({ t: 'recall' }); }
+
   attackMob(id, dmg, kind = 'basic') { this._send({ t: 'mhit', id, dmg, k: kind }); }
   invite(to) { this._send({ t: 'pinvite', to }); }
   accept(from) { this._send({ t: 'paccept', from }); }
@@ -694,7 +694,7 @@ export class Net {
       return true;
     }
     if (dist < 0.2) return false;
-    const ptype = REMOTE_SKILL_PROJECTILE[skillKind] || REMOTE_PROJECTILE_BY_CHAR[r.charFile];
+    const ptype = REMOTE_SKILL_PROJECTILE[skillKind] || PROJECTILE_BY_CHAR[r.charFile];
     if (ptype && dist > 3.4 && fx.projectile) {
       const fire = () => fx.projectile({ x: sx, y: 1.35, z: sz }, { x: tx, y: 0.95, z: tz }, ptype);
       const delayMs = Math.max(0, Math.min(220, Number(releaseDelay) * 1000 || 0));
