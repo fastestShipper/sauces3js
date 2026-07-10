@@ -84,8 +84,12 @@ function compileMaterial(material) {
   if (tenth.body - ninth.body <= first.body) throw new Error('10x streak did not increase blood buildup');
   for (let i = 0; i < 100; i++) coat.recordKill(20 + i);
   if (setup.char.children.length !== childCount) throw new Error('repeated kills added scene nodes');
-  if (coat.intensity.body > 0.4001 || coat.intensity.weapon > 0.5201) {
+  // el ARMA se empapa (cap 0.94); el CUERPO sigue siendo sutil (cap 0.40)
+  if (coat.intensity.body > 0.4001 || coat.intensity.weapon > 0.9401) {
     throw new Error('blood coat intensity exceeded its cap');
+  }
+  if (coat.intensity.weapon < 0.9) {
+    throw new Error('tras 100 kills el arma melee deberia estar empapada');
   }
   const capped = coat.intensity.body;
   coat.update(10);

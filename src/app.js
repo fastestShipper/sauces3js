@@ -1133,23 +1133,20 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   };
   inventory = new Inventory(() => { applyEquip(); saveChar(); });
   inventory.buildUI(document.body);
-  let inventoryLockRestore = null;
   const setInventoryOpen = (open) => {
     open = !!open;
     if (inventory.isOpen() === open) return;
+    // El inventario y la tienda NO congelan el juego: sigues moviendote, pegando
+    // y esquivando con el panel abierto. Solo se suelta el mouse para poder
+    // clickear la UI. Los clics DENTRO del panel ya no llegan al combate
+    // (isUiPointerTarget en player.js + _isGameplayPointer en combat.js), asi
+    // que no hace falta el candado `player.locked` (ese es del chat, que si come
+    // el teclado porque estas escribiendo).
     if (open) {
-      inventoryLockRestore = !!player.locked;
       player.releaseMouseCapture?.();
       inventory.setOpen(true);
-      player.locked = true;
     } else {
       inventory.setOpen(false);
-      if (inventoryLockRestore != null) {
-        player.locked = inventoryLockRestore;
-        inventoryLockRestore = null;
-      }
-      player.keys = {};
-      player.actionKeys = {};
     }
   };
   // tecla I: abrir/cerrar inventario. Si otro panel ya bloqueo al jugador, no abre.

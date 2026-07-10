@@ -515,11 +515,11 @@ export function createTrailerMode(ctx) {
   const shots = [
     { at: 0, title: 'LA INVASIÓN', sub: 'El parque cayó primero', pos: offset(-22, 11, 23), look: offset(0, 1.6, 5) },
     { at: 5, title: 'SIN SALIDA', sub: 'Una horda tomó Los Sauces', pos: offset(17, 4.5, 18), look: offset(0, 1.2, 5) },
-    { at: 8, title: 'CUATRO CONTRA TODOS', sub: 'Verdugo · Piromante · Cazadora · Sombra', pos: offset(0, 3.6, -16), look: offset(0, 1.6, -5) },
+    { at: 8, title: 'CUATRO CONTRA TODOS', sub: 'Guerrero · Bruja · Cazador · Asesino', pos: offset(0, 3.6, -16), look: offset(0, 1.6, -5) },
     { at: 14, title: 'COMBATE RÁPIDO', sub: 'Cada golpe cuenta', pos: offset(-16, 4.8, -10), look: offset(0, 1.4, 0) },
     { at: 20, title: 'ROMPE LA HORDA', sub: 'Acero, fuego y precisión', pos: offset(16, 7.5, -4), look: offset(0, 1.2, 2) },
     { at: 26, title: 'AL BORDE', sub: 'La party está por caer', pos: offset(-9, 2.8, -13), look: offset(0, 1.1, -4) },
-    { at: 30, title: 'VELO SOMBRÍO', sub: 'La Sombra levanta al equipo', pos: offset(9, 4, -13), look: offset(1.5, 1.4, -4) },
+    { at: 30, title: 'VELO SOMBRÍO', sub: 'El Asesino levanta al equipo', pos: offset(9, 4, -13), look: offset(1.5, 1.4, -4) },
     { at: 33, title: 'CADENA DE ULTIMATES', sub: 'Fuego · flechas · hacha · sombra', pos: offset(-15, 6, -10), look: offset(0, 1.8, 4) },
     { at: 39, title: 'DEFIENDE TU BARRIO', sub: 'Los Sauces RPG', pos: offset(0, 4, -19), look: offset(0, 2, 6) },
   ];

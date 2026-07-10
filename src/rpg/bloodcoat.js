@@ -1,8 +1,13 @@
 const MELEE_STYLES = new Set(['1h', '2h', 'dual']);
 const MAX_BODY_INTENSITY = 0.40;
-const MAX_WEAPON_INTENSITY = 0.52;
+// El ARMA se EMPAPA: un solo kill ya la deja roja y sigue sucia un buen rato.
+// Antes hacian falta ~14 kills para llegar a 0.52 mientras decaia a 0.0052/s, asi
+// que matar cada 7s solo empataba el decaimiento: el equilibrio real quedaba en
+// ~0.05 y el arma NUNCA se veia sangrienta. El cuerpo si sigue siendo sutil.
+const MAX_WEAPON_INTENSITY = 0.94;
+const WEAPON_GAIN_PER_KILL = 0.34;
 const BODY_DECAY_PER_SECOND = 0.0042;
-const WEAPON_DECAY_PER_SECOND = 0.0052;
+const WEAPON_DECAY_PER_SECOND = 0.014;
 const MANAGED_MATERIAL = Symbol('bloodCoatMaterial');
 
 const VERTEX_DECLARATION = `
@@ -150,7 +155,7 @@ export class BloodCoat {
     this.bodyIntensity = clamp(this.bodyIntensity + 0.026 + highStreakBonus, 0, MAX_BODY_INTENSITY);
     if (this.isMelee) {
       this.weaponIntensity = clamp(
-        this.weaponIntensity + 0.038 + highStreakBonus * 1.35,
+        this.weaponIntensity + WEAPON_GAIN_PER_KILL + highStreakBonus * 1.35,
         0,
         MAX_WEAPON_INTENSITY
       );

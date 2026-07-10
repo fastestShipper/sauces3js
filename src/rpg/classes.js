@@ -10,7 +10,7 @@
 export const CLASSES = {
   verdugo: {
     id: 'verdugo',
-    name: 'Verdugo',
+    name: 'Guerrero',
     char: 'char_knight.glb',
     emoji: '🪓',
     rol: 'Carnicero de hordas · hacha 2H',
@@ -23,12 +23,12 @@ export const CLASSES = {
       { key: 'Q', name: 'Tajo Carnicero', desc: 'Golpe brutal al objetivo (240% daño)', emoji: '🪓', cost: 24, cd: 5.4, type: 'strike', dmgMult: 2.4 },
       { key: 'E', name: 'Torbellino', desc: 'Giras con el hacha: daña TODO a tu alrededor', emoji: '🌪️', cost: 38, cd: 10.8, type: 'spin', dmgMult: 1.7, radius: 4 },
       { key: 'R', name: 'Grito de Guerra', desc: 'TODO el party pega +45% por 6s', emoji: '📢', cost: 20, cd: 28, type: 'partybuff', v: 0.45, dur: 6 },
-      { key: 'F', name: 'Juicio del Verdugo', desc: 'Salto devastador: gran área a tu alrededor', emoji: '⚡', cost: 68, cd: 32, type: 'leap', dmgMult: 3.2, radius: 6 },
+      { key: 'F', name: 'Juicio del Guerrero', desc: 'Salto devastador: gran área a tu alrededor', emoji: '⚡', cost: 68, cd: 32, type: 'leap', dmgMult: 3.2, radius: 6 },
     ],
   },
   piromante: {
     id: 'piromante',
-    name: 'Piromante',
+    name: 'Bruja',
     char: 'char_mage.glb',
     emoji: '🔥',
     rol: 'Fuego de área a distancia',
@@ -47,7 +47,7 @@ export const CLASSES = {
   },
   cazadora: {
     id: 'cazadora',
-    name: 'Cazadora',
+    name: 'Cazador',
     char: 'char_ranger.glb',
     emoji: '🏹',
     rol: 'Francotiradora · lluvias de acero',
@@ -66,7 +66,7 @@ export const CLASSES = {
   },
   sombra: {
     id: 'sombra',
-    name: 'Sombra',
+    name: 'Asesino',
     char: 'char_rogue_hooded.glb',
     emoji: '🗡️',
     rol: 'Asesino · roba vida',

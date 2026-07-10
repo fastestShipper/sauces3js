@@ -3,6 +3,7 @@
 // de modulo, materiales clonados por particula para opacidad independiente, y caps
 // duros de cantidad para no acumular nodos en la escena.
 import * as THREE from 'three';
+import { ParticleBatch } from './particles.js?v=20260710g42';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
@@ -18,7 +19,14 @@ const BLOOD_COLOR = 0x8a0e0e;    // rojo sangre oscuro
 const GORE_MEAT_COLORS = [0x6b0d10, 0x8a1216, 0x520a0c, 0x7a1712];
 const GORE_ORGAN_COLORS = [0x4a0a12, 0x5e1018];
 const GORE_BONE_COLOR = 0xe3dccb;
-const SHAKE_INTENSITY_MULT = 0.14;
+// SCREEN SHAKE: apagado por defecto. Marea y tapa los telegraphs de los mobs.
+// `sauces_shake` en localStorage: 'off' (default) | 'min' | 'full'.
+const SHAKE_PRESETS = { off: 0, min: 0.045, full: 0.14 };
+function shakeIntensityMult() {
+  let mode = 'off';
+  try { mode = localStorage.getItem('sauces_shake') || 'off'; } catch {}
+  return SHAKE_PRESETS[mode] != null ? SHAKE_PRESETS[mode] : SHAKE_PRESETS.off;
+}
 const SHAKE_DURATION_MULT = 0.62;
 const VFX_NEAR_RANGE = 24;
 const VFX_MID_RANGE = 48;
@@ -178,7 +186,9 @@ export class Effects {
     this.scene = scene;
     this.getCamera = getCamera || (() => null);
     this.getFocus = getFocus || (() => null);
-    this.particles = []; // { mesh, vel, life, max }
+    // registros planos, sin nodos de escena: los dibuja un solo InstancedMesh
+    this.particles = []; // { x,y,z, vx,vy,vz, scale, color, life, max }
+    this.particleBatch = new ParticleBatch(scene, PARTICLE_GEO, particleCap());
     this.pools = [];      // { mesh, life, max }
     this.numbers = [];    // { sprite, life, max, vy }
     this.flashes = [];    // { sprite, life, max }
@@ -261,28 +271,24 @@ export class Effects {
   }
 
   // Genera n particulas saliendo desde pos. spread = magnitud de la velocidad.
+  // Son REGISTROS, no nodos de escena: las dibuja un solo InstancedMesh.
   _spurt(pos, n, spread, life, color = BLOOD_COLOR) {
     if (isMobileProfile()) n = Math.max(3, n >> 1);   // movil: mitad de gore
     const p = readPos(pos);
     for (let i = 0; i < n; i++) {
-      if (this.particles.length >= particleCap()) {
-        // Tira la mas vieja para respetar el cap.
-        const old = this.particles.shift();
-        if (old) this._killParticle(old);
-      }
-      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
-      const mesh = new THREE.Mesh(PARTICLE_GEO, mat);
-      mesh.position.set(p.x, p.y + 0.2, p.z);
-      mesh.scale.setScalar(0.6 + Math.random() * 0.8);
+      if (this.particles.length >= particleCap()) this.particles.shift();   // tira la mas vieja
       const ang = Math.random() * Math.PI * 2;
       const rad = (0.4 + Math.random() * 0.6) * spread;
-      const vel = new THREE.Vector3(
-        Math.cos(ang) * rad,
-        spread * (0.6 + Math.random() * 0.7),
-        Math.sin(ang) * rad,
-      );
-      this.scene.add(mesh);
-      this.particles.push({ mesh, vel, life, max: life });
+      this.particles.push({
+        x: p.x, y: p.y + 0.2, z: p.z,
+        vx: Math.cos(ang) * rad,
+        vy: spread * (0.6 + Math.random() * 0.7),
+        vz: Math.sin(ang) * rad,
+        scale: 0.6 + Math.random() * 0.8,
+        color,
+        life,
+        max: life,
+      });
     }
   }
 
@@ -541,7 +547,9 @@ export class Effects {
 
   // SCREEN SHAKE: pide una sacudida; Combat filtra por distancia antes de llamarlo.
   shake(amp = 0.1, dur = 0.14) {
-    const nextAmp = Math.max(0, amp) * SHAKE_INTENSITY_MULT;
+    const mult = shakeIntensityMult();
+    if (mult <= 0) return;              // apagado: ni siquiera arranca el decaimiento
+    const nextAmp = Math.max(0, amp) * mult;
     const nextT = Math.max(0, dur) * SHAKE_DURATION_MULT;
     if (nextAmp >= this.shakeAmp * 0.92) this.shakePhase = (this.shakePhase + 1.37) % (Math.PI * 2);
     this.shakeAmp = Math.max(this.shakeAmp, nextAmp);
@@ -631,10 +639,6 @@ export class Effects {
   }
 
   // Quita una particula de la escena y libera su material (geometria es compartida).
-  _killParticle(e) {
-    if (e.mesh.parent) e.mesh.parent.remove(e.mesh);
-    if (e.mesh.material) e.mesh.material.dispose();
-  }
 
   // Quita un nodo con geometria y/o textura propias y las libera.
   _kill(mesh, hasGeo) {
@@ -722,17 +726,17 @@ export class Effects {
       const e = this.particles[i];
       e.life -= d;
       if (e.life <= 0) {
-        this._killParticle(e);
         this.particles.splice(i, 1);
         continue;
       }
-      e.vel.y -= GRAVITY * d;
-      e.mesh.position.x += e.vel.x * d;
-      e.mesh.position.y += e.vel.y * d;
-      e.mesh.position.z += e.vel.z * d;
-      if (e.mesh.position.y < 0.02) { e.mesh.position.y = 0.02; e.vel.set(0, 0, 0); }
-      e.mesh.material.opacity = Math.max(0, e.life / e.max);
+      e.vy -= GRAVITY * d;
+      e.x += e.vx * d;
+      e.y += e.vy * d;
+      e.z += e.vz * d;
+      if (e.y < 0.02) { e.y = 0.02; e.vx = 0; e.vy = 0; e.vz = 0; }
     }
+    // un solo draw call para las 300 gotas (antes: una malla por gota)
+    this.particleBatch.sync(this.particles);
 
     // Manchas: crecen al inicio y se desvanecen al final.
     for (let i = this.pools.length - 1; i >= 0; i--) {
