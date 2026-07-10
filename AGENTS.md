@@ -474,6 +474,13 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Deploy permission note: extracting a tar created on Windows can overwrite existing directory modes. After a selective tar deploy, explicitly keep the web root and included directories at `755` and static files at `644`; g42 initially returned 403 until these modes were restored.
   - Backups: `/root/deploy-backups/sauces-web-20260710T072945Z-before-20260710g42-selective.tar.gz` and `/root/deploy-backups/sauces-server-20260710T072945Z-before-20260710g42.js`.
 
+- **Production patch 20260710g50**: `sauces.controla.group` runs `APP_VERSION=20260710g50` (client-only; relay unchanged, no account reset).
+  - Fixed light thrashing: `Effects.flashLight` created a `PointLight` and `scene.add`/`scene.remove`d it per skill cast/impact. Changing the scene light count forces Three.js to recompile every lit shader (buildings, mobs, ground) on the next frame, a synchronous multi-ms stall firing several times per second in combat. This tanked FPS on skill casts and hordes. Lights now live in a fixed pool added to the scene once (4 desktop, 0 on mobile/low-end); casts only reposition and pulse a pooled light, and expiry sets intensity 0 without removing it. The recall (B key) channel light was likewise made persistent instead of add/remove per teleport.
+  - Verified: scene PointLight count stays constant (7 = 4 fx pool + 2 gruta braziers + 1 recall) across 300 flash spams plus expiry; `renderer.info.programs` held at 39 with zero recompiles; console clean; live prod g50 stable.
+  - UX: the local hero no longer renders its own nametag (it covered the screen). Other players' nametags via `net.js` are unchanged. Removed the now-unused `makeNametag` import from `player.js`.
+  - QA: `smoke_light_pool_stable` (new regression guard for constant light count), `smoke_effect_caps`/`smoke_effect_shared_geometry`/`smoke_effect_vfx_lod`/`smoke_motion_trails`/`smoke_damage_number_cache` updated to count non-light scene nodes, `smoke_gameplay_teaser_mode` stamp bumped; combat/skill/gore/mob smokes green; `node --check` on changed sources; external HTTPS 200, served hashes at g50, relay healthy with 86 mobs.
+  - Backup: `/root/deploy-backups/sauces-web-20260710T184555Z-before-20260710g50.tar.gz` (index.html + src only).
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.
