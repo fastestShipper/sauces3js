@@ -154,6 +154,24 @@ function hideBootOverlay() {
   document.getElementById('boot-overlay')?.remove();
 }
 
+const CINEMATIC_CLASS = 'sauces-cinematic';
+
+function installCinematicStyle() {
+  if (document.getElementById('sauces-cinematic-style')) return;
+  const style = document.createElement('style');
+  style.id = 'sauces-cinematic-style';
+  style.textContent = `
+body.${CINEMATIC_CLASS}>:not(#app):not(script):not(style){opacity:0!important;visibility:hidden!important;pointer-events:none!important}
+body.${CINEMATIC_CLASS},body.${CINEMATIC_CLASS} #app,body.${CINEMATIC_CLASS} #app canvas{cursor:none!important}`;
+  document.head.appendChild(style);
+}
+
+function isEditableTextTarget(target) {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  return !!target.closest?.('input,textarea,select,[contenteditable="true"],[contenteditable=""]');
+}
+
 // perfil MOVIL: touch = GPU de telefono. Menos pixeles, sombras chicas, menos
 // gore. ?perf=high fuerza el perfil desktop en tablets potentes.
 const perfParams = new URLSearchParams(location.search);
@@ -1458,6 +1476,81 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     });
   }
 
+  installCinematicStyle();
+  const cinematicShots = [
+    { duration: 9, distance: 4.8, height: 2.7, angle: (heading, t) => heading + Math.PI + Math.sin(t * 0.45) * 0.12 },
+    { duration: 10.5, distance: 7.2, height: 3.8, angle: (heading, t) => heading + Math.PI * 0.5 + t * 0.2 },
+    { duration: 8.5, distance: 13.5, height: 11.5, angle: (heading, t) => heading + Math.PI * 0.82 + Math.sin(t * 0.24) * 0.28 },
+  ];
+  const cinematic = {
+    active: false,
+    shotIndex: 0,
+    shotTime: 0,
+    position: new THREE.Vector3(),
+    desired: new THREE.Vector3(),
+    normalPosition: new THREE.Vector3(),
+    normalQuaternion: new THREE.Quaternion(),
+  };
+  const setCinematicMode = (enabled) => {
+    const next = !!enabled;
+    if (cinematic.active === next) return;
+    cinematic.active = next;
+    document.body.classList.toggle(CINEMATIC_CLASS, next);
+    if (next) {
+      cinematic.shotIndex = 0;
+      cinematic.shotTime = 0;
+      cinematic.position.copy(camera.position);
+      cinematic.normalPosition.copy(camera.position);
+      cinematic.normalQuaternion.copy(camera.quaternion);
+      return;
+    }
+    camera.position.copy(cinematic.normalPosition);
+    camera.quaternion.copy(cinematic.normalQuaternion);
+    camera.updateMatrixWorld(true);
+  };
+  const restoreGameplayCamera = () => {
+    if (!cinematic.active) return;
+    camera.position.copy(cinematic.normalPosition);
+    camera.quaternion.copy(cinematic.normalQuaternion);
+  };
+  const updateCinematicCamera = (dt) => {
+    if (!cinematic.active) return;
+    cinematic.normalPosition.copy(camera.position);
+    cinematic.normalQuaternion.copy(camera.quaternion);
+    const step = Math.max(0, Math.min(Number(dt) || 0, 0.1));
+    let shot = cinematicShots[cinematic.shotIndex];
+    cinematic.shotTime += step;
+    if (cinematic.shotTime >= shot.duration) {
+      cinematic.shotTime %= shot.duration;
+      cinematic.shotIndex = (cinematic.shotIndex + 1) % cinematicShots.length;
+      shot = cinematicShots[cinematic.shotIndex];
+    }
+    const heading = Number.isFinite(player.heading) ? player.heading : 0;
+    const angle = shot.angle(heading, cinematic.shotTime);
+    cinematic.desired.set(
+      player.pos.x + Math.sin(angle) * shot.distance,
+      player.pos.y + shot.height,
+      player.pos.z + Math.cos(angle) * shot.distance
+    );
+    const alpha = 1 - Math.exp(-step * 1.8);
+    cinematic.position.lerp(cinematic.desired, alpha);
+    camera.position.copy(cinematic.position);
+    camera.lookAt(player.pos.x, player.pos.y + 1.35, player.pos.z);
+  };
+  addEventListener('keydown', (event) => {
+    if ((event.code !== 'F7' && event.key !== 'F7') || event.repeat || player.locked || isEditableTextTarget(event.target)) return;
+    event.preventDefault();
+    setCinematicMode(!cinematic.active);
+  });
+  addEventListener('mousemove', (event) => {
+    if (cinematic.active) event.stopImmediatePropagation();
+  }, { capture: true });
+  addEventListener('wheel', (event) => {
+    if (!cinematic.active) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, { capture: true, passive: false });
+
   let streetT = 0;
   let minimapT = 0;
   const clock = new THREE.Clock();
@@ -1507,11 +1600,17 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       autoHeartbeatAt = now;
       return;
     }
-    const heartbeatDt = Math.min(0.25, Math.max(0, (now - autoHeartbeatAt) / 1000));
+    let heartbeatBudget = Math.min(1, Math.max(0, (now - autoHeartbeatAt) / 1000));
     autoHeartbeatAt = now;
-    if (heartbeatDt <= 0) return;
-    player.advanceActionTimers(heartbeatDt);
-    combat.update(heartbeatDt);
+    // Hidden tabs commonly tick at 1 Hz. Consume that second in bounded steps,
+    // including SkillSystem because auto combat can call tryAutoCast().
+    for (let i = 0; i < 4 && heartbeatBudget > 0; i++) {
+      const heartbeatStep = Math.min(0.25, heartbeatBudget);
+      player.advanceActionTimers(heartbeatStep);
+      combat.update(heartbeatStep);
+      skills.update(heartbeatStep);
+      heartbeatBudget -= heartbeatStep;
+    }
   }, 250);
   addEventListener('beforeunload', () => clearInterval(autoHeartbeat), { once: true });
   renderer.setAnimationLoop(() => {
@@ -1529,6 +1628,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       setTimeout(startNonCombatWhenCalm, 1000);
     }
     if (trailer) trailer.beforeFrame(dt);
+    restoreGameplayCamera();
     player.update(dt, camera);
     {
       // borde del mundo: nada de caminar hacia el vacio fuera del radio
@@ -1587,6 +1687,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       const sh = effects.shakeOffset && effects.shakeOffset();
       if (sh) { camera.position.x += sh.x; camera.position.y += sh.y; camera.position.z += sh.z; }
     }
+    updateCinematicCamera(rawDt);
     renderer.render(scene, camera);
     const perf = frameMeter.sample(wallDt, renderer.info.render);
     if (perf) {

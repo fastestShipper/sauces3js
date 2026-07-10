@@ -31,7 +31,16 @@ if (!/loadHeavyDecor\(\)[\s\S]*finally\(\(\) => setTimeout\(startStreetLifeWhenC
 if (!/if \(!document\.hidden \|\| !combat\.autoAttack\)/.test(app)) {
   fail('hidden heartbeat must be gated by auto mode');
 }
-if (!/heartbeatDt = Math\.min\(0\.25/.test(app)) fail('hidden heartbeat dt must be capped');
+if (!/heartbeatBudget = Math\.min\(1/.test(app)) fail('hidden heartbeat must discard delays beyond one second');
+if (!/for \(let i = 0; i < 4 && heartbeatBudget > 0; i\+\+\)/.test(app)) {
+  fail('hidden heartbeat must use at most four substeps');
+}
+if (!/heartbeatStep = Math\.min\(0\.25, heartbeatBudget\)/.test(app)) {
+  fail('hidden heartbeat substeps must stay capped at 0.25 seconds');
+}
+if (!/combat\.update\(heartbeatStep\);\s*skills\.update\(heartbeatStep\)/.test(app)) {
+  fail('hidden auto combat must advance SkillSystem cooldowns');
+}
 if (!/const wallDt = clock\.getDelta\(\);\s*if \(document\.hidden\) return;/.test(app)) {
   fail('hidden rAF must not duplicate heartbeat simulation');
 }
