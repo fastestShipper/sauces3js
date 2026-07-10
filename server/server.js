@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { MAX_WEAPON_ATK, MAX_PLAYER_LEVEL, maxPlayerHit } = require('./combat_limits');
+const { verifyPrivyToken, isConfigured: privyConfigured } = require('./auth_privy');
 const {
   SAFE_X,
   SAFE_Z,
@@ -61,6 +62,10 @@ const CHAR_ALLOWLIST = [
   'char_cernunnos.glb',
 ];
 const GOD_CHAR = 'char_cernunnos.glb';
+
+// Migracion a Google: la contrasena sobrevive SOLO hasta que cada jugador ata su
+// cuenta (privylink). Poner AUTH_PASSWORD_ENABLED=0 la apaga del todo.
+const PASSWORD_AUTH_ENABLED = process.env.AUTH_PASSWORD_ENABLED !== '0';
 
 // Guard de progresion del save (ver sanitizeChar). Los niveles se ganan de a uno;
 // +2 tolera un doble level-up entre saves. El oro tolera una venta grande de
@@ -153,15 +158,20 @@ function flushStore() {
   }
 }
 
-// hashing de password con scrypt. salt nuevo por cuenta.
-function hashPassword(pass, salt) {
-  return crypto.scryptSync(pass, salt, 64).toString('hex');
+// scrypt es caro A PROPOSITO. Corriendo en el bucle de eventos (scryptSync), cada
+// login congelaba el mobTick, los broadcasts y el movimiento de TODOS los jugadores
+// mientras se calculaba. La version asincrona lo manda al threadpool de libuv.
+const scryptAsync = require('util').promisify(crypto.scrypt);
+
+async function hashPassword(pass, salt) {
+  const buf = await scryptAsync(pass, salt, 64);
+  return buf.toString('hex');
 }
 
 // verificacion timing-safe. Devuelve false ante cualquier inconsistencia.
-function verifyPassword(pass, salt, expectedHex) {
+async function verifyPassword(pass, salt, expectedHex) {
   try {
-    const got = crypto.scryptSync(pass, salt, 64);
+    const got = await scryptAsync(pass, salt, 64);
     const want = Buffer.from(String(expectedHex || ''), 'hex');
     if (got.length !== want.length) return false;
     return crypto.timingSafeEqual(got, want);
@@ -170,13 +180,84 @@ function verifyPassword(pass, salt, expectedHex) {
   }
 }
 
+// Los tokens de sesion EXPIRAN y se pueden revocar. Antes eran eternos: un token
+// filtrado servia para siempre, y el Map crecia sin techo mientras el server viviera.
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;   // 7 dias
+const TOKEN_SWEEP_MS = 60 * 60 * 1000;
+
 function newToken(user) {
   const token = crypto.randomBytes(24).toString('hex');
-  tokens.set(token, user);
+  tokens.set(token, { user, exp: Date.now() + TOKEN_TTL_MS });
   return token;
 }
 
+// Devuelve la cuenta del token si sigue vivo; si expiro lo borra.
+function accountForToken(token) {
+  if (typeof token !== 'string') return null;
+  const rec = tokens.get(token);
+  if (!rec) return null;
+  if (rec.exp <= Date.now()) { tokens.delete(token); return null; }
+  return rec.user;
+}
+
+// Invalida TODAS las sesiones de una cuenta (cambio de credenciales, claim, etc).
+function revokeTokensFor(user) {
+  let n = 0;
+  for (const [token, rec] of tokens) {
+    if (rec.user === user) { tokens.delete(token); n++; }
+  }
+  return n;
+}
+
+const tokenSweep = setInterval(() => {
+  const now = Date.now();
+  for (const [token, rec] of tokens) if (rec.exp <= now) tokens.delete(token);
+}, TOKEN_SWEEP_MS);
+if (tokenSweep.unref) tokenSweep.unref();
+
+// RATE LIMIT de auth. Sin esto: fuerza bruta libre, y como scrypt es caro, un
+// chorro de intentos congela el bucle de eventos (mobs, broadcasts) para TODOS.
+const AUTH_MAX_PER_CONN = 6;
+const AUTH_CONN_WINDOW_MS = 60 * 1000;
+const AUTH_MAX_PER_IP = 24;
+const AUTH_IP_WINDOW_MS = 10 * 60 * 1000;
+const authByIp = new Map();   // ip -> { count, resetAt }
+
+function authRateLimited(client) {
+  const now = Date.now();
+  if (!client._authWindow || now > client._authWindow.resetAt) {
+    client._authWindow = { count: 0, resetAt: now + AUTH_CONN_WINDOW_MS };
+  }
+  client._authWindow.count++;
+  if (client._authWindow.count > AUTH_MAX_PER_CONN) return true;
+
+  const ip = client.ip || 'unknown';
+  let bucket = authByIp.get(ip);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + AUTH_IP_WINDOW_MS };
+    authByIp.set(ip, bucket);
+  }
+  bucket.count++;
+  return bucket.count > AUTH_MAX_PER_IP;
+}
+
+const authIpSweep = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, b] of authByIp) if (now > b.resetAt) authByIp.delete(ip);
+}, AUTH_IP_WINDOW_MS);
+if (authIpSweep.unref) authIpSweep.unref();
+
+// indice DID de Privy -> nombre de cuenta. Se reconstruye desde el store.
+const privyIndex = new Map();
+function rebuildPrivyIndex() {
+  privyIndex.clear();
+  for (const [user, acc] of Object.entries(store.accounts || {})) {
+    if (acc && acc.privySub) privyIndex.set(acc.privySub, user);
+  }
+}
+
 loadStore();
+rebuildPrivyIndex();
 // flush con debounce: a lo sumo cada 2s.
 const flushTimer = setInterval(flushStore, 2000);
 if (flushTimer.unref) flushTimer.unref();
@@ -978,16 +1059,95 @@ wss.on('connection', (ws, req) => {
     ws, name: 'Anon', char: 'char_knight.glb', x: SAFE_X, z: SAFE_Z, h: 0, a: 'Idle', account: null,
     lastMoveAt: Date.now(), moveCredit: MOVEMENT_MAX_CREDIT,
     joinedAt: Date.now(), greeted: false, alive: true,
+    ip: (req && req.socket && req.socket.remoteAddress) || 'unknown',
   };
   clients.set(id, me);
   console.log('conn', id, 'from', req && req.socket && req.socket.remoteAddress, '| total', clients.size);
   send(ws, { t: 'id', id });
 
-  ws.on('message', (buf) => {
+  ws.on('message', async (buf) => {
     let m;
     try { m = JSON.parse(buf); } catch { return; }
 
+    // LOGIN CON GOOGLE (via Privy). El cliente trae un access token JWT; el server
+    // lo verifica contra la clave publica de Privy y lo ata al DID del usuario.
+    if (m.t === 'privy') {
+      if (authRateLimited(me)) {
+        send(ws, { t: 'auth', ok: false, error: 'Demasiados intentos. Espera un momento.' });
+        return;
+      }
+      const verdict = await verifyPrivyToken(m.token);
+      if (!verdict.ok) {
+        send(ws, { t: 'auth', ok: false, error: 'No se pudo verificar tu sesion de Google' });
+        return;
+      }
+      const did = verdict.subject;
+      const existing = privyIndex.get(did);
+      if (existing && store.accounts[existing]) {
+        me.account = existing;
+        const token = newToken(existing);
+        send(ws, {
+          t: 'auth', ok: true, god: existing === GOD_USER, user: existing,
+          char: store.accounts[existing].char, token,
+        });
+        return;
+      }
+      // DID nuevo: hace falta un nombre de cuenta para crearla.
+      const user = String(m.user || '');
+      if (!user) { send(ws, { t: 'auth', ok: false, needsUsername: true, error: 'Elige un nombre' }); return; }
+      if (!/^[a-zA-Z0-9_]{3,16}$/.test(user) || (GOD_USER && user.toLowerCase() === GOD_USER.toLowerCase())) {
+        send(ws, { t: 'auth', ok: false, needsUsername: true, error: 'Usuario invalido' });
+        return;
+      }
+      if (store.accounts[user]) {
+        send(ws, { t: 'auth', ok: false, needsUsername: true, error: 'Ese usuario ya existe' });
+        return;
+      }
+      store.accounts[user] = { salt: null, hash: null, privySub: did, char: null };
+      privyIndex.set(did, user);
+      markDirty();
+      me.account = user;
+      send(ws, { t: 'auth', ok: true, god: false, user, char: null, token: newToken(user) });
+      return;
+    }
+
+    // CLAIM de migracion: una cuenta vieja de contrasena se ata a un Google.
+    // Despues de esto, esa cuenta entra por Google. Se corre UNA vez por cuenta.
+    if (m.t === 'privylink') {
+      if (authRateLimited(me)) { send(ws, { t: 'link', ok: false, error: 'Demasiados intentos' }); return; }
+      if (!me.account || !store.accounts[me.account]) {
+        send(ws, { t: 'link', ok: false, error: 'Inicia sesion con tu contrasena primero' });
+        return;
+      }
+      const verdict = await verifyPrivyToken(m.token);
+      if (!verdict.ok) { send(ws, { t: 'link', ok: false, error: 'Token invalido' }); return; }
+      const did = verdict.subject;
+      const owner = privyIndex.get(did);
+      if (owner && owner !== me.account) {
+        send(ws, { t: 'link', ok: false, error: 'Ese Google ya esta atado a otra cuenta' });
+        return;
+      }
+      const acc = store.accounts[me.account];
+      acc.privySub = did;
+      // el claim retira la contrasena: la cuenta pasa a ser solo-Google.
+      acc.salt = null;
+      acc.hash = null;
+      privyIndex.set(did, me.account);
+      markDirty();
+      revokeTokensFor(me.account);   // fuerza re-login por el camino nuevo
+      send(ws, { t: 'link', ok: true, user: me.account });
+      return;
+    }
+
     if (m.t === 'register') {
+      if (!PASSWORD_AUTH_ENABLED) {
+        send(ws, { t: 'auth', ok: false, error: 'Entra con Google' });
+        return;
+      }
+      if (authRateLimited(me)) {
+        send(ws, { t: 'auth', ok: false, error: 'Demasiados intentos. Espera un momento.' });
+        return;
+      }
       const user = String(m.user || '');
       const pass = String(m.pass || '');
       if (!/^[a-zA-Z0-9_]{3,16}$/.test(user) || (GOD_USER && user.toLowerCase() === GOD_USER.toLowerCase())) {
@@ -1003,7 +1163,7 @@ wss.on('connection', (ws, req) => {
         return;
       }
       const salt = crypto.randomBytes(16).toString('hex');
-      const hash = hashPassword(pass, salt);
+      const hash = await hashPassword(pass, salt);
       store.accounts[user] = { salt, hash, char: null };
       markDirty();
       const token = newToken(user);
@@ -1013,11 +1173,19 @@ wss.on('connection', (ws, req) => {
     }
 
     if (m.t === 'login') {
+      if (!PASSWORD_AUTH_ENABLED) {
+        send(ws, { t: 'auth', ok: false, error: 'Entra con Google' });
+        return;
+      }
+      if (authRateLimited(me)) {
+        send(ws, { t: 'auth', ok: false, error: 'Demasiados intentos. Espera un momento.' });
+        return;
+      }
       const user = String(m.user || '');
       const pass = String(m.pass || '');
 
       // GOD: usuario exacto + verificacion del HASH (provisto por el entorno).
-      if (GOD_ENABLED && user === GOD_USER && verifyPassword(pass, GOD_PASS_SALT, GOD_PASS_HASH)) {
+      if (GOD_ENABLED && user === GOD_USER && await verifyPassword(pass, GOD_PASS_SALT, GOD_PASS_HASH)) {
         if (!store.accounts[GOD_USER]) {
           store.accounts[GOD_USER] = { salt: GOD_PASS_SALT, hash: GOD_PASS_HASH, char: null };
           markDirty();
@@ -1029,7 +1197,8 @@ wss.on('connection', (ws, req) => {
       }
 
       const acc = store.accounts[user];
-      if (!acc || !verifyPassword(pass, acc.salt, acc.hash)) {
+      // una cuenta ya migrada a Google no tiene hash: no entra por contrasena.
+      if (!acc || !acc.hash || !await verifyPassword(pass, acc.salt, acc.hash)) {
         send(ws, { t: 'auth', ok: false, error: 'Usuario o contrasena incorrectos' });
         return;
       }
@@ -1061,7 +1230,8 @@ wss.on('connection', (ws, req) => {
       if (me.greeted) return;
       me.greeted = true;
       // si trae token valido, atamos la conexion a la cuenta (para los saves).
-      if (m.token && tokens.has(m.token)) me.account = tokens.get(m.token);
+      const tokenUser = accountForToken(m.token);
+      if (tokenUser) me.account = tokenUser;
       me.name = clean(m.name, 16) || 'Anon';
       // char SOLO de la allowlist: se rebroadcastea y cada cliente lo usa como
       // ruta de asset (path traversal si va crudo). Cernunnos solo Diosito.
