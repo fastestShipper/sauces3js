@@ -57,7 +57,20 @@ const SPAWN_QUEUE_MOVE_WAKE = 1.5;
 const HP_BAR_CAPACITY = 128;
 
 // kind % 4 -> tipo de esqueleto. El server manda kind; el cliente solo lo mapea a un look.
+// El rig sale del ARQUETIPO que manda el server (`a`), no del nivel. Antes salia
+// de `kind = lvl - 1`, asi que el esqueleto Mago parecia hechicero y peleaba
+// como un zombie mas. El orden espeja MOB_ARCHETYPE_ORDER en server/mob_balance.js.
 const KIND_TO_TYPE = ['Minion', 'Rogue', 'Warrior', 'Mage'];
+
+// Ataques por arquetipo. El saqueador carga a dos manos (telegraph largo y
+// leible), la rastrera apunala rapido, el cultista CANTEA.
+const CULTIST_ARCH = 3;   // indice de 'cultista' en MOB_ARCHETYPE_ORDER
+const ATTACK_POOL_BY_ARCHETYPE = [
+  ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Horizontal'],                       // 0 caminante
+  ['1H_Melee_Attack_Stab', '1H_Melee_Attack_Slice_Diagonal', 'Dualwield_Melee_Attack_Stab'], // 1 rastrera
+  ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice'],                                  // 2 saqueador
+  ['Spellcast_Shoot', 'Spellcast_Raise', 'Spellcasting'],                             // 3 cultista
+];
 
 // Pools de VARIEDAD (nombres VERIFICADOS dentro de kaykit_skeletons.glb).
 // Cada mob elige determinista por id: el mismo zombie ataca/idlea/muere igual siempre.
@@ -811,13 +824,26 @@ export class MobField {
       const h = v.root.rotation.y || 0;
       const fx = this.effects;
       const scaleK = Math.max(1, Math.min(1.6, (v.baseScale || SCALE) / SCALE));
-      fx?.dangerCircle?.({
-        x: v.root.position.x + Math.sin(h) * 0.5 * scaleK,
-        y: 0,
-        z: v.root.position.z + Math.cos(h) * 0.5 * scaleK,
-      }, 1.45 * scaleK, tellT, 0xff3c22);
-      fx?.hitFlash?.({ x: v.root.position.x, y: 1.1, z: v.root.position.z }, 0xffd24a);
-      v.attackClawPending = true;
+      const victim = this.net?.player?.pos;
+      if (v.arch === CULTIST_ARCH && victim) {
+        // CULTISTA: cantea a 9m. Su amenaza NO cae a sus pies sino a los TUYOS,
+        // y se ve venir el proyectil: es un cast esquivable, no una mordida.
+        fx?.dangerCircle?.({ x: victim.x, y: 0, z: victim.z }, 1.6, tellT, 0x9a52ff);
+        fx?.projectile?.(
+          { x: v.root.position.x, y: 1.35 * scaleK, z: v.root.position.z },
+          { x: victim.x, y: 1.1, z: victim.z },
+          'magic',
+        );
+        fx?.hitFlash?.({ x: v.root.position.x, y: 1.4 * scaleK, z: v.root.position.z }, 0x9a52ff);
+      } else {
+        fx?.dangerCircle?.({
+          x: v.root.position.x + Math.sin(h) * 0.5 * scaleK,
+          y: 0,
+          z: v.root.position.z + Math.cos(h) * 0.5 * scaleK,
+        }, 1.45 * scaleK, tellT, 0xff3c22);
+        fx?.hitFlash?.({ x: v.root.position.x, y: 1.1, z: v.root.position.z }, 0xffd24a);
+      }
+      v.attackClawPending = v.arch !== CULTIST_ARCH;   // el caster no zarpea
       v.attackClawAge = timing.clawAge;
       v.attackClawColor = 0xff3c22;
     } else if (opts.impact) {
@@ -867,7 +893,8 @@ export class MobField {
   _createMob(mob) {
     if (!this.ready || !mob || mob.id == null) return null;
     if (this.mobs.has(mob.id)) return this.mobs.get(mob.id);
-    const type = KIND_TO_TYPE[((mob.kind | 0) % 4 + 4) % 4];
+    const archIdx = ((mob.a | 0) % 4 + 4) % 4;
+    const type = KIND_TO_TYPE[archIdx];
     // El Gigante usa su propio rig si cargo; si no, cae al esqueleto de siempre.
     const isGiant = !!mob.g && !!this.protos.Giant;
     const proto = isGiant ? this.protos.Giant : (this.protos[type] || this.protos.Minion);
@@ -926,9 +953,10 @@ export class MobField {
     actions.Idle = bind(IDLE_POOL[(h >> 4) % IDLE_POOL.length]) || bind('Idle_Combat') || bind('Idle');
     actions.Hit = bind('Hit_A') || bind('Hit_B');
     // El Gigante pega a DOS MANOS y lento: golpes leibles que se pueden esquivar.
+    const archPool = ATTACK_POOL_BY_ARCHETYPE[archIdx] || ATTACK_POOL;
     actions.Attack = isGiant
       ? (bind(GIANT_ATTACK_POOL[h % GIANT_ATTACK_POOL.length]) || bind('2H_Melee_Attack_Chop'))
-      : bind(ATTACK_POOL[h % ATTACK_POOL.length]);
+      : bind(archPool[h % archPool.length]);
     actions.Attack = actions.Attack || bind('Unarmed_Melee_Attack_Punch_A');
     actions.Death = bind(DEATH_POOL[(h >> 2) % DEATH_POOL.length]) || bind('Death_A') || bind('Death_B');
     // ANDAR por personalidad (k2 del server): 0=arrastre normal, 1=corredor, 2=tanque
@@ -954,7 +982,7 @@ export class MobField {
     if (mob.b) actions.Taunt = bind('Taunt_Longer') || bind('Taunt');
     if (actions.Idle) actions.Idle.play();
     const v = {
-      id: mob.id, root, ch, mixer, actions, bar, ring, mats, boss: !!mob.b,
+      id: mob.id, root, ch, mixer, actions, bar, ring, mats, boss: !!mob.b, arch: archIdx,
       hp: mob.hp != null ? mob.hp : (mob.hpMax || 1),
       hpMax: mob.hpMax || mob.hp || 1,
       tx: mob.x || 0, tz: mob.z || 0, th: mob.h || 0, state: mob.state || 'idle',

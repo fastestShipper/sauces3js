@@ -9,12 +9,12 @@ const {
   mobDamage,
 } = require('../server/mob_balance.js');
 
-function stats(spawn, persona = 'normal') {
+function stats(spawn, archetype = 'caminante') {
   const zone = zoneBalance(spawn);
   return {
     zone,
-    hp: mobHpMax(spawn, persona),
-    dmg: mobDamage({ lvl: spawn.lvl, persona, zoneDmgMult: zone.dmg }),
+    hp: mobHpMax(spawn, archetype),
+    dmg: mobDamage({ lvl: spawn.lvl, archetype, zoneDmgMult: zone.dmg }),
   };
 }
 
@@ -23,7 +23,7 @@ const gruta = stats({ x: -8, z: -55, lvl: 1, zone: 'spot7' });
 const normal = stats({ x: 80, z: 20, lvl: 3, zone: 'calle' });
 const mid = stats({ x: -42, z: 132, lvl: 3, zone: 'spot1' });
 const hard = stats({ x: -168, z: 164, lvl: 4, zone: 'spot3' });
-const boss = stats({ x: -4, z: -64, lvl: 5, zone: 'boss_guardian', boss: true }, 'tanque');
+const boss = stats({ x: -4, z: -64, lvl: 5, zone: 'boss_guardian', boss: true }, 'saqueador');
 
 assert.deepEqual(starter.zone, ZONE_BALANCE.starter, 'starter fodder should use starter curve');
 assert.deepEqual(gruta.zone, ZONE_BALANCE.gruta, 'gruta spot should use beginner curve');

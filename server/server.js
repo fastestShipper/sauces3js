@@ -16,8 +16,11 @@ const {
   SAFE_X,
   SAFE_Z,
   SAFE_R,
-  MOB_PERSONAS,
-  mobPersona,
+  MOB_ARCHETYPES,
+  ARCHETYPE_GAIT,
+  mobArchetype,
+  archetypeProfile,
+  archetypeIndex,
   zoneBalance,
   mobHpMax,
   mobDamage,
@@ -467,9 +470,10 @@ function loadMobSpawns() {
 // crea un objeto mob desde un spawn. hpMax = 30 + lvl*16 (early amable); boss x4;
 // la personalidad multiplica hp/velocidad/dano encima de eso.
 function makeMob(id, spawn) {
-  const persona = mobPersona(id, !!spawn.boss);
+  const archetype = mobArchetype(id, !!spawn.boss);
+  const arch = archetypeProfile(archetype);
   const zb = zoneBalance(spawn);
-  const hpMax = mobHpMax(spawn, persona);
+  const hpMax = mobHpMax(spawn, archetype);
   return {
     id,
     x: spawn.x,
@@ -492,7 +496,11 @@ function makeMob(id, spawn) {
     wanderX: null,
     wanderZ: null,
     nextWanderMs: 0,
-    persona,
+    archetype,
+    aggro: arch.aggro,
+    attackRange: arch.attackRange,
+    windupMs: arch.windupMs,
+    keepDist: arch.keepDist || 0,
     attackDueMs: 0,
     attackTargetId: null,
     attackDmg: 0,
@@ -513,8 +521,9 @@ function makeMob(id, spawn) {
 // representacion publica del mob para los clientes.
 // k2 = personalidad (0 normal, 1 corredor, 2 tanque) por si el cliente quiere pintarla.
 function mobView(m) {
-  const k2 = m.persona === 'corredor' ? 1 : (m.persona === 'tanque' ? 2 : 0);
-  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, k2, zone: m.zone, b: m.boss ? 1 : 0, g: m.giant ? 1 : 0 };
+  const k2 = ARCHETYPE_GAIT[m.archetype] || 0;
+  const a = archetypeIndex(m.archetype);
+  return { id: m.id, x: m.x, z: m.z, h: m.h, state: m.state, lvl: m.lvl, hp: m.hp, hpMax: m.hpMax, kind: m.kind, k2, zone: m.zone, b: m.boss ? 1 : 0, g: m.giant ? 1 : 0, a };
 }
 
 // spawnea hasta MOB_CAP mobs en spawns DISTINTOS (toma los primeros N).
@@ -531,7 +540,7 @@ function spawnInitialMobs() {
 
 function nearestMobTarget(mob) {
   let best = null;
-  let bestD = MOB_AGGRO_RANGE;
+  let bestD = mob.aggro || MOB_AGGRO_RANGE;
   for (const [id, c] of clients) {
     if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) continue;
     // la gruta es refugio TOTAL: los refugiados no son targeteables (sin esto
@@ -709,7 +718,7 @@ function faceMobTarget(mob, c) {
 function beginMobAttackWindup(mob, tid, c, now) {
   faceMobTarget(mob, c);
   mob.attackTargetId = tid;
-  mob.attackDueMs = now + MOB_ATTACK_WINDUP_MS;
+  mob.attackDueMs = now + (mob.windupMs || MOB_ATTACK_WINDUP_MS);
   mob.attackDmg = mobDamage(mob);
   mob.hitCdMs = MOB_ATTACK_CD_MS;
   // GRUNIDO: 10% de las veces se toma 0.8s extra tras golpear (ritmo organico)
@@ -718,7 +727,7 @@ function beginMobAttackWindup(mob, tid, c, now) {
     t: 'matk',
     id: mob.id,
     target: tid,
-    ms: MOB_ATTACK_WINDUP_MS,
+    ms: mob.windupMs || MOB_ATTACK_WINDUP_MS,
     x: mob.x,
     z: mob.z,
     h: mob.h,
@@ -728,7 +737,8 @@ function beginMobAttackWindup(mob, tid, c, now) {
 function commitMobAttackWindup(mob, c) {
   if (validMobAttackTarget(mob, c)) {
     const d = Math.hypot(c.x - mob.x, c.z - mob.z);
-    if (d <= MOB_ATTACK_COMMIT_RANGE) {
+    const commitRange = (mob.attackRange || MOB_ATTACK_RANGE) + 0.75;
+    if (d <= commitRange) {
       faceMobTarget(mob, c);
       c.lastDamagedAt = Date.now();   // combat lock: no se recalla bajo fuego
       send(c.ws, { t: 'phit', id: mob.id, dmg: mob.attackDmg || mobDamage(mob), hp: null, told: 1 });
@@ -792,10 +802,25 @@ function mobTick() {
         const [tid, c, d, noisy] = target;
         mob.targetId = tid;
         clearMobWander(mob);
-        const pk = MOB_PERSONAS[mob.persona] || MOB_PERSONAS.normal;
-        if (d > MOB_ATTACK_RANGE) {
-          // PANICO: al verte cerca CORREN (x1.7), y en el ultimo tramo EMBISTEN
-          const rush = (d < 4 ? 2.3 : (d < 11 ? 1.7 : 1)) * (noisy && now < (mob.scentBoostUntilMs || 0) ? MOB_NOISE_RUSH_MULT : 1);
+        const pk = archetypeProfile(mob.archetype);
+        const range = mob.attackRange || MOB_ATTACK_RANGE;
+
+        // CULTISTA: es caster. Si le cierras la distancia, RETROCEDE mientras
+        // cantea en vez de dejarse pegar. Obliga a perseguirlo o a comerte el cast.
+        // OJO: nada de `continue` aca dentro. El final del loop es el que empuja
+        // el mob a `changed` y lo broadcastea; saltarselo hace que el cultista
+        // retroceda solo en el server y en pantalla se quede clavado.
+        if (mob.keepDist && d < mob.keepDist) {
+          const ux = (mob.x - c.x) / (d || 1), uz = (mob.z - c.z) / (d || 1);
+          const back = MOB_SPEED * pk.speed * (mob.zoneSpeedMult || 1) * 0.9 * dt;
+          stepToward(mob, mob.x + ux * 3, mob.z + uz * 3, back);
+          mob.h = Math.atan2(c.x - mob.x, c.z - mob.z);   // retrocede SIN darte la espalda
+          state = 'walk';
+          if (mob.hitCdMs <= 0) { beginMobAttackWindup(mob, tid, c, now); state = 'attack'; }
+          applyMobSeparation(mob, packs.get(tid), dt);
+        } else if (d > range) {
+          // PANICO: al verte cerca CORREN, y en el ultimo tramo EMBISTEN
+          const rush = (d < 4 ? pk.rushNear : (d < 11 ? pk.rushFar : 1)) * (noisy && now < (mob.scentBoostUntilMs || 0) ? MOB_NOISE_RUSH_MULT : 1);
           // RODEO: cerca del objetivo cada mob apunta a SU punto del anillo,
           // no al centro del jugador => la manada rodea en vez de apilarse
           let tx = c.x, tz = c.z;
@@ -805,7 +830,7 @@ function mobTick() {
           }
           // ZIGZAG: desvio senoidal perpendicular al avance (fase por id,
           // periodo ~1.6s) que se apaga al acercarse para no fallar la mordida
-          const zigK = Math.min(1, (d - MOB_ATTACK_RANGE) / 6);
+          const zigK = Math.min(1, (d - range) / 6);
           const zig = Math.sin(now / 260 + mob.zigPhase) * MOB_ZIGZAG_AMP * zigK;
           const ux = (c.x - mob.x) / d, uz = (c.z - mob.z) / d;
           tx += -uz * zig;

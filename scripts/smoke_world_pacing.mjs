@@ -30,7 +30,7 @@ if (!/!inSafeZone\(c\)/.test(server)) fail('waves must ignore players inside the
 if (!/waveN % 10 === 0/.test(server)) fail('wave bosses must stay rare');
 if (!/const WAVE_TTL_MS = 60000;/.test(server) || !/Date\.now\(\) \+ WAVE_TTL_MS/.test(server)) fail('normal wave TTL must stay at 60 seconds');
 if (!/const MOB_RESPAWN_MS = 16000;/.test(server) || !/setTimeout\(\(\) => \{[\s\S]*?\}, MOB_RESPAWN_MS\);/.test(server)) fail('normal mobs must respawn after 16 seconds');
-if (!/const zb = zoneBalance\(spawn\);/.test(server) || !/const hpMax = mobHpMax\(spawn, persona\);/.test(server) || !/zoneDmgMult: zb\.dmg/.test(server) || !/zoneSpeedMult: zb\.speed/.test(server)) {
+if (!/const zb = zoneBalance\(spawn\);/.test(server) || !/const hpMax = mobHpMax\(spawn, archetype\);/.test(server) || !/zoneDmgMult: zb\.dmg/.test(server) || !/zoneSpeedMult: zb\.speed/.test(server)) {
   fail('normal respawn pacing must preserve zone difficulty curves');
 }
 if (!/x: SAFE_X, z: SAFE_Z/.test(server)) fail('server-side new player position must start in gruta');
