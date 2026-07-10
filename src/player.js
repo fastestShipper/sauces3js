@@ -295,6 +295,22 @@ export class Player {
     }
   }
 
+  advanceActionTimers(dt) {
+    const value = Number(dt);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    const step = Math.min(value, 0.25);
+    if (this.dashT > 0) this.dashT = Math.max(0, this.dashT - step);
+    this.comboT -= step;
+    if (this.attackT > 0) this.attackT = Math.max(0, this.attackT - step);
+    if (this.attackVisualT > 0) this.attackVisualT = Math.max(0, this.attackVisualT - step);
+    if (this.hitMoveLockT > 0) this.hitMoveLockT = Math.max(0, this.hitMoveLockT - step);
+    if (this._tickSkillFollowup) this._tickSkillFollowup(step);
+    if (this.dashVisualT > 0) this.dashVisualT = Math.max(0, this.dashVisualT - step);
+    this._tryCounterAttackQueue?.();
+    if (this._tickActionStops) this._tickActionStops(step);
+    return step;
+  }
+
   _assetUrl(name) {
     return './assets/models/' + name + (this.assetVersion ? '?v=' + encodeURIComponent(this.assetVersion) : '');
   }
@@ -842,7 +858,6 @@ export class Player {
     if (!this.locked && moving && spacePressed && typeof this.tryDash === 'function') this.tryDash(dx, dz);
     if (this.dashT > 0) {
       movePlanar(this.dashX * DASH_SPEED * dt, this.dashZ * DASH_SPEED * dt);
-      this.dashT = Math.max(0, this.dashT - dt);
     } else if (moving) {
       const sx = dx * spd * dt, sz = dz * spd * dt;
       // colision con deslizamiento (edificios + autos)
@@ -890,14 +905,7 @@ export class Player {
     this._lastX = this.pos.x;
     this._lastZ = this.pos.z;
     // la ventana de combo corre SIEMPRE (encadena entre golpes, no solo durante)
-    this.comboT -= dt;
-    if (this.attackT > 0) this.attackT = Math.max(0, this.attackT - dt);
-    if (this.attackVisualT > 0) this.attackVisualT = Math.max(0, this.attackVisualT - dt);
-    if (this.hitMoveLockT > 0) this.hitMoveLockT = Math.max(0, this.hitMoveLockT - dt);
-    if (this._tickSkillFollowup) this._tickSkillFollowup(dt);
-    if (this.dashVisualT > 0) this.dashVisualT = Math.max(0, this.dashVisualT - dt);
-    this._tryCounterAttackQueue?.();
-    if (this._tickActionStops) this._tickActionStops(dt);
+    this.advanceActionTimers(dt);
     // prioridad de animacion: muerte > ataque > tambaleo > salto > locomocion
     if (this.dead) {
       // mantener la pose de Death; no pisar con nada

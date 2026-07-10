@@ -28,7 +28,7 @@ import { attachWeaponByName } from './weapons.js?v=20260709g41';
 import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g41';
 import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g41';
 import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g41';
-import { SocialPanel } from './social.js?v=20260709g41';
+import { SocialPanel, showSocialInvite } from './social.js?v=20260709g41';
 import { SkillSystem } from './rpg/skills.js?v=20260709g41';
 import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g41';
 import { createSfx } from './sfx.js?v=20260709g41';
@@ -707,20 +707,16 @@ async function boot() {
       scene.add(im);
     }
   };
-  // precarga del decor pesado EN PARALELO durante el boot/login: al entrar al
-  // mundo los arboles/autos/arbustos aparecen al instante (antes se empezaban
-  // a descargar recien en el primer frame jugable = pop-in feo)
   const CAR_FILES = ['k_sedan.glb', 'k_suv.glb', 'k_van.glb', 'k_taxi.glb', 'k_hatchback-sports.glb', 'k_delivery.glb'];
-  const preloadGLB = (file) => loader.loadAsync(MOD + file).catch((e) => {
-    console.warn(file + ' preload failed', e);
-    return null;
-  });
-  const decorPreload = {
-    // GOTCHA: los GLB no llevan ?v= y el cache del browser puede servir la
-    // version vieja tras un deploy. Los que se REGENERAN llevan el stamp.
-    trees: preloadGLB('trees_real.glb?v=' + APP_VERSION),
-    bushes: preloadGLB('bushes_real.glb?v=' + APP_VERSION),
-    cars: CAR_FILES.map(preloadGLB),
+  const decorCache = new Map();
+  const loadDecorGLB = (file) => {
+    if (!decorCache.has(file)) {
+      decorCache.set(file, loader.loadAsync(MOD + file).catch((e) => {
+        console.warn(file + ' deferred load failed', e);
+        return null;
+      }));
+    }
+    return decorCache.get(file);
   };
 
   // vaiven sutil del follaje (cartas de hoja alpha-tested) con fase por
@@ -793,7 +789,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     // SAUCES llorones horneados con ez-tree: el unico arbol del barrio (decreto
     // del Comandante — es el Parque LOS SAUCES). lift:false = el pivote del
     // tronco va al suelo y las ramas colgantes barren el pasto, como sauce real
-    const tg = await decorPreload.trees;
+    // GOTCHA: los GLB regenerados llevan stamp para no reutilizar assets viejos.
+    const tg = await loadDecorGLB('trees_real.glb?v=' + APP_VERSION);
     if (tg) {
       const TREES = pickNodes(tg, ['sauce_a', 'sauce_b', 'sauce_c', 'sauce_d']);
       if (TREES.length === 4) {
@@ -809,8 +806,9 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
         plantSet(TREES, treePlan);
       } catch (e) { console.warn('Forest GLB deferred load failed', e); }
     }
+    await breathe();
     // arbustos realistas sobre los puntos de scatter de parques
-    const bg = await decorPreload.bushes;
+    const bg = await loadDecorGLB('bushes_real.glb?v=' + APP_VERSION);
     if (bg) {
       const BUSHES = pickNodes(bg, ['bush_a', 'bush_b', 'bush_c']);
       const bushSpots = (P.parkScatter || []).filter((_, i) => i % 3 !== 2);
@@ -819,6 +817,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
         plantSet(BUSHES, [[bushSpots, [0.7, 1.35], 53]]);
       }
     }
+    await breathe();
     const carSpots = [];
     {
       const rng = mulberry32(777);
@@ -847,13 +846,16 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     }
     for (let ci = 0; ci < CAR_FILES.length; ci++) {
       const spots = carSpots.filter((_, i) => i % CAR_FILES.length === ci);
-      const cg = await decorPreload.cars[ci];
-      if (!cg || !spots.length) continue;
-      sanitizeImported(cg.scene, aniso);
-      // carroceria PBR + vidrio oscuro reflectivo; sin repintar (estacionados
-      // conservan color de fabrica, la variedad la ponen los que circulan)
-      styleCarShell(cg.scene);
-      instancedRoot(cg.scene, spots, { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
+      if (!spots.length) continue;
+      const cg = await loadDecorGLB(CAR_FILES[ci]);
+      if (cg) {
+        sanitizeImported(cg.scene, aniso);
+        // carroceria PBR + vidrio oscuro reflectivo; sin repintar (estacionados
+        // conservan color de fabrica, la variedad la ponen los que circulan)
+        styleCarShell(cg.scene);
+        instancedRoot(cg.scene, spots, { fit: true, h: [1.9, 1.9], y: ROAD_Y, lift: true, seed: 30 + ci });
+      }
+      await breathe();
     }
   };
   // pilares de las vias elevadas (cilindro unidad escalado en Y a cada altura)
@@ -1304,9 +1306,14 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   partyPanel.style.cssText = "position:fixed;left:18px;top:120px;z-index:35;font-family:'Fredoka',system-ui,sans-serif;color:#fff0bf;font-size:12px;text-shadow:0 1px 3px rgba(0,0,0,.8);display:none;padding:8px 10px;border-radius:12px;background:linear-gradient(145deg,rgba(32,29,56,.82),rgba(8,18,23,.82));border:1px solid rgba(255,232,177,.26);box-shadow:0 14px 34px rgba(10,8,24,.46),inset 0 1px 0 rgba(255,255,255,.12);backdrop-filter:blur(12px) saturate(1.28);-webkit-backdrop-filter:blur(12px) saturate(1.28)";
   document.body.appendChild(partyPanel);
   let partyIdSet = new Set();   // para pintar a mi party en verde en el minimapa
+  let pendingInvite = null;
+  let partyInviteNotice = null;
   net.onParty = (members) => {
     partyIdSet = new Set((members || []).map((mem) => mem.id));
     if (!members || members.length < 2) { partyPanel.style.display = 'none'; return; }
+    pendingInvite = null;
+    partyInviteNotice?.close('joined');
+    partyInviteNotice = null;
     partyPanel.style.display = 'block';
     partyPanel.replaceChildren();
     const h = document.createElement('div'); h.textContent = 'GRUPO';
@@ -1317,16 +1324,29 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       partyPanel.appendChild(row);
     }
   };
-  let pendingInvite = null, inviteTO = null;
   net.onPartyInvited = (fromId, name) => {
-    hud.toast((name || 'Alguien') + ' te invitó al grupo. Pulsa ' + actionLabel('acceptParty') + ' para aceptar.');
+    const invite = showSocialInvite({
+      kind: 'party',
+      name: name || 'Alguien',
+      action: 'acceptParty',
+      timeout: 15000,
+      canAccept: () => !player.locked && pendingInvite === fromId,
+      onAccept: () => {
+        pendingInvite = null;
+        partyInviteNotice = null;
+        net.accept(fromId);
+      },
+      onClose: (reason) => {
+        if (reason !== 'accepted' && pendingInvite === fromId) pendingInvite = null;
+        if (partyInviteNotice === invite) partyInviteNotice = null;
+      },
+    });
     pendingInvite = fromId;
-    clearTimeout(inviteTO); inviteTO = setTimeout(() => { pendingInvite = null; }, 15000);
+    partyInviteNotice = invite;
   };
   addEventListener('keydown', (e) => {
     if (player.locked) return;
-    if (matchesAction(e, 'acceptParty') && pendingInvite != null) { net.accept(pendingInvite); pendingInvite = null; }
-    else if (matchesAction(e, 'inviteParty')) {
+    if (matchesAction(e, 'inviteParty')) {
       let best = null, bd = 1e9;
       for (const [pid, r] of net.remotes) { const dd = Math.hypot(r.x - player.pos.x, r.z - player.pos.z); if (dd < bd) { bd = dd; best = pid; } }
       if (best != null && bd < 40) { net.invite(best); hud.toast('Invitación de grupo enviada.'); }
@@ -1445,25 +1465,58 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   let firstPlayable = true;
   let heavyDecorStarted = false;
   let streetLifeStarted = false;
-  const startNonCombatWhenCalm = () => {
-    if (heavyDecorStarted && streetLifeStarted) return;
+  let decorCalmSince = 0;
+  const isNonCombatCalm = () => {
+    if (document.hidden) return false;
     const nearMob = [...net.mobs.values()].some((m) =>
       Math.hypot(m.x - player.pos.x, m.z - player.pos.z) < 14);
-    if (combat.targetId || nearMob || combat.hp < combat.hpMax) {
-      setTimeout(startNonCombatWhenCalm, 10000);
+    return !combat.targetId && !nearMob && combat.hp >= combat.hpMax;
+  };
+  const startStreetLifeWhenCalm = () => {
+    if (streetLifeStarted) return;
+    if (!isNonCombatCalm()) {
+      setTimeout(startStreetLifeWhenCalm, 5000);
       return;
     }
-    if (!heavyDecorStarted) {
-      heavyDecorStarted = true;
-      loadHeavyDecor().catch((e) => console.warn('Deferred decor failed', e));
-    }
-    if (!streetLifeStarted) {
-      streetLifeStarted = true;
-      life.load(IS_MOBILE ? 18 : 40, seatSpots, P.parkTrees).catch((e) => console.warn('StreetLife deferred load failed', e));
-    }
+    streetLifeStarted = true;
+    life.load(IS_MOBILE ? 18 : 40, seatSpots, P.parkTrees)
+      .catch((e) => console.warn('StreetLife deferred load failed', e));
   };
+  const startNonCombatWhenCalm = () => {
+    if (heavyDecorStarted) return;
+    if (!isNonCombatCalm()) {
+      decorCalmSince = 0;
+      setTimeout(startNonCombatWhenCalm, 1000);
+      return;
+    }
+    const now = performance.now();
+    if (!decorCalmSince) decorCalmSince = now;
+    if (now - decorCalmSince < 9000) {
+      setTimeout(startNonCombatWhenCalm, 1000);
+      return;
+    }
+    heavyDecorStarted = true;
+    loadHeavyDecor()
+      .catch((e) => console.warn('Deferred decor failed', e))
+      .finally(() => setTimeout(startStreetLifeWhenCalm, 1000));
+  };
+  let autoHeartbeatAt = performance.now();
+  const autoHeartbeat = setInterval(() => {
+    const now = performance.now();
+    if (!document.hidden || !combat.autoAttack) {
+      autoHeartbeatAt = now;
+      return;
+    }
+    const heartbeatDt = Math.min(0.25, Math.max(0, (now - autoHeartbeatAt) / 1000));
+    autoHeartbeatAt = now;
+    if (heartbeatDt <= 0) return;
+    player.advanceActionTimers(heartbeatDt);
+    combat.update(heartbeatDt);
+  }, 250);
+  addEventListener('beforeunload', () => clearInterval(autoHeartbeat), { once: true });
   renderer.setAnimationLoop(() => {
     const wallDt = clock.getDelta();
+    if (document.hidden) return;
     const rawDt = Math.min(wallDt, 0.05);
     // GAME FEEL: hit-stop congela el mundo ~50ms al conectar; racha alta = slow-mo.
     // El factor decae con el dt REAL (si no, el freeze seria eterno).
@@ -1473,7 +1526,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       hideBootOverlay();
       if (introScene) introScene.dispose();
       void mobFieldLoad;
-      setTimeout(startNonCombatWhenCalm, 45000);
+      setTimeout(startNonCombatWhenCalm, 1000);
     }
     if (trailer) trailer.beforeFrame(dt);
     player.update(dt, camera);
