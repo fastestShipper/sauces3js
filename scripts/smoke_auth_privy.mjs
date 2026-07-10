@@ -117,5 +117,42 @@ const check = (name, ok, detail = '') => {
   check('isConfigured() refleja el entorno', typeof isConfigured() === 'boolean');
 }
 
-console.log(failures === 0 ? 'ALL PASS' : failures + ' FAILURES');
+// 10. Camino JWKS (el que usa produccion): las claves se leen de un endpoint y
+//     Privy las ROTA. Se sirve un JWKS local para no depender de la red.
+{
+  const http = await import('node:http');
+  const jwk = await jose.exportJWK(publicKey);
+  jwk.alg = 'ES256'; jwk.use = 'sig'; jwk.kid = 'kid-actual';
+  const evilJwk = await jose.exportJWK(evil.publicKey);
+  evilJwk.alg = 'ES256'; evilJwk.use = 'sig'; evilJwk.kid = 'kid-viejo';
+
+  // el endpoint publica DOS claves, como el real: una vieja y la actual
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ keys: [evilJwk, jwk] }));
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${server.address().port}/jwks.json`;
+
+  const good = await new jose.SignJWT({ sub: 'did:privy:jwks' })
+    .setProtectedHeader({ alg: 'ES256', kid: 'kid-actual' })
+    .setIssuer('privy.io').setAudience(APP_ID)
+    .setIssuedAt().setExpirationTime('1h').sign(privateKey);
+  const r1 = await verifyPrivyToken(good, { appId: APP_ID, jwksUrl: url });
+  check('JWKS: token firmado con una clave publicada -> aceptado', r1.ok === true, r1.error || '');
+  check('JWKS: devuelve el DID', r1.subject === 'did:privy:jwks');
+
+  // firmado con una clave que NO esta en el JWKS
+  const stranger = await jose.generateKeyPair('ES256', { extractable: true });
+  const bad = await new jose.SignJWT({ sub: 'did:privy:evil' })
+    .setProtectedHeader({ alg: 'ES256', kid: 'kid-actual' })
+    .setIssuer('privy.io').setAudience(APP_ID)
+    .setIssuedAt().setExpirationTime('1h').sign(stranger.privateKey);
+  const r2 = await verifyPrivyToken(bad, { appId: APP_ID, jwksUrl: url });
+  check('JWKS: clave ajena RECHAZADA', r2.ok === false, r2.error);
+
+  server.close();
+}
+
+console.log(failures === 0 ? 'ALL PASS (con JWKS)' : failures + ' FAILURES');
 process.exit(failures === 0 ? 0 : 1);

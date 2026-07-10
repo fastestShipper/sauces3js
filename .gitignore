@@ -7,6 +7,9 @@ node_modules/
 # Secrets / env
 .env
 .env.*
+# ...pero el ejemplo SI se versiona (no lleva valores)
+!.env.example
+!**/.env.example
 *.key
 *.pem
 id_*
