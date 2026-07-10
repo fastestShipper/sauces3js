@@ -33,3 +33,9 @@ server/accounts.json
 assets/source/
 clips/
 scripts/__pycache__/
+/tmp/
+/dist-modern/
+
+# Godot generated editor/cache state
+godot/.godot/
+godot/export_presets.cfg

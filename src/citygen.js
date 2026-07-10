@@ -269,6 +269,24 @@ export class City {
     return false;
   }
 
+  buildingHeightAt(x, z, margin = 0) {
+    const key = Math.floor(x / SEG_CELL) + ',' + Math.floor(z / SEG_CELL);
+    let height = 0;
+    for (const ri of (this.ringGrid.get(key) || [])) {
+      const rr = this.rings[ri];
+      const bb = rr.bb;
+      if (x < bb[0] - margin || x > bb[2] + margin || z < bb[1] - margin || z > bb[3] + margin) continue;
+      let inside = this.pointInRing(x, z, rr.ring);
+      if (!inside && margin > 0) {
+        const px = Math.max(bb[0], Math.min(bb[2], x));
+        const pz = Math.max(bb[1], Math.min(bb[3], z));
+        inside = this.pointInRing(px, pz, rr.ring);
+      }
+      if (inside) height = Math.max(height, Number(rr.h) || 5);
+    }
+    return height;
+  }
+
   inTallerBuilding(x, z, minH) {
     const key = Math.floor(x / SEG_CELL) + ',' + Math.floor(z / SEG_CELL);
     for (const ri of (this.ringGrid.get(key) || [])) {

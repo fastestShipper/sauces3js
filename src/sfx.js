@@ -3,6 +3,8 @@
 // anticipacion + impacto + consecuencia, con pitch aleatorio para no sonar a
 // metralleta. El AudioContext nace perezoso en el primer gesto (autoplay).
 // Tecla M silencia; persiste en localStorage.
+import { matchesAction } from './keybinds.js?v=20260709g35';
+
 const LS_MUTE = 'sauces_muted';
 
 // pools de variantes: se elige una al azar por disparo
@@ -78,7 +80,7 @@ class Sfx {
     addEventListener('mousedown', boot);
     addEventListener('keydown', boot);
     addEventListener('keydown', (e) => {
-      if (e.code === 'KeyM' && !e.repeat) this.toggleMute();
+      if (matchesAction(e, 'mute') && !e.repeat) this.toggleMute();
     });
     this.onMuteChange = null;   // (muted) -> UI opcional
   }

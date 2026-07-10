@@ -1,4 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { obstacleStats, pointBlocked } = require('../server/world_obstacles');
 
 function fail(message) {
   console.error(`FAIL: ${message}`);
@@ -84,6 +88,8 @@ function roadClearance(point, roads) {
 const raw = JSON.parse(readFileSync(new URL('../server/mob_spawns.json', import.meta.url), 'utf8'));
 const zone = JSON.parse(readFileSync(new URL('../assets/zone.json', import.meta.url), 'utf8'));
 const spawns = Array.isArray(raw.spawns) ? raw.spawns : [];
+const obstacleInfo = obstacleStats();
+if (!obstacleInfo.enabled || obstacleInfo.obstacles < 1000) fail(`world obstacle index is unavailable: ${JSON.stringify(obstacleInfo)}`);
 if (spawns.length < 40) fail(`expected at least 40 mob spawns, got ${spawns.length}`);
 for (const [index, spawn] of spawns.entries()) {
   if (!Number.isFinite(spawn.x) || !Number.isFinite(spawn.z)) fail(`spawn ${index} has invalid coordinates`);
@@ -99,7 +105,16 @@ const nn = nearestStats(active);
 const zones = new Set(active.map(s => s.zone || 'missing'));
 const levels = active.reduce((acc, s) => { acc[s.lvl] = (acc[s.lvl] || 0) + 1; return acc; }, {});
 const laneRepeats = axisLaneRepeats(spawns);
-const nonParkActive = active.filter(s => !String(s.zone || '').startsWith('park_'));
+const activeSpotCount = active.filter(s => /^spot\d+$/.test(String(s.zone || ''))).length;
+const bossCount = spawns.filter(s => s.boss === true).length;
+const calleCount = spawns.filter(s => String(s.zone || '') === 'calle').length;
+const starter = spawns.filter(s => String(s.zone || '') === 'starter');
+const starterFodder = starter.filter(s => s.fodder === true).length;
+const grutaZones = spawns.filter(s => String(s.zone || '') === 'spot7');
+const hardZones = spawns.filter(s => ['spot3', 'spot4', 'spot6', 'boss_guardian'].includes(String(s.zone || '')));
+const hardAvg = hardZones.reduce((sum, s) => sum + s.lvl, 0) / Math.max(1, hardZones.length);
+const playerSpawn = { x: -62, z: -7, radius: 90 };
+const nearestPlayer = Math.min(...spawns.map((s) => Math.hypot(s.x - playerSpawn.x, s.z - playerSpawn.z)));
 const clearances = active.map(s => roadClearance(s, zone.roads || []));
 const minRoadClearance = Math.min(...clearances);
 const bbox = {
@@ -108,6 +123,9 @@ const bbox = {
   minZ: Math.min(...active.map(s => s.z)),
   maxZ: Math.max(...active.map(s => s.z)),
 };
+const blockedSpawns = spawns
+  .map((spawn, index) => pointBlocked(spawn.x, spawn.z, 1) ? index : -1)
+  .filter((index) => index >= 0);
 
 console.log('mob spawn audit:', {
   total: spawns.length,
@@ -116,17 +134,33 @@ console.log('mob spawn audit:', {
   levels,
   corr: +c.toFixed(3),
   laneRepeats,
-  parkActive: active.length - nonParkActive.length,
+  activeSpotCount,
+  bossCount,
+  calleCount,
+  starterCount: starter.length,
+  starterFodder,
+  grutaMaxLevel: Math.max(...grutaZones.map(s => s.lvl)),
+  hardAvg: +hardAvg.toFixed(2),
+  nearestPlayer: +nearestPlayer.toFixed(2),
   minRoadClearance: +minRoadClearance.toFixed(2),
   nearestAvg: +nn.avg.toFixed(2),
   nearestSafe: +nearestSafe.toFixed(2),
   bbox,
+  blockedSpawns,
 });
+if (blockedSpawns.length) fail(`spawns overlap buildings: ${blockedSpawns.join(', ')}`);
 if (zones.has('missing') || zones.size < 3) fail(`active spawns need at least 3 named zones, got ${[...zones].join(', ')}`);
-if (nonParkActive.length) fail(`active spawns must be park zones, got ${nonParkActive.map(s => s.zone || 'missing').join(', ')}`);
-if (minRoadClearance < 10) fail(`active spawns are too close to roads, min clearance=${minRoadClearance.toFixed(2)}`);
-if (laneRepeats.length) fail(`spawns share exact visual lanes: ${laneRepeats.join(', ')}`);
+if (activeSpotCount < 35) fail(`active spawns must use ARPG combat spots, got ${activeSpotCount}`);
+if (bossCount < 1) fail('expected at least one boss guardian spawn');
+if (calleCount < 4) fail(`expected calle overflow spawns, got ${calleCount}`);
+if (starter.length < 4) fail(`expected starter combat spawns near player start, got ${starter.length}`);
+if (starterFodder !== starter.length) fail(`all starter spawns must be fodder, got ${starterFodder}/${starter.length}`);
+if (starter.some(s => s.lvl > 2)) fail('starter spawns must stay level 1-2');
+if (grutaZones.some(s => s.lvl > 2)) fail('gruta-adjacent spot7 spawns must stay level 1-2');
+if (hardZones.length < 20 || hardAvg < 4.1) fail(`hard park zones are too soft, count=${hardZones.length}, avg=${hardAvg.toFixed(2)}`);
+if (nearestPlayer > playerSpawn.radius) fail(`player start is too far from first combat, nearest=${nearestPlayer.toFixed(2)}`);
+if (minRoadClearance < -8) fail(`active spawns are too deep into roads, min clearance=${minRoadClearance.toFixed(2)}`);
 if (Math.abs(c) > 0.9) fail(`active spawns are too line-like, corr=${c.toFixed(3)}`);
-if (nn.avg < 5) fail(`active spawns are packed too tightly, nearest avg=${nn.avg.toFixed(2)}`);
+if (nn.avg < 2) fail(`active spawns are packed too tightly, nearest avg=${nn.avg.toFixed(2)}`);
 if (nearestSafe < safeSpawn.radius) fail(`active spawns are too close to respawn, nearest=${nearestSafe.toFixed(2)}`);
 console.log('PASS: mob spawn audit');

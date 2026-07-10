@@ -3,44 +3,46 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709m';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709m';
-import { GrassSystem } from './veg/grass.js?v=20260709m';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709m';
-import { Player } from './player.js?v=20260709m';
-import { MiniMap } from './minimap.js?v=20260709m';
-import { StreetLife } from './npcs.js?v=20260709m';
-import { sanitizeImported } from './glbutil.js?v=20260709m';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709m';
-import { Net } from './net.js?v=20260709m';
-import { ChatUI, showBubble } from './chat.js?v=20260709m';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709m';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709m';
-import { equipWeapon } from './weapons.js?v=20260709m';
-import { authRequest } from './rpg/account.js?v=20260709m';
-import { MobField } from './rpg/mobs.js?v=20260709m';
-import { Inventory } from './rpg/loot.js?v=20260709m';
-import { HUD, Progress, QuestLog } from './rpg/hud.js?v=20260709m';
-import { Combat } from './rpg/combat.js?v=20260709m';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709m';
-import { Effects } from './rpg/effects.js?v=20260709m';
-import { attachWeaponByName } from './weapons.js?v=20260709m';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709m';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709m';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709m';
-import { SocialPanel } from './social.js?v=20260709m';
-import { SkillSystem } from './rpg/skills.js?v=20260709m';
-import { rollDrops, Wallet } from './rpg/economy.js?v=20260709m';
-import { createSfx } from './sfx.js?v=20260709m';
-import { installTouchControls } from './touch.js?v=20260709m';
-import { createIntroScene } from './introscene.js?v=20260709m';
-import { styleCarShell } from './carstyle.js?v=20260709m';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g35';
+import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g35';
+import { GrassSystem } from './veg/grass.js?v=20260709g35';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709g35';
+import { Player } from './player.js?v=20260709g35';
+import { MiniMap } from './minimap.js?v=20260709g35';
+import { StreetLife } from './npcs.js?v=20260709g35';
+import { sanitizeImported } from './glbutil.js?v=20260709g35';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g35';
+import { Net } from './net.js?v=20260709g35';
+import { ChatUI, showBubble } from './chat.js?v=20260709g35';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g35';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g35';
+import { equipWeapon } from './weapons.js?v=20260709g35';
+import { authRequest } from './rpg/account.js?v=20260709g35';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g35';
+import { Inventory } from './rpg/loot.js?v=20260709g35';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g35';
+import { Combat } from './rpg/combat.js?v=20260709g35';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g35';
+import { Effects } from './rpg/effects.js?v=20260709g35';
+import { attachWeaponByName } from './weapons.js?v=20260709g35';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g35';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g35';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g35';
+import { SocialPanel } from './social.js?v=20260709g35';
+import { SkillSystem } from './rpg/skills.js?v=20260709g35';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g35';
+import { createSfx } from './sfx.js?v=20260709g35';
+import { installTouchControls } from './touch.js?v=20260709g35';
+import { createIntroScene } from './introscene.js?v=20260709g35';
+import { styleCarShell } from './carstyle.js?v=20260709g35';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g35';
 
-const APP_VERSION = '20260709m';
+const APP_VERSION = '20260709g35';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
 window.__SAUCES_BUILD__ = { version: APP_VERSION, world: 'toon-v3' };
+warmMobAssets().catch(() => {});
 
 const app = document.getElementById('app');
 const lbar = document.getElementById('lbar');
@@ -101,6 +103,45 @@ function ensureBootOverlay() {
   return ov;
 }
 
+function comboLabel(actions, compact = false) {
+  const labels = actions.map(actionLabel).filter(Boolean);
+  if (!labels.length) return 'Sin asignar';
+  if (compact && labels.every((label) => label.length === 1)) return labels.join('');
+  return labels.join(' ');
+}
+
+function installDynamicHint() {
+  const hint = document.getElementById('hint');
+  if (!hint) return null;
+  const key = (label) => {
+    const span = document.createElement('span');
+    span.className = 'key';
+    span.textContent = label;
+    return span;
+  };
+  const text = (value) => document.createTextNode(value);
+  const render = () => {
+    hint.replaceChildren(
+      key(comboLabel(['moveForward', 'moveLeft', 'moveBack', 'moveRight'], true)),
+      text(' moverse · clic/ATQ pega · '),
+      key(actionLabel('toggleAuto')),
+      text(' modo auto · '),
+      key(comboLabel(['skill0', 'skill1', 'skill2', 'skill3'])),
+      text(' habilidades · '),
+      key(comboLabel(['consumable0', 'consumable1', 'consumable2'])),
+      text(' pociones · '),
+      key(actionLabel('inventory')),
+      text(' inventario · '),
+      key(actionLabel('teleportHome')),
+      text(' gruta')
+    );
+  };
+  render();
+  const onChange = () => render();
+  addEventListener(keybindChangeEvent(), onChange);
+  return () => removeEventListener(keybindChangeEvent(), onChange);
+}
+
 function setBootOverlay(p, text) {
   ensureBootOverlay();
   if (text) document.getElementById('boot-overlay-msg').textContent = text;
@@ -114,12 +155,25 @@ function hideBootOverlay() {
 
 // perfil MOVIL: touch = GPU de telefono. Menos pixeles, sombras chicas, menos
 // gore. ?perf=high fuerza el perfil desktop en tablets potentes.
-const IS_MOBILE = (('ontouchstart' in window) || navigator.maxTouchPoints > 0)
-  && new URLSearchParams(location.search).get('perf') !== 'high';
+const perfParams = new URLSearchParams(location.search);
+const IS_TOUCH_DEVICE = (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+const IS_MOBILE = IS_TOUCH_DEVICE && perfParams.get('perf') !== 'high';
+const LOW_END_MOBILE = IS_MOBILE && (
+  Number(navigator.deviceMemory || 8) <= 4 ||
+  Number(navigator.hardwareConcurrency || 8) <= 4 ||
+  perfParams.get('perf') === 'low'
+);
+const DPR_CAP = IS_MOBILE ? (LOW_END_MOBILE ? 0.85 : 1.0) : 1.45;
 window.__SAUCES_MOBILE__ = IS_MOBILE;
-const renderer = new THREE.WebGLRenderer({ antialias: !IS_MOBILE, powerPreference: 'high-performance' });
+window.__SAUCES_LOW_END__ = LOW_END_MOBILE;
+window.__SAUCES_PERF__ = { mobile: IS_MOBILE, lowEnd: LOW_END_MOBILE, dprCap: DPR_CAP };
+const renderer = new THREE.WebGLRenderer({
+  antialias: !IS_MOBILE,
+  powerPreference: 'high-performance',
+  stencil: false,
+});
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, IS_MOBILE ? 1.0 : 1.6));
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, DPR_CAP));
 renderer.shadowMap.enabled = !IS_MOBILE;   // sombras en movil = mitad del frame
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -139,11 +193,13 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, DPR_CAP));
 });
 
 // refs de luces del mundo para el ciclo dia/noche (se llenan en el boot)
 const worldLights = { sun: null, hemi: null };
-const DAYNIGHT_MS = 600000;   // 10 min, ultimo 40% = NOCHE (misma formula del server)
+const DAYNIGHT_MS = 1500000;   // 25 min, ultimo 40% = NOCHE (misma formula del server)
+const GRUTA_SPAWN = [-62, -7];
 const FOG_DAY = new THREE.Color(0xdceefa);
 const FOG_NIGHT = new THREE.Color(0x11162b);
 
@@ -264,10 +320,14 @@ function showClassPick(prefillName) {
       card.insertBefore(mount, nameI);
     }
     mount.replaceChildren();
-    const PW = Math.min(300, innerWidth - 80), PH = 250;
+    const tightPick = innerHeight < 660;
+    const mobilePick = innerWidth <= 680;
+    const compactPick = tightPick || mobilePick || innerHeight < 820;
+    const PW = Math.min(tightPick ? 180 : (mobilePick ? 220 : (compactPick ? 230 : 300)), innerWidth - 80);
+    const PH = tightPick ? 112 : (mobilePick ? 150 : (compactPick ? 176 : 250));
     const prr = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     prr.setSize(PW, PH);
-    prr.setPixelRatio(Math.min(devicePixelRatio, 2));
+    prr.setPixelRatio(Math.min(devicePixelRatio || 1, IS_MOBILE ? 1.0 : 1.5));
     prr.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(prr.domElement);
     const psc = new THREE.Scene();
@@ -420,6 +480,7 @@ function showClassPick(prefillName) {
       pdisposed = true;
       try { prr.dispose(); } catch { /* liberar GPU del preview */ }
       ob.style.display = 'none';
+      ob.remove();
       resolve({
         char: sel.char,
         name: (nameI.value.trim() || sel.name).slice(0, 16),
@@ -431,6 +492,7 @@ function showClassPick(prefillName) {
 }
 
 async function boot() {
+  installDynamicHint();
   setProgress(0.05, 'Los Sauces despierta…');
   // cielo TOON pintado (gradiente + nubes): background + IBL en uno, cero red
   const skyTex = createToonSkyTexture();
@@ -444,7 +506,7 @@ async function boot() {
   const sun = new THREE.DirectionalLight(0xfff1d0, 2.5);
   worldLights.sun = sun;
   sun.position.set(80, 96, -58);
-  sun.castShadow = true;
+  sun.castShadow = !IS_MOBILE;
   sun.shadow.mapSize.set(IS_MOBILE ? 1024 : 2048, IS_MOBILE ? 1024 : 2048);
   sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
   sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
@@ -471,7 +533,7 @@ async function boot() {
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(-100, -0.01, 100);
   ground.material.map.repeat.set(700, 700);
-  ground.receiveShadow = true;
+  ground.receiveShadow = !IS_MOBILE;
   scene.add(ground);
 
   const data = await (await fetch('./assets/zone.json')).json();
@@ -575,12 +637,11 @@ async function boot() {
   applyPhoto('concrete_n.jpg', [ground.material], { normal: true, repeat: 700 });
 
   // pasto 3D instanciado (parques + bermas). ?grass=off|low|high para debug
-  const grassParam = new URLSearchParams(location.search).get('grass');
-  const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const grassParam = perfParams.get('grass');
   const grass = grassParam === 'off' ? null : new GrassSystem(scene, {
     rects: P.grassRects || [],
     strips: R.bermaStrips || [],
-    mobile: grassParam === 'low' ? true : grassParam === 'high' ? false : isTouchDevice,
+    mobile: grassParam === 'low' ? true : grassParam === 'high' ? false : IS_MOBILE,
   });
   // instancia los meshes de un Object3D ya cargado en cada spot [x, z(, ang)]
   const instancedRoot = (root, spots, opts = {}) => {
@@ -958,13 +1019,14 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   setBootOverlay(0.08, 'Cargando personaje…');
   // spec completa del HEROE elegido: tinte, arma, aura, estilo y kit de skills
   const heroSpec = choice.god ? CERNUNNOS : classById(choice.className);
-  const playerSpawn = trailerConfig.enabled && P.landmark ? [P.landmark[0], P.landmark[1] + 8] : [-4.2, 47.1];
+  const playerSpawn = GRUTA_SPAWN;
   const player = new Player(scene, city, playerSpawn, {
     ...choice,
     tint: heroSpec.tint,
     weapon: heroSpec.weapon,
     combatStyle: heroSpec.combatStyle,
     heroSpec,
+    assetVersion: APP_VERSION,
     custom: sanitizeCustom(choice.custom || (auth.char && auth.char.custom) || {}, heroSpec.char),
   });
   await player.load();
@@ -975,7 +1037,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   const minimap = new MiniMap(city, document.getElementById('minimap'));
   const coordsEl = document.getElementById('coords');
   const daytimeEl = document.getElementById('daytime');
-  const net = trailerConfig.enabled && trailerConfig.offline ? createTrailerNet() : new Net(scene, player, auth.token);
+  const net = trailerConfig.enabled && trailerConfig.offline ? createTrailerNet() : new Net(scene, player, auth.token, { assetVersion: APP_VERSION });
   window.__game.net = net;
 
   // ===== MODO RPG (local) =====
@@ -989,7 +1051,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   // en el jardin del Boulevard). El MobField solo los DIBUJA y anima desde net.mobs.
   const mobField = new MobField(scene, () => camera, net);
   setBootOverlay(0.55, 'Iniciando mundo…');
-  const effects = new Effects(scene, () => camera);
+  const effects = new Effects(scene, () => camera, () => player.pos);
+  net.effects = effects;
+  mobField.effects = effects;   // gore compartido de muertes server-side
+  const mobFieldLoad = mobField.load().catch((e) => console.warn('MobField early load failed', e));
   // HUD + progresion + quest + inventario
   const hud = new HUD(document.body);
   const publicPois = await publicPoisPromise;
@@ -1013,41 +1078,77 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   };
   inventory = new Inventory(() => { applyEquip(); saveChar(); });
   inventory.buildUI(document.body);
-  // tecla I: abrir/cerrar inventario (no mientras el chat esta abierto -> player.locked)
+  let inventoryLockRestore = null;
+  const setInventoryOpen = (open) => {
+    open = !!open;
+    if (inventory.isOpen() === open) return;
+    if (open) {
+      inventoryLockRestore = !!player.locked;
+      player.releaseMouseCapture?.();
+      inventory.setOpen(true);
+      player.locked = true;
+    } else {
+      inventory.setOpen(false);
+      if (inventoryLockRestore != null) {
+        player.locked = inventoryLockRestore;
+        inventoryLockRestore = null;
+      }
+      player.keys = {};
+      player.actionKeys = {};
+    }
+  };
+  // tecla I: abrir/cerrar inventario. Si otro panel ya bloqueo al jugador, no abre.
   addEventListener('keydown', (e) => {
-    if (e.code === 'KeyI' && !player.locked) inventory.setOpen(!inventory.isOpen());
-  });
+    if (!matchesAction(e, 'inventory') || e.repeat) return;
+    e.preventDefault();
+    if (inventory.isOpen()) {
+      setInventoryOpen(false);
+      return;
+    }
+    if (player.locked) return;
+    setInventoryOpen(true);
+  }, true);
   // ===== sonido procedural (M silencia) + recurso/skill de clase (Q) + monedero =====
   const sfx = createSfx();
   player.sfx = sfx;
   mobField.sfx = sfx;   // gruñidos, quejidos y estertores zombie
-  sfx.onMuteChange = (muted) => hud.toast(muted ? '🔇 Sonido apagado (M)' : '🔊 Sonido encendido');
+  sfx.onMuteChange = (muted) => hud.toast(muted ? '🔇 Sonido apagado (' + actionLabel('mute') + ')' : '🔊 Sonido encendido');
   const skills = new SkillSystem(choice.god ? 'cernunnos' : (choice.className || 'verdugo'));
   const wallet = new Wallet(document.body, 0);
   hud.setGold(0);
   // combate tab-target + PvP
   const combat = new Combat({
     scene, camera, player, mobField, net,
+    inputSurface: renderer.domElement,
     inventory, progress, hud, effects, skills, sfx,
     classSpec: heroSpec,
     onRespawn: () => {
-      if (P.landmark) { player.pos.set(P.landmark[0], 0, P.landmark[1] + 8); player.velY = 0; player.grounded = true; }
+      player.pos.set(GRUTA_SPAWN[0], 0, GRUTA_SPAWN[1]);
+      player.velY = 0;
+      player.grounded = true;
     },
     // loot MU-style al matar: oro directo, pociones/armas al inventario.
     // La RACHA multiplica el oro (mult viene del combate) = farmeo adictivo.
     onKillRewards: ({ lvl, mult = 1 }) => {
       const gained = [];
-      for (const drop of rollDrops(lvl)) {
+      let goldTotal = 0;
+      const goldMult = goldRewardMultiplier(mult);
+      const classId = choice.god ? 'cernunnos' : choice.className;
+      for (const drop of rollDrops(lvl, { classId })) {
         if (drop.kind === 'gold') {
-          const amount = Math.round(drop.amount * mult);
+          const amount = Math.round(drop.amount * goldMult);
           wallet.add(amount);
           hud.setGold(wallet.gold);
-          gained.push('+' + amount + ' oro');
+          goldTotal += amount;
           sfx.coin();
         } else if (drop.kind === 'potion') {
           if (inventory.add(drop)) gained.push(drop.name);
         } else if (drop.kind === 'material') {
-          wallet.addMaterial(drop);
+          const amount = materialGoldValue(drop, lvl);
+          wallet.add(amount);
+          hud.setGold(wallet.gold);
+          goldTotal += amount;
+          sfx.coin();
         } else if (drop.kind === 'gear') {
           if (drop.slot === 'weapon') {
             if (inventory.add(drop)) { gained.push('⚔ ' + drop.name); sfx.loot(); }
@@ -1056,10 +1157,11 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
             const sale = 6 + lvl * 3;
             wallet.add(sale);
             hud.setGold(wallet.gold);
-            gained.push(drop.name + ' → +' + sale + ' oro');
+            goldTotal += sale;
           }
         }
       }
+      if (!gained.length && goldTotal >= 45) gained.push('+' + goldTotal + ' oro');
       if (gained.length) hud.toast(gained.join(' · '));
       saveChar();
     },
@@ -1076,7 +1178,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   // leaderboard de rachas del dia
   net.onTop = (list) => hud.setTop(list);
   // Q lanza la skill de la clase via el combate (maná/furia/energia + cooldown)
-  skills._onCast = (effect) => combat.castSkill(effect);
+  skills._onCast = (effect, opts) => combat.castSkill(effect, opts);
   // arma de la tienda: SIEMPRE del tipo del heroe, tier escalado por nivel
   const rollShopWeapon = (className, lvl) => {
     const names = { verdugo: ['Hacha', 'axe_2handed'], piromante: ['Bast\u00f3n', 'staff'], cazadora: ['Arco', 'bow'], sombra: ['Daga', 'dagger'], cernunnos: ['Bast\u00f3n', 'staff'] };
@@ -1088,9 +1190,9 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   // ===== BODEGA OJEDA: mercader real del barrio (el oro POR FIN sirve) =====
   const OJEDA = [-53.2, 88.6];
   const shopProducts = () => [
-    { id: 'potion_s', name: '\ud83e\uddea Poci\u00f3n de la abuela', desc: 'Cura 40 HP', price: 25 },
-    { id: 'potion_l', name: '\ud83c\udf76 Tónico del bigote', desc: 'Cura toda la vida', price: 60 },
-    { id: 'weapon', name: '\u2694\ufe0f Arma de tu clase', desc: 'Tier seg\u00fan tu nivel (roll)', price: 150 },
+    { id: 'potion_s', name: '\ud83e\uddea Poci\u00f3n de la abuela', desc: 'Cura 40 HP', price: 30 },
+    { id: 'potion_l', name: '\ud83c\udf76 Tónico del bigote', desc: 'Cura toda la vida', price: 90 },
+    { id: 'weapon', name: '\u2694\ufe0f Arma de tu clase', desc: 'Tier seg\u00fan tu nivel (roll)', price: 240 },
   ];
   let nearOjeda = false;
   inventory.getGold = () => wallet.gold;
@@ -1120,13 +1222,29 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   };
   // pocion: clic en el inventario la bebe
   inventory.onUse = (item) => {
+    if (combat.hp >= combat.hpMax) {
+      hud.toast('Vida completa');
+      return false;
+    }
     combat.hp = Math.min(combat.hpMax, combat.hp + (item.heal || 25));
     hud.setHP(combat.hp, combat.hpMax);
     hud.toast('🧪 ' + item.name + ' (+' + (item.heal || 25) + ' HP)');
     sfx.potion();
     saveChar();
+    return true;
   };
-  installTouchControls({ player, combat });
+  inventory.onEmptyConsumable = () => hud.toast('No tienes pociones listas');
+  addEventListener('keydown', (e) => {
+    if (player.locked || e.repeat) return;
+    const slot = matchesAction(e, 'consumable0') ? 0
+      : matchesAction(e, 'consumable1') ? 1
+        : matchesAction(e, 'consumable2') ? 2 : -1;
+    if (slot < 0) return;
+    e.preventDefault();
+    inventory.useConsumable(slot);
+  });
+  createKeybindsPanel({ player, hud });
+  installTouchControls({ player, combat, inventory });
   window.__game.rpg = { mobField, combat, inventory, progress, hud, skills, wallet };
   const trailer = trailerConfig.enabled ? createTrailerMode({
     config: trailerConfig,
@@ -1148,7 +1266,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
 
   // ===== PARTY: invitar con G al jugador mas cercano; aceptar con Y =====
   const partyPanel = document.createElement('div');
-  partyPanel.style.cssText = "position:fixed;left:18px;top:120px;z-index:35;font-family:'Fredoka',system-ui,sans-serif;color:#e8edf6;font-size:12px;text-shadow:0 1px 2px #000;display:none";
+  partyPanel.style.cssText = "position:fixed;left:18px;top:120px;z-index:35;font-family:'Fredoka',system-ui,sans-serif;color:#fff0bf;font-size:12px;text-shadow:0 1px 3px rgba(0,0,0,.8);display:none;padding:8px 10px;border-radius:12px;background:linear-gradient(145deg,rgba(32,29,56,.82),rgba(8,18,23,.82));border:1px solid rgba(255,232,177,.26);box-shadow:0 14px 34px rgba(10,8,24,.46),inset 0 1px 0 rgba(255,255,255,.12);backdrop-filter:blur(12px) saturate(1.28);-webkit-backdrop-filter:blur(12px) saturate(1.28)";
   document.body.appendChild(partyPanel);
   let partyIdSet = new Set();   // para pintar a mi party en verde en el minimapa
   net.onParty = (members) => {
@@ -1156,8 +1274,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     if (!members || members.length < 2) { partyPanel.style.display = 'none'; return; }
     partyPanel.style.display = 'block';
     partyPanel.replaceChildren();
-    const h = document.createElement('div'); h.textContent = 'PARTY';
-    h.style.cssText = 'font-weight:800;font-size:10px;letter-spacing:.6px;color:#7be0a8;margin-bottom:3px';
+    const h = document.createElement('div'); h.textContent = 'GRUPO';
+    h.style.cssText = 'font-weight:900;font-size:10px;letter-spacing:.8px;color:#fff0a8;margin-bottom:4px';
     partyPanel.appendChild(h);
     for (const mem of members) {
       const row = document.createElement('div'); row.textContent = '• ' + (mem.name || 'Vecino');
@@ -1166,17 +1284,17 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   };
   let pendingInvite = null, inviteTO = null;
   net.onPartyInvited = (fromId, name) => {
-    hud.toast((name || 'Alguien') + ' te invito a party. Pulsa Y para aceptar.');
+    hud.toast((name || 'Alguien') + ' te invitó al grupo. Pulsa ' + actionLabel('acceptParty') + ' para aceptar.');
     pendingInvite = fromId;
     clearTimeout(inviteTO); inviteTO = setTimeout(() => { pendingInvite = null; }, 15000);
   };
   addEventListener('keydown', (e) => {
     if (player.locked) return;
-    if (e.code === 'KeyY' && pendingInvite != null) { net.accept(pendingInvite); pendingInvite = null; }
-    else if (e.code === 'KeyG') {
+    if (matchesAction(e, 'acceptParty') && pendingInvite != null) { net.accept(pendingInvite); pendingInvite = null; }
+    else if (matchesAction(e, 'inviteParty')) {
       let best = null, bd = 1e9;
       for (const [pid, r] of net.remotes) { const dd = Math.hypot(r.x - player.pos.x, r.z - player.pos.z); if (dd < bd) { bd = dd; best = pid; } }
-      if (best != null && bd < 40) { net.invite(best); hud.toast('Invitacion de party enviada.'); }
+      if (best != null && bd < 40) { net.invite(best); hud.toast('Invitación de grupo enviada.'); }
       else hud.toast('No hay nadie cerca para invitar.');
     }
   });
@@ -1211,8 +1329,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   if (saved && saved.level) {
     progress.level = saved.level;
     progress.xp = saved.xp || 0;
-    progress.xpNext = 20 * progress.level;
-    progress.hpMax = saved.hpMax || (80 + 20 * progress.level);
+    progress.xpNext = xpNextForLevel(progress.level);
+    progress.hpMax = hpMaxForLevel(progress.level);
     if (Array.isArray(saved.inv)) {
       for (const it of saved.inv) inventory.add(it);
       if (saved.equipId) { const eq = inventory.items.find(i => i.id === saved.equipId); if (eq) inventory.equip(eq); }
@@ -1221,6 +1339,11 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     combat.hpMax = progress.hpMax; combat.hp = progress.hpMax;
     hud.setHP(combat.hp, combat.hpMax);
     hud.setXP(progress.xp, progress.xpNext, progress.level);
+  }
+  if (progress.level <= 1 && !inventory.items.some((it) => it && it.kind === 'potion')) {
+    for (let i = 0; i < 3; i++) {
+      inventory.add({ id: 'starter_potion_' + i + '_' + Date.now(), name: 'Poción de la gruta', kind: 'potion', heal: 45 });
+    }
   }
   saveChar();   // persistir el estado inicial (clase elegida) en cuentas nuevas
 
@@ -1231,8 +1354,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     chat.add(player.name || 'Tú', text, true);   // eco local
     showBubble(player.root, text, localBubble);   // burbuja sobre mi propia cabeza
   });
-  chat.onOpen = () => { player.locked = true; };
-  chat.onClose = () => { player.locked = false; player.keys = {}; };
+  chat.onOpen = () => { player.releaseMouseCapture?.(); player.locked = true; };
+  chat.onClose = () => { player.locked = false; player.keys = {}; player.actionKeys = {}; };
   net.onChat = (name, text) => chat.add(name, text, false);
 
   // tecla B: teletransporte a la gruta con 2s de CHANNELING + aura magica
@@ -1265,7 +1388,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   };
   if (P.landmark) {
     addEventListener('keydown', (e) => {
-      if (e.code !== 'KeyB' || teleCh > 0 || player.locked) return;
+      if (!matchesAction(e, 'teleportHome') || teleCh > 0 || player.locked) return;
       teleCh = 2.0;
       sfx.teleport();
       player.locked = true;                                  // channeling: no te mueves
@@ -1281,8 +1404,28 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   }
 
   let streetT = 0;
+  let minimapT = 0;
   const clock = new THREE.Clock();
   let firstPlayable = true;
+  let heavyDecorStarted = false;
+  let streetLifeStarted = false;
+  const startNonCombatWhenCalm = () => {
+    if (heavyDecorStarted && streetLifeStarted) return;
+    const nearMob = [...net.mobs.values()].some((m) =>
+      Math.hypot(m.x - player.pos.x, m.z - player.pos.z) < 14);
+    if (combat.targetId || nearMob || combat.hp < combat.hpMax) {
+      setTimeout(startNonCombatWhenCalm, 10000);
+      return;
+    }
+    if (!heavyDecorStarted) {
+      heavyDecorStarted = true;
+      loadHeavyDecor().catch((e) => console.warn('Deferred decor failed', e));
+    }
+    if (!streetLifeStarted) {
+      streetLifeStarted = true;
+      life.load(IS_MOBILE ? 18 : 40, seatSpots, P.parkTrees).catch((e) => console.warn('StreetLife deferred load failed', e));
+    }
+  };
   renderer.setAnimationLoop(() => {
     const rawDt = Math.min(clock.getDelta(), 0.05);
     // GAME FEEL: hit-stop congela el mundo ~50ms al conectar; racha alta = slow-mo.
@@ -1292,9 +1435,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       firstPlayable = false;
       hideBootOverlay();
       if (introScene) introScene.dispose();
-      loadHeavyDecor().catch((e) => console.warn('Deferred decor failed', e));
-      mobField.load().catch((e) => console.warn('MobField deferred load failed', e));
-      life.load(40, seatSpots, P.parkTrees).catch((e) => console.warn('StreetLife deferred load failed', e));
+      void mobFieldLoad;
+      setTimeout(startNonCombatWhenCalm, 45000);
     }
     if (trailer) trailer.beforeFrame(dt);
     player.update(dt, camera);
@@ -1345,7 +1487,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
         nearOjeda = true;
         inventory.setShop(shopProducts());
         hud.toast('\ud83c\udfea Bodega Ojeda \u00b7 pulsa I para comerciar');
-        if (!inventory.isOpen()) inventory.setOpen(true);
+        if (!inventory.isOpen()) setInventoryOpen(true);
       } else if (dOj >= 9 && nearOjeda) {
         nearOjeda = false;
         inventory.setShop([]);
@@ -1373,8 +1515,12 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       if (worldLights.hemi) worldLights.hemi.intensity = 0.55 * (1 - nightK * 0.55);
       if (scene.fog) scene.fog.color.lerpColors(FOG_DAY, FOG_NIGHT, nightK);
     }
-    minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes,
-      { mobs: net.mobs, pois: publicPois, partyIds: partyIdSet });
+    minimapT -= rawDt;
+    if (minimapT <= 0) {
+      minimapT = IS_MOBILE ? 0.16 : 0.08;
+      minimap.draw(player.pos.x, player.pos.z, player.heading, net.remotes,
+        { mobs: net.mobs, pois: publicPois, partyIds: partyIdSet });
+    }
     if (trailer) trailer.afterFrame(dt);
     {
       const sh = effects.shakeOffset && effects.shakeOffset();

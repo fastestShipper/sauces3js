@@ -7,6 +7,10 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏘️%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preload" href="./assets/models/kaykit_skeletons.glb" as="fetch" type="model/gltf-binary" crossorigin="anonymous" fetchpriority="low">
+<link rel="preload" href="https://www.gstatic.com/draco/v1/decoders/draco_decoder.wasm" as="fetch" type="application/wasm" crossorigin="anonymous" fetchpriority="low">
+<link rel="preload" href="https://www.gstatic.com/draco/v1/decoders/draco_wasm_wrapper.js" as="script" crossorigin="anonymous" fetchpriority="low">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -23,6 +27,16 @@
     --hp: #ff5a48;
     --font: 'Fredoka', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --shadow-panel: 0 12px 32px rgba(10, 8, 24, .38), inset 0 1px 0 rgba(255, 255, 255, .09);
+    --ui-rail-right: max(14px, env(safe-area-inset-right));
+    --ui-rail-top: max(14px, env(safe-area-inset-top));
+    --ui-rail-gap: 10px;
+    --ui-map-size: 196px;
+    --ui-map-bottom: calc(var(--ui-rail-top) + var(--ui-map-size));
+    --ui-coords-top: calc(var(--ui-map-bottom) + var(--ui-rail-gap));
+    --ui-daytime-top: calc(var(--ui-coords-top) + 36px);
+    --ui-streak-top: calc(var(--ui-daytime-top) + 42px);
+    --ui-key-toggle-top: calc(var(--ui-streak-top) + 96px);
+    --ui-panel-top: calc(var(--ui-key-toggle-top) + 52px);
   }
   html, body { margin: 0; padding: 0; overflow: hidden; background: #0e1116; height: 100%; }
   /* con la escena 3D de fondo (clase intro3d), los fondos pintados se apartan:
@@ -126,45 +140,50 @@
   }
   #hud .title {
     display: inline-block; font-size: 17px; font-weight: 700; letter-spacing: .2px;
-    background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
+    background:
+      radial-gradient(circle at 18% 0%, rgba(255,232,177,.2), transparent 38%),
+      linear-gradient(145deg, rgba(32,29,56,.82), rgba(8,18,23,.82));
     backdrop-filter: blur(14px) saturate(1.5); -webkit-backdrop-filter: blur(14px) saturate(1.5);
-    border: 1px solid var(--glass-line); border-radius: 13px;
+    border: 1px solid rgba(255,232,177,.32); border-radius: 12px;
     padding: 7px 15px; text-shadow: 0 1px 3px rgba(10,10,30,.7);
-    box-shadow: 0 10px 28px rgba(10,8,24,.35), inset 0 1px 0 var(--glass-hi);
+    box-shadow: 0 12px 30px rgba(10,8,24,.42), inset 0 1px 0 rgba(255,255,255,.14);
   }
-  #hud .title b { color: var(--gold); font-weight: 700; }
+  #hud .title b { color: #fff0a8; font-weight: 700; }
   #hint {
     margin-top: 8px; max-width: 620px; font-size: 12px; font-weight: 500; line-height: 1.5;
     color: rgba(255,255,255,.94); text-shadow: 0 1px 3px rgba(10,10,30,.9);
   }
   #hint .key {
     display: inline-block; padding: 1px 8px; margin: 0 1px; border-radius: 7px;
-    background: rgba(255,255,255,.1); backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,.28); border-bottom-width: 2px;
-    font-weight: 700; font-size: 11px; color: #fff;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.2);
+    background: rgba(255,232,177,.12); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,232,177,.32); border-bottom-width: 2px;
+    font-weight: 800; font-size: 11px; color: #fff0bf;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
   }
   #minimap {
-    position: fixed; top: 14px; right: 14px; width: 196px; height: 196px; z-index: 30;
-    border-radius: 20px; border: 1px solid var(--glass-line);
-    box-shadow: 0 16px 40px rgba(10,8,24,.45), inset 0 0 0 3px rgba(255,255,255,.1), 0 0 0 1px rgba(10,8,24,.3);
+    position: fixed; top: var(--ui-rail-top); right: var(--ui-rail-right);
+    width: var(--ui-map-size); height: var(--ui-map-size); z-index: 30;
+    border-radius: 16px; border: 1px solid rgba(255,232,177,.32);
+    background: rgba(8,10,16,.52);
+    box-shadow: 0 18px 44px rgba(10,8,24,.5), inset 0 0 0 3px rgba(255,255,255,.08),
+      0 0 0 1px rgba(10,8,24,.36);
   }
   #coords {
-    position: fixed; right: 14px; top: 222px; z-index: 30;
-    padding: 5px 12px; border-radius: 10px;
-    background: rgba(255,255,255,.1); backdrop-filter: blur(10px) saturate(1.4);
-    border: 1px solid var(--glass-line);
-    box-shadow: var(--shadow-panel); color: #fff;
-    font-family: var(--font); font-weight: 600; font-size: 12px;
+    position: fixed; right: var(--ui-rail-right); top: var(--ui-coords-top); z-index: 30;
+    padding: 5px 12px; border-radius: 9px;
+    background: rgba(8,18,23,.78); backdrop-filter: blur(10px) saturate(1.4);
+    border: 1px solid rgba(255,232,177,.24);
+    box-shadow: 0 10px 26px rgba(10,8,24,.4), inset 0 1px 0 rgba(255,255,255,.1); color: #fff0bf;
+    font-family: var(--font); font-weight: 700; font-size: 12px;
     letter-spacing: .5px; user-select: text; cursor: text;
   }
   #daytime {
-    position: fixed; right: 14px; top: 258px; z-index: 30;
-    padding: 5px 12px; border-radius: 10px;
-    background: rgba(255,255,255,.1); backdrop-filter: blur(10px) saturate(1.4);
-    border: 1px solid var(--glass-line);
-    box-shadow: var(--shadow-panel); color: #fff;
-    font-family: var(--font); font-weight: 600; font-size: 12px;
+    position: fixed; right: var(--ui-rail-right); top: var(--ui-daytime-top); z-index: 30;
+    padding: 5px 12px; border-radius: 9px;
+    background: rgba(8,18,23,.78); backdrop-filter: blur(10px) saturate(1.4);
+    border: 1px solid rgba(255,232,177,.24);
+    box-shadow: 0 10px 26px rgba(10,8,24,.4), inset 0 1px 0 rgba(255,255,255,.1); color: #fff0bf;
+    font-family: var(--font); font-weight: 700; font-size: 12px;
     letter-spacing: .5px; user-select: none;
   }
   #chat-log {
@@ -175,18 +194,30 @@
   #chat-log .chat-line {
     align-self: flex-start; max-width: 100%; color: #fff;
     font-size: 13.5px; font-weight: 500; line-height: 1.4;
-    background: rgba(23,20,41,.66); border: 1px solid rgba(255,255,255,.10);
-    padding: 4px 11px; border-radius: 11px;
+    background:
+      linear-gradient(135deg, rgba(35,30,64,.72), rgba(9,20,26,.68)),
+      radial-gradient(circle at 8% 0%, rgba(255,207,92,.16), transparent 42%);
+    backdrop-filter: blur(10px) saturate(1.35); -webkit-backdrop-filter: blur(10px) saturate(1.35);
+    border: 1px solid rgba(255,232,177,.22);
+    padding: 5px 12px; border-radius: 12px;
     transition: opacity .8s; word-break: break-word;
-    box-shadow: 0 4px 14px rgba(10,8,24,.25);
+    box-shadow: 0 8px 22px rgba(10,8,24,.34), inset 0 1px 0 rgba(255,255,255,.12);
   }
   #chat-input {
     position: fixed; left: 18px; bottom: 26px; width: min(440px, 62vw); display: none;
     box-sizing: border-box; padding: 11px 16px; z-index: 31;
-    border: 2px solid rgba(255,207,92,.9); border-radius: 13px;
-    background: rgba(17,14,32,.94); color: #fff;
+    border: 1px solid rgba(255,232,177,.62); border-radius: 14px;
+    background:
+      linear-gradient(135deg, rgba(29,27,54,.96), rgba(7,18,24,.94));
+    color: #fff;
     font-family: var(--font); font-weight: 500; font-size: 15px; outline: none;
-    box-shadow: 0 14px 36px rgba(10,8,24,.5);
+    box-shadow: 0 16px 42px rgba(10,8,24,.58), 0 0 0 3px rgba(255,207,92,.12),
+      inset 0 1px 0 rgba(255,255,255,.16);
+  }
+  #chat-input:focus {
+    border-color: rgba(255,230,164,.95);
+    box-shadow: 0 18px 46px rgba(10,8,24,.62), 0 0 0 4px rgba(255,207,92,.18),
+      0 0 28px rgba(112,205,190,.18), inset 0 1px 0 rgba(255,255,255,.2);
   }
 
   /* ===== loading: atardecer de invasion ===== */
@@ -282,11 +313,15 @@
   /* ===== class pick ===== */
   #onboard {
     position: fixed; inset: 0; z-index: 60; display: none;
-    align-items: center; justify-content: center; overflow: hidden;
+    align-items: center; justify-content: center; overflow: auto;
+    padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    box-sizing: border-box;
     font-family: var(--font);
   }
   .ob-card {
     position: relative; width: min(560px, 92vw); padding: 30px 30px 24px; box-sizing: border-box;
+    max-height: min(92dvh, 900px); overflow: auto; overscroll-behavior: contain;
     background: linear-gradient(180deg, rgba(18,36,24,.9), rgba(9,22,13,.95));
     backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25);
     border: 1px solid rgba(255,255,255,.18); border-radius: 24px;
@@ -329,7 +364,7 @@
   #ob-go {
     width: 100%; padding: 15px; border: 0; border-radius: 14px; cursor: pointer;
     font-family: var(--font); font-weight: 700; font-size: 17px; letter-spacing: .4px; color: #fff;
-    background: var(--acc-grad); position: relative; overflow: hidden;
+    background: var(--acc-grad); position: sticky; bottom: 0; z-index: 2; overflow: hidden;
     text-shadow: 0 1px 2px rgba(16,70,36,.45);
     box-shadow: 0 10px 26px rgba(96,190,110,.42), inset 0 1.5px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(24,90,48,.4);
     transition: transform .12s ease, box-shadow .15s ease, filter .12s ease;
@@ -370,26 +405,127 @@
   .ob-piece.on { color: #f2f0fa; border-color: rgba(255,207,92,.55); background: rgba(255,207,92,.12); }
   .ob-hint .key { color: var(--gold); font-weight: 600; }
 
+  @media (max-height: 820px) and (min-width: 821px) {
+    .ob-card { padding: 18px 30px 16px; }
+    .ob-title { font-size: 24px; }
+    .ob-sub { margin: 4px 0 10px; font-size: 12px; }
+    #ob-preview { min-height: 176px; margin: 0 0 8px; }
+    #ob-preview canvas { max-height: 176px; width: auto !important; }
+    #ob-name { padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+    .ob-pick-label { margin-bottom: 7px; font-size: 12px; }
+    #ob-grid { gap: 10px; margin-bottom: 14px; }
+    .ob-char { padding: 12px 4px 10px; gap: 5px; border-radius: 14px; }
+    .ob-char .e { width: 48px; height: 48px; font-size: 26px; }
+    .ob-char .n { font-size: 12px; }
+    .ob-char .r { font-size: 9px; min-height: 22px; }
+    #ob-custom { gap: 7px; margin-bottom: 12px; }
+    .ob-piece { padding: 3px 10px; font-size: 10px; }
+    #ob-go { padding: 12px; font-size: 15px; }
+  }
+  @media (max-height: 660px) {
+    #onboard { align-items: stretch; }
+    .ob-card { width: min(560px, 96vw); max-height: calc(100dvh - 20px); padding: 12px 16px 12px; }
+    .ob-title, .ob-sub { display: none; }
+    #ob-preview { min-height: 112px; margin: 0 0 6px; border-radius: 14px; }
+    #ob-preview canvas { max-height: 112px; width: auto !important; }
+    #ob-name { padding: 9px 12px; margin-bottom: 8px; font-size: 13px; }
+    .ob-pick-label { margin-bottom: 6px; font-size: 11px; }
+    #ob-grid { gap: 7px; margin-bottom: 10px; }
+    .ob-char { padding: 8px 4px 7px; gap: 4px; border-radius: 12px; }
+    .ob-char .e { width: 38px; height: 38px; font-size: 22px; }
+    .ob-char .n { font-size: 11px; }
+    .ob-char .r { font-size: 8.5px; min-height: 19px; }
+    #ob-custom { gap: 5px; margin-bottom: 8px; }
+    .ob-slots { gap: 5px; }
+    .ob-slot { padding: 3px 6px; gap: 4px; }
+    .ob-slot .l { font-size: 9px; }
+    .ob-slot .v { min-width: 72px; font-size: 10px; }
+    .ob-slot button { width: 20px; height: 20px; }
+    .ob-pieces { gap: 5px; }
+    .ob-piece { padding: 3px 8px; font-size: 9.5px; }
+    .ob-swatches { gap: 7px; }
+    .ob-swatch { width: 22px; height: 22px; }
+    #ob-go { padding: 10px; font-size: 14px; border-radius: 12px; }
+  }
+
   @media (max-width: 820px) {
+    :root {
+      --ui-rail-right: max(14px, env(safe-area-inset-right));
+      --ui-rail-top: max(14px, env(safe-area-inset-top));
+      --ui-map-size: 118px;
+      --ui-rail-gap: 10px;
+      --ui-key-toggle-top: calc(var(--ui-streak-top) + 96px);
+      --ui-panel-top: calc(var(--ui-daytime-top) + 58px);
+    }
     #minimap { width: 118px; height: 118px; border-radius: 14px; }
-    #coords { top: 144px; font-size: 11px; padding: 4px 9px; }
+    #coords { font-size: 11px; padding: 4px 9px; }
     #hint { display: none; }
     #hud .title { font-size: 14px; padding: 5px 11px; }
-    #ob-grid { grid-template-columns: repeat(2, 1fr); }
     /* movil: el cluster se APILA al centro (vida abajo, skills encima) para no
        chocar con el joystick (izq) ni los botones ATK/SALTO (der) */
-    .rpg-hud-root .rpg-hud-bottom { width: min(300px, calc(100vw - 24px));
-      transform: translateX(-50%); bottom: 8px; padding: 7px 10px 7px 52px; }
+    .rpg-hud-root .rpg-hud-bottom { left: max(8px, env(safe-area-inset-left));
+      width: min(310px, calc(100vw - 112px)); transform: none; bottom: 8px;
+      padding: 7px 10px 7px 52px; }
     .rpg-hud-root .rpg-hud-lvl-badge { width: 34px; height: 34px; font-size: 15px; }
     .rpg-hud-root .rpg-hud-bar { height: 11px; }
     /* body-prefijo: el <style> inyectado de skills.js va DESPUES en la cascada
        y ganaria con la misma especificidad */
-    body .rpg-skill-root { left: 50%; transform: translateX(-50%); bottom: 88px; align-items: center; }
+    body .rpg-skill-root { left: 50%; transform: translateX(-50%); bottom: clamp(184px, 26dvh, 224px); align-items: center; }
     .rpg-skill-root .rpg-skill-slot { width: 48px; height: 48px; }
     .rpg-skill-root .rpg-skill-slot .s-emoji { font-size: 20px; }
     .rpg-skill-root .rpg-skill-resbox { width: 216px; }
     .rpg-hud-root .rpg-hud-streak { right: 10px; top: 32%; }
     .rpg-hud-root .rpg-hud-streak .s-num { font-size: 26px; }
+  }
+  @media (max-width: 680px) {
+    .ob-card { width: min(560px, 94vw); max-height: calc(100dvh - 24px); padding: 18px 18px 14px; }
+    .ob-title { font-size: 22px; }
+    .ob-sub { margin: 4px 0 10px; font-size: 12px; }
+    #ob-preview { min-height: 150px; margin: 0 0 8px; border-radius: 15px; }
+    #ob-preview canvas { max-height: 150px; width: auto !important; }
+    #ob-name { padding: 10px 13px; margin-bottom: 10px; font-size: 14px; }
+    .ob-pick-label { margin-bottom: 7px; font-size: 12px; }
+    #ob-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+    .ob-char { padding: 9px 4px 8px; gap: 4px; border-radius: 13px; }
+    .ob-char .e { width: 42px; height: 42px; font-size: 23px; }
+    .ob-char .n { font-size: 11.5px; }
+    .ob-char .r { font-size: 9px; min-height: 20px; }
+    #ob-custom { gap: 6px; margin-bottom: 9px; }
+    .ob-slots { gap: 6px; }
+    .ob-slot { padding: 3px 7px; gap: 4px; }
+    .ob-slot .l { font-size: 9px; }
+    .ob-slot .v { min-width: 70px; font-size: 10.5px; }
+    .ob-slot button { width: 20px; height: 20px; }
+    .ob-pieces { gap: 5px; max-height: 56px; overflow: auto; padding: 1px 2px; }
+    .ob-piece { padding: 3px 8px; font-size: 9.5px; }
+    .ob-swatches { gap: 7px; }
+    .ob-swatch { width: 22px; height: 22px; }
+    #ob-go { padding: 11px; font-size: 14.5px; border-radius: 12px; }
+  }
+  @media (max-width: 680px) and (max-height: 700px) {
+    body .rpg-skill-root { bottom: clamp(166px, 24dvh, 184px); }
+    .rpg-skill-root .rpg-skill-slot { width: 44px; height: 44px; }
+    .rpg-skill-root .rpg-skill-resbox { width: 190px; padding: 4px 6px; }
+  }
+  @media (max-height: 660px) and (min-width: 561px) {
+    body .rpg-skill-root { left: auto; right: max(12px, env(safe-area-inset-right));
+      bottom: max(8px, env(safe-area-inset-bottom)); transform: none; align-items: flex-end; }
+  }
+  @media (max-height: 660px) and (pointer: coarse) {
+    body .rpg-skill-root { left: 50%; right: auto; bottom: clamp(150px, 27vh, 184px);
+      transform: translateX(-50%); align-items: center; }
+  }
+  @media (max-height: 660px) and (max-width: 560px) {
+    body .rpg-skill-root { left: 50%; right: auto; bottom: clamp(204px, 33vh, 228px);
+      transform: translateX(-50%); align-items: center; }
+  }
+  @media (max-height: 660px) and (min-width: 561px) and (hover: hover) {
+    body .rpg-skill-root {
+      left: auto; right: max(12px, env(safe-area-inset-right));
+      bottom: max(10px, env(safe-area-inset-bottom)); transform: none;
+      align-items: flex-end; max-width: min(300px, calc(100vw - 328px));
+    }
+    body .rpg-skill-root .rpg-skill-row { justify-content: flex-end; }
   }
 </style>
 </head>
@@ -397,7 +533,7 @@
 <div id="app"></div>
 <div id="hud">
   <div class="title">Los Sauces <b>·</b> San Borja</div>
-  <div id="hint"><span class="key">WASD</span> moverse · <span class="key">clic</span> golpea · <span class="key">X</span> auto-pelea · <span class="key">Q E R F</span> skills (R = party) · <span class="key">I</span> inventario · <span class="key">B</span> gruta</div>
+  <div id="hint"><span class="key">WASD</span> moverse · clic/ATQ pega · <span class="key">X</span> modo auto · <span class="key">Q E R F</span> habilidades · <span class="key">1 2 3</span> pociones · <span class="key">I</span> inventario · <span class="key">B</span> gruta</div>
 </div>
 <canvas id="minimap" width="560" height="560"></canvas>
 <div id="coords">X 0 · Z 0</div>
@@ -414,9 +550,9 @@
     <div class="ld-tips">
       <span>La gruta de la Virgen es refugio sagrado: los zombies no entran.</span>
       <span>De noche las hordas crecen. Vuelve a la gruta o pelea en manada.</span>
-      <span>La R de cada héroe beneficia a TODO tu party. Júntense.</span>
+      <span>La R de cada héroe beneficia a TODO tu grupo. Júntense.</span>
       <span>Shift+clic vende objetos. La bodega Ojeda compra de todo.</span>
-      <span>Cada 3 oleadas llega una ABOMINACIÓN. Se escucha antes de verse.</span>
+      <span>Las abominaciones son raras. Se escuchan antes de verse.</span>
     </div>
   </div>
 </div>
@@ -446,6 +582,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260709m"></script>
+<script type="module" src="./src/app.js?v=20260709g35"></script>
 </body>
 </html>

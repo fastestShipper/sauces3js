@@ -1,10 +1,15 @@
-// Economia RPG estilo MU Online: los mobs sueltan MAYORMENTE oro + materiales,
-// y MUY de vez en cuando un arma o pieza de gear (raro ~8%). Pura logica de drop
+// Economia RPG estilo MU Online: los mobs sueltan MAYORMENTE oro.
+// Los consumibles y gear son raros para que el inventario no se llene de basura.
 // (sin three.js) + un HUD DOM chico para el oro. El color de cada item sale de
 // TIERS[tier].glow (hex numerico) que vive en el modulo fx.
-import { TIERS } from './fx.js?v=20260709m';
+import { TIERS } from './fx.js?v=20260709g35';
 
 const TIER_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const DROP_GOLD_CHANCE = 0.78;
+const DROP_MATERIAL_CHANCE = 0.08;
+const DROP_POTION_CHANCE = 0.035;
+const DROP_GEAR_CHANCE = 0.022;
+const GEAR_WEAPON_CHANCE = 0.72;
 
 // Catalogo de materiales: nombre con sabor + un tier "tipico" para teñir el icono.
 // El tier real del drop puede subir con el nivel del mob (ver pickTier).
@@ -27,7 +32,7 @@ const POTIONS = [
 ];
 
 // Slots de gear. weaponName solo aplica a slot 'weapon'.
-const GEAR_SLOTS = ['weapon', 'helmet', 'armor', 'boots', 'gloves', 'shield', 'amulet'];
+const ARMOR_SLOTS = ['helmet', 'armor', 'boots', 'gloves', 'shield', 'amulet'];
 
 // Nombre base en español por slot (para armar "Casco de Hueso", etc.).
 const SLOT_NAME = {
@@ -37,13 +42,17 @@ const SLOT_NAME = {
 
 // Armas KayKit validas + clase que las usa por defecto (classReq), o null.
 const WEAPONS = [
-  { weaponName: 'sword_1handed',    base: 'Espada',   classReq: 'guerrero'     },
-  { weaponName: 'axe_2handed',      base: 'Hacha',    classReq: 'guerrero'     },
-  { weaponName: 'staff',            base: 'Bastón',   classReq: 'mago'         },
-  { weaponName: 'bow',              base: 'Arco',     classReq: 'arquero'      },
-  { weaponName: 'dagger',           base: 'Daga',     classReq: 'encapuchado'  },
-  { weaponName: 'crossbow_1handed', base: 'Ballesta', classReq: 'arquero'      },
+  { weaponName: 'sword_1handed',    base: 'Espada',   classReq: 'verdugo'   },
+  { weaponName: 'axe_2handed',      base: 'Hacha',    classReq: 'verdugo'   },
+  { weaponName: 'staff',            base: 'Bastón',   classReq: 'piromante' },
+  { weaponName: 'bow',              base: 'Arco',     classReq: 'cazadora'  },
+  { weaponName: 'dagger',           base: 'Daga',     classReq: 'sombra'    },
+  { weaponName: 'crossbow_1handed', base: 'Ballesta', classReq: 'cazadora'  },
 ];
+const PREFERRED_WEAPON_BY_CLASS = Object.freeze({
+  verdugo: 'axe_2handed', piromante: 'staff', cazadora: 'bow',
+  sombra: 'dagger', cernunnos: 'staff',
+});
 
 // Sufijo "de <material>" por tier para dar sabor a las piezas de armadura.
 const GEAR_SUFFIX = {
@@ -61,6 +70,18 @@ const WEAPON_ADJ = {
 
 function clampLevel(lvl) { return Math.max(1, lvl | 0); }
 function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+export function goldRewardMultiplier(streakMult = 1) {
+  const raw = Math.max(1, Number(streakMult) || 1);
+  return 1 + Math.min(1, (raw - 1) * 0.5);
+}
+
+export function materialGoldValue(material, mobLevel = 1) {
+  const lvl = clampLevel(mobLevel);
+  const rank = (TIERS[material && material.tier] && TIERS[material.tier].rank) || 0;
+  return 2 + lvl * 2 + rank * 3;
+}
+
+
 
 let _idSeq = 0;
 function nextId(prefix) {
@@ -92,12 +113,17 @@ function tierRank(tier) {
   return (TIERS[tier] && TIERS[tier].rank) || 0;
 }
 
+function pickGearTier(mobLevel) {
+  const tier = pickTier(mobLevel);
+  return tier === 'common' ? 'uncommon' : tier;
+}
+
 // --- rolls individuales ------------------------------------------------------
 
 // Oro: escala con el nivel del mob + jitter. Casi siempre algo (~95%).
 function rollGold(mobLevel) {
   const lvl = clampLevel(mobLevel);
-  const base = 3 + lvl * 4;
+  const base = 2 + lvl * 3;
   const amount = base + Math.floor(Math.random() * (base + 1)); // base..2*base
   return { kind: 'gold', amount };
 }
@@ -137,25 +163,27 @@ function rollDef(tier, mobLevel) {
 }
 
 // Gear: arma o pieza de armadura. RARO (lo decide rollDrops, no esta funcion).
-function rollGear(mobLevel) {
-  const slot = pick(GEAR_SLOTS);
-  const tier = pickTier(mobLevel);
+function rollGear(mobLevel, classId = '') {
+  const slot = Math.random() < GEAR_WEAPON_CHANCE ? 'weapon' : pick(ARMOR_SLOTS);
+  const tier = pickGearTier(mobLevel);
   const lvlReq = rollLvlReq(tier, mobLevel);
 
   if (slot === 'weapon') {
-    const w = pick(WEAPONS);
+    const preferred = PREFERRED_WEAPON_BY_CLASS[String(classId || '')];
+    const w = WEAPONS.find((entry) => entry.weaponName === preferred) || pick(WEAPONS);
     const adj = WEAPON_ADJ[tier] || 'común';
     return {
       kind: 'gear', id: nextId('gear'), name: `${w.base} ${adj}`,
       slot: 'weapon', weaponName: w.weaponName, tier,
-      classReq: w.classReq || null, lvlReq, atk: rollAtk(tier, mobLevel),
+      classReq: preferred ? String(classId) : (w.classReq || null), lvlReq, atk: rollAtk(tier, mobLevel),
     };
   }
 
   const suffix = GEAR_SUFFIX[tier] || 'de Hueso';
   // classReq solo a veces para armadura (el resto = cualquiera la usa).
+  const playableClasses = ['verdugo', 'piromante', 'cazadora', 'sombra'];
   const classReq = Math.random() < 0.3
-    ? pick(['guerrero', 'mago', 'arquero', 'encapuchado'])
+    ? pick(playableClasses)
     : null;
   return {
     kind: 'gear', id: nextId('gear'), name: `${SLOT_NAME[slot]} ${suffix}`,
@@ -166,13 +194,14 @@ function rollGear(mobLevel) {
 // --- API principal -----------------------------------------------------------
 
 // Tira loot al matar un mob de nivel mobLevel. Devuelve un ARRAY de drops.
-// Distribucion aprox: ~95% oro, ~45% material, ~12% pocion, ~8% gear.
-export function rollDrops(mobLevel) {
+// Distribution target: 78% gold, 8% auto-sold material, 3.5% potion, 2.2% useful gear.
+export function rollDrops(mobLevel, options = {}) {
+  const classId = typeof options === 'string' ? options : String(options?.classId || '');
   const drops = [];
-  if (Math.random() < 0.95) drops.push(rollGold(mobLevel));
-  if (Math.random() < 0.45) drops.push(rollMaterial(mobLevel));
-  if (Math.random() < 0.12) drops.push(rollPotion());
-  if (Math.random() < 0.08) drops.push(rollGear(mobLevel));
+  if (Math.random() < DROP_GOLD_CHANCE) drops.push(rollGold(mobLevel));
+  if (Math.random() < DROP_MATERIAL_CHANCE) drops.push(rollMaterial(mobLevel));
+  if (Math.random() < DROP_POTION_CHANCE) drops.push(rollPotion());
+  if (Math.random() < DROP_GEAR_CHANCE) drops.push(rollGear(mobLevel, classId));
   return drops;
 }
 

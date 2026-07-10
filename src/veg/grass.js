@@ -60,8 +60,12 @@ function buildBladeGeometry() {
 export class GrassSystem {
   constructor(scene, { rects = [], strips = [], lawnY = 0.015, mobile = false, seed = 1337 } = {}) {
     this.scene = scene;
+    this.mobile = !!mobile;
     this.rings = mobile ? RINGS_MOBILE : RINGS_DESKTOP;
     this.maxDist = this.rings[this.rings.length - 1][0];
+    this.buildsPerFrame = this.mobile ? 1 : BUILDS_PER_FRAME;
+    this.manageEvery = this.mobile ? 0.34 : 0.25;
+    this.rebuildMove = this.mobile ? 4.0 : 3.0;
     this.seed = seed;
 
     this.uniforms = {
@@ -357,12 +361,12 @@ diffuseColor.rgb *= gcol;`);
     this._mgrClock -= dt;
     const px = playerPos ? playerPos.x : 0, pz = playerPos ? playerPos.z : 0;
     const moved = Math.hypot(px - this._lastPX, pz - this._lastPZ);
-    if (this._mgrClock <= 0 || moved > 3) {
-      this._mgrClock = 0.25;
+    if (this._mgrClock <= 0 || moved > this.rebuildMove) {
+      this._mgrClock = this.manageEvery;
       this._lastPX = px; this._lastPZ = pz;
       this._manage(px, pz);
     }
-    for (let i = 0; i < BUILDS_PER_FRAME && this.queue.length; i++) {
+    for (let i = 0; i < this.buildsPerFrame && this.queue.length; i++) {
       const [key, ring] = this.queue.shift();
       if (this.tiles.has(key)) continue;
       const tile = this._buildTile(key, ring);

@@ -5,8 +5,15 @@
 //  3. freq -> facc legitimo -> flist mutuo
 //  4. pvp legitimo -> pvph llega -> pvpdead broadcastea pvpkill
 import { WebSocket } from '../server/node_modules/ws/wrapper.mjs';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const URL = 'ws://127.0.0.1:8456';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(__dirname, '..');
+const relayPort = Number(process.env.SMOKE_PVP_PORT || 8576);
+const healthPort = relayPort + 1;
+const URL = `ws://127.0.0.1:${relayPort}`;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
 
@@ -29,7 +36,38 @@ function client(name) {
   return c;
 }
 
-const suffix = String(process.pid % 10000);
+const child = spawn(process.execPath, ['server.js'], {
+  cwd: path.join(root, 'server'),
+  env: {
+    ...process.env,
+    SAUCES_PORT: String(relayPort),
+    SAUCES_HEALTH_PORT: String(healthPort),
+    WAVE_EVERY_MS: '600000',
+  },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+let serverOut = '';
+child.stdout.on('data', (buf) => { serverOut += buf.toString(); });
+child.stderr.on('data', (buf) => { serverOut += buf.toString(); });
+
+async function waitForServer() {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${healthPort}/health`);
+      if (res.ok) return true;
+    } catch {}
+    await wait(200);
+  }
+  return false;
+}
+
+if (!await waitForServer()) {
+  console.error(serverOut || 'FAIL relay temporal no inicio');
+  process.exit(1);
+}
+
+const suffix = Date.now().toString(36).slice(-6) + String(process.pid % 10000);
 const A = client('ka' + suffix);
 const B = client('kb' + suffix);
 await Promise.all([A.open, B.open]);
@@ -77,10 +115,14 @@ check('amistad mutua tras solicitud real',
 A.send({ t: 'pvp', to: B.id, dmg: 25 });
 await wait(300);
 check('pvph llega a la victima', B.got('pvph').some((m) => m.from === A.id && m.dmg === 25));
+check('pvpi se comparte para animacion inmediata',
+  A.got('pvpi').some((m) => m.from === A.id && m.to === B.id && m.dmg === 25)
+  && B.got('pvpi').some((m) => m.from === A.id && m.to === B.id && m.dmg === 25));
 B.send({ t: 'pvpdead', by: A.id });
 await wait(400);
 check('pvpkill broadcastea tras golpe real', A.got('pvpkill').some((m) => m.victim === B.name));
 
 A.ws.close(); B.ws.close();
+try { child.kill(); } catch {}
 console.log(failures === 0 ? 'ALL PASS' : failures + ' FAILURES');
 process.exit(failures === 0 ? 0 : 1);

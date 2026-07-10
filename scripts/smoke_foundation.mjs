@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 
 const HTTP_BASE = (process.env.SMOKE_HTTP_BASE || 'http://127.0.0.1:8877').replace(/\/$/, '');
 const WS_URL = process.env.SMOKE_WS_URL || 'ws://127.0.0.1:8456';
-const EXPECTED_BUILD = process.env.SMOKE_BUILD || '20260620v2';
+let EXPECTED_BUILD = process.env.SMOKE_BUILD || '';
 const SKIP_HTTP = process.env.SMOKE_SKIP_HTTP === '1';
 const SKIP_WS = process.env.SMOKE_SKIP_WS === '1';
 
@@ -37,14 +37,47 @@ runAudit('audit_building_count.mjs');
 runAudit('audit_zone_integrity.mjs');
 runAudit('audit_server_store.mjs');
 runAudit('audit_park_clearance.mjs');
+runAudit('smoke_zone_difficulty_balance.mjs');
 runAudit('audit_mob_spawns.mjs');
+runAudit('smoke_world_pacing.mjs');
+runAudit('smoke_mob_mixer_lod.mjs');
+runAudit('smoke_mob_action_blend.mjs');
+runAudit('smoke_net_remote_action_blend.mjs');
+runAudit('smoke_mob_hit_feedback.mjs');
+runAudit('smoke_mob_stagger_interrupt.mjs');
+runAudit('smoke_net_remote_mixer_lod.mjs');
+runAudit('smoke_damage_number_cache.mjs');
+runAudit('smoke_effect_caps.mjs');
+runAudit('smoke_effect_shared_geometry.mjs');
+runAudit('smoke_effect_smooth_shake.mjs');
+runAudit('smoke_inventory_potion_stack.mjs');
+runAudit('smoke_bleed_pressure.mjs');
+runAudit('smoke_player_pointer_lock.mjs');
+runAudit('smoke_player_root_motion_filter.mjs');
+runAudit('smoke_player_body_lean.mjs');
+runAudit('smoke_camera_occlusion.mjs');
+runAudit('smoke_movement_guard.mjs');
+runAudit('smoke_world_obstacles.mjs');
+runAudit('smoke_player_action_blend.mjs');
+runAudit('smoke_touch_feedback.mjs');
+runAudit('smoke_net_remote_body_lean.mjs');
+runAudit('smoke_player_hit_impulse.mjs');
+runAudit('smoke_melee_attack_settle.mjs');
+runAudit('smoke_dash_action_buffer.mjs');
+runAudit('smoke_dash_response.mjs');
+runAudit('smoke_motion_trails.mjs');
 
 console.log('--- app version (local file) ---');
 const appJs = readFileSync(path.join(root, 'src/app.js'), 'utf8');
-if (!appJs.includes(`APP_VERSION = '${EXPECTED_BUILD}'`) && !appJs.includes(`APP_VERSION = "${EXPECTED_BUILD}"`)) {
+if (!EXPECTED_BUILD) {
+  EXPECTED_BUILD = appJs.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/)?.[1] || '';
+}
+if (!EXPECTED_BUILD) {
+  fail('src/app.js missing APP_VERSION declaration');
+} else if (!appJs.includes(`APP_VERSION = '${EXPECTED_BUILD}'`) && !appJs.includes(`APP_VERSION = "${EXPECTED_BUILD}"`)) {
   fail(`src/app.js missing APP_VERSION ${EXPECTED_BUILD}`);
 } else {
-  console.log('PASS: APP_VERSION in src/app.js');
+  console.log('PASS: APP_VERSION in src/app.js', EXPECTED_BUILD);
 }
 
 async function httpCheck() {

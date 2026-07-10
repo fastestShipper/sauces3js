@@ -10,8 +10,27 @@ const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const {
+  SAFE_X,
+  SAFE_Z,
+  SAFE_R,
+  MOB_PERSONAS,
+  mobPersona,
+  zoneBalance,
+  mobHpMax,
+  mobDamage,
+} = require('./mob_balance');
 
-const PORT = 8456;
+const { guardMovement, MOVEMENT_MAX_CREDIT } = require('./movement_guard');
+const {
+  chooseMobStep,
+  findOpenSpawnAround,
+  findWanderTarget,
+  mobPointAllowed,
+} = require('./mob_navigation');
+const { obstacleStats } = require('./world_obstacles');
+
+const PORT = Number(process.env.SAUCES_PORT) || 8456;
 const wss = new WebSocketServer({ port: PORT, host: '127.0.0.1' });
 
 let nextId = 1;
@@ -21,7 +40,9 @@ const clients = new Map();   // id -> { ws, name, char, x, z, h, a, account }
 // Cuentas: store en disco + tokens en memoria
 // ---------------------------------------------------------------------------
 
-const STORE_PATH = path.join(__dirname, 'accounts.json');
+const STORE_PATH = process.env.SAUCES_STORE_PATH
+  ? path.resolve(process.env.SAUCES_STORE_PATH)
+  : path.join(__dirname, 'accounts.json');
 const STORE_TMP = STORE_PATH + '.tmp';
 const STORE_SCHEMA_VERSION = 1;
 const HEALTH_PORT = Number(process.env.SAUCES_HEALTH_PORT) || 8457;
@@ -160,6 +181,12 @@ function clean(raw, max) {
   return [...String(raw || '')].filter((c) => c.charCodeAt(0) >= 32).join('').trim().slice(0, max);
 }
 
+const DODGE_KEYS = new Set(['Forward', 'Backward', 'Left', 'Right']);
+function cleanDodgeKey(raw) {
+  const key = clean(raw, 12);
+  return DODGE_KEYS.has(key) ? key : '';
+}
+
 // numero clamp a [min,max]; NaN/invalido cae a min.
 function clampNum(v, min, max) {
   const n = Number(v);
@@ -237,20 +264,26 @@ const MOB_SPAWNS_PATH = path.join(__dirname, 'mob_spawns.json');
 // de 66 el orden del JSON dejaba vacias las zonas cercanas al spawn/parque
 // tras cada restart ("faltan los mobs") hasta que los respawns rotaban.
 const MOB_CAP = 90;
-const MOB_RESPAWN_MS = 7000;   // ARPG: la horda vuelve rapido, farmeo sin huecos
+const MOB_RESPAWN_MS = 7000;   // respawn vivo, pero sin saturar el parque de basura
 const MOB_DMG_MAX = 3000;
 const MOB_TICK_MS = 100;
-const MOB_AGGRO_RANGE = 24;   // zombies agresivos pero sin trenes interminables
+const MOB_HIT_RATE_MS = 300;   // rate por objetivo: permite combos, cleave y skills AoE
+const MOB_SKILL_HIT_RATE_MS = 120;   // skills no deben quedar bloqueadas por el golpe basico previo
+const MOB_BLEED_HIT_RATE_MS = 160;   // bleed tickea rapido, pero no como spam libre
+const MOB_AGGRO_RANGE = 28;   // zombies agresivos pero sin trenes interminables
 const MOB_ATTACK_RANGE = 2.0;   // el zombie se pega al cuerpo antes de morder
-const MOB_LEASH_RANGE = 42;
-const MOB_SPEED = 4.2;
-const MOB_RETURN_SPEED = 3.0;
+const MOB_ATTACK_WINDUP_MS = 220;   // mordida telegrafiada: anim primero, dano despues
+const MOB_ATTACK_COMMIT_RANGE = MOB_ATTACK_RANGE + 0.75;   // margen para que no falle por interpolacion
+const MOB_STAGGER_INTERRUPT_CD_MS = 650;   // skill/heavy cortan mordida sin dejar re-mordida instantanea
+const MOB_LEASH_RANGE = 48;
+const MOB_SPEED = 5.0;
+const MOB_RETURN_SPEED = 3.4;
 const MOB_WANDER_SPEED = 1.35;
 const MOB_WANDER_RADIUS = 4.5;
 const MOB_WANDER_REACH = 0.45;
 const MOB_WANDER_PAUSE_MIN_MS = 600;
 const MOB_WANDER_PAUSE_MAX_MS = 1800;
-const MOB_ATTACK_CD_MS = 1500;   // la horda rodea y asusta, no tritura en 2s
+const MOB_ATTACK_CD_MS = 1200;   // la horda rodea y asusta, no tritura en 2s
 
 // --- AI de horda: separacion, rodeo, personalidades, timing organico, zigzag ---
 const MOB_SEP_RADIUS = 1.6;      // a menos de 1.6m entre mobs hay empujon anti-apilamiento
@@ -262,25 +295,23 @@ const MOB_ZIGZAG_AMP = 0.9;      // metros de desvio lateral senoidal en la pers
 const MOB_FIRST_HIT_JITTER_MS = 600;   // primer golpe desfasado 0-600ms (manada no sincronizada)
 const MOB_GROWL_CHANCE = 0.10;   // 10%: tras golpear, "grunido de pausa"
 const MOB_GROWL_MS = 800;        // 0.8s extra sin atacar durante el grunido
-
-// PERSONALIDADES: cada zombie nace con caracter propio (semilla = id, determinista:
-// el respawn reusa el id => mismo caracter). El boss SIEMPRE es tanque.
-const MOB_PERSONAS = {
-  normal:   { speed: 1.0, hp: 1.0, dmg: 1.0 },
-  corredor: { speed: 1.3, hp: 0.8, dmg: 1.0 },   // flaco y rapido, muere antes
-  tanque:   { speed: 0.8, hp: 1.4, dmg: 1.3 },   // lento pero aguanta y muerde fuerte
+// RUIDO DE COMBATE: cada golpe despierta mobs cercanos al impacto. Aumenta la
+// presion ARPG sin subir dano ni romper el leash de cada spawn.
+const MOB_NOISE = {
+  basic: { range: 22, max: 7, ms: 3400, boostMs: 1100 },
+  heavy: { range: 24, max: 8, ms: 3800, boostMs: 1250 },
+  cleave: { range: 28, max: 10, ms: 4400, boostMs: 1500 },
+  skill: { range: 32, max: 12, ms: 5400, boostMs: 1800 },
+  bleed: { range: 12, max: 3, ms: 1600, boostMs: 600 },
+  kill: { range: 36, max: 14, ms: 6600, boostMs: 2200 },
 };
-function mobPersona(id, boss) {
-  if (boss) return 'tanque';
-  const h = (id * 2654435761) >>> 0;   // hash multiplicativo de Knuth, barato y estable
-  const r = h % 10;
-  if (r < 3) return 'corredor';   // 30%
-  if (r < 5) return 'tanque';     // 20%
-  return 'normal';                // 50%
-}
+const MOB_NOISE_RUSH_MULT = 1.22;
+
+// Persona and zone curves are isolated so balance can be tested without booting the relay.
 
 // top 5 de rachas del dia (se resetea cada 24h)
 let topStreaks = [];
+const publicTopStreaks = () => topStreaks.map(({ name, v }) => ({ name, v }));
 const rankReset = setInterval(() => { topStreaks = []; broadcastAll({ t: 'top', list: [] }); }, 86400000);
 if (rankReset.unref) rankReset.unref();
 
@@ -300,7 +331,8 @@ function loadMobSpawns() {
       const x = Number(s.x), z = Number(s.z);
       const lvl = clampInt(s.lvl, 1, 5);
       if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
-      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28), boss: !!s.boss });
+      if (!mobPointAllowed(x, z, { clearance: 1 })) continue;
+      mobSpawns.push({ x, z, lvl, zone: clean(s.zone || '', 28), boss: !!s.boss, fodder: !!s.fodder });
     }
   } catch {
     mobSpawns = [];
@@ -311,7 +343,8 @@ function loadMobSpawns() {
 // la personalidad multiplica hp/velocidad/dano encima de eso.
 function makeMob(id, spawn) {
   const persona = mobPersona(id, !!spawn.boss);
-  const hpMax = Math.round((30 + spawn.lvl * 16) * (spawn.boss ? 4 : 1) * MOB_PERSONAS[persona].hp);
+  const zb = zoneBalance(spawn);
+  const hpMax = mobHpMax(spawn, persona);
   return {
     id,
     x: spawn.x,
@@ -332,6 +365,14 @@ function makeMob(id, spawn) {
     wanderZ: null,
     nextWanderMs: 0,
     persona,
+    attackDueMs: 0,
+    attackTargetId: null,
+    attackDmg: 0,
+    scentTargetId: null,
+    scentUntilMs: 0,
+    scentBoostUntilMs: 0,
+    zoneDmgMult: zb.dmg,
+    zoneSpeedMult: zb.speed,
     // RODEO: angulo propio alrededor del objetivo (angulo aureo por id = reparto parejo)
     surroundA: (id * 2.39996323) % (Math.PI * 2),
     // ZIGZAG: fase propia del desvio senoidal (que no caminen en fila india)
@@ -376,22 +417,12 @@ function nearestMobTarget(mob) {
   return best;
 }
 
-// zona SELLADA (edificio con hueco en x3 z-47): nadie entra, ni mobs ni bots
-const SEAL_X = 3, SEAL_Z = -47, SEAL_R = 11;
 function stepToward(mob, tx, tz, step) {
-  const dx = tx - mob.x, dz = tz - mob.z;
-  const d = Math.hypot(dx, dz);
-  if (d < 0.01) return false;
-  const s = Math.min(step, d);
-  const nx = mob.x + (dx / d) * s;
-  const nz = mob.z + (dz / d) * s;
-  // los zombies no pisan la gruta (perimetro sagrado)
-  if (Math.hypot(nx - SAFE_X, nz - SAFE_Z) < SAFE_R - 3) return false;
-  // el sello es impenetrable para mobs
-  if (Math.hypot(nx - SEAL_X, nz - SEAL_Z) < SEAL_R) return false;
-  mob.x = nx;
-  mob.z = nz;
-  mob.h = Math.atan2(dx, dz);
+  const next = chooseMobStep(mob, tx, tz, step);
+  if (!next) return false;
+  mob.x = next.x;
+  mob.z = next.z;
+  mob.h = next.h;
   return true;
 }
 
@@ -428,9 +459,7 @@ function applyMobSeparation(mob, pack, dt) {
   if (m < 0.0001) return;
   const nx = mob.x + (px / m) * MOB_SEP_FORCE * dt;
   const nz = mob.z + (pz / m) * MOB_SEP_FORCE * dt;
-  // el empuje respeta gruta y sello igual que stepToward
-  if (Math.hypot(nx - SAFE_X, nz - SAFE_Z) < SAFE_R - 3) return;
-  if (Math.hypot(nx - SEAL_X, nz - SEAL_Z) < SEAL_R) return;
+  if (!mobPointAllowed(nx, nz)) return;
   mob.x = nx;
   mob.z = nz;
 }
@@ -441,10 +470,13 @@ function clearMobWander(mob) {
 }
 
 function setMobWanderTarget(mob, now) {
-  const a = Math.random() * Math.PI * 2;
-  const r = MOB_WANDER_RADIUS * (0.35 + Math.sqrt(Math.random()) * 0.65);
-  mob.wanderX = mob.spawnX + Math.cos(a) * r;
-  mob.wanderZ = mob.spawnZ + Math.sin(a) * r;
+  const target = findWanderTarget(mob.spawnX, mob.spawnZ, MOB_WANDER_RADIUS);
+  if (target) {
+    mob.wanderX = target.x;
+    mob.wanderZ = target.z;
+  } else {
+    clearMobWander(mob);
+  }
   mob.nextWanderMs = now + MOB_WANDER_PAUSE_MIN_MS + Math.random() * (MOB_WANDER_PAUSE_MAX_MS - MOB_WANDER_PAUSE_MIN_MS);
 }
 
@@ -469,11 +501,105 @@ function stepMobWander(mob, now, dt) {
   return false;
 }
 
-// balance: los clusters fundian al lvl 1 en segundos; pegan menos y desde
-// mas cerca para que la primera experiencia no sea morir camninando
-function mobDamage(mob) {
-  const pk = MOB_PERSONAS[mob.persona] || MOB_PERSONAS.normal;
-  return Math.round((4 + mob.lvl * 2) * pk.dmg);   // balance horda: varios pegando a la vez
+
+function clearMobAttackWindup(mob) {
+  mob.attackDueMs = 0;
+  mob.attackTargetId = null;
+  mob.attackDmg = 0;
+}
+
+function interruptMobAttackWindup(mob) {
+  if (!mob || !(mob.attackDueMs > 0)) return false;
+  const tid = mob.attackTargetId;
+  const c = clients.get(tid);
+  if (c && c.ws && c.ws.readyState === 1) send(c.ws, { t: 'pmiss', id: mob.id, told: 1, stagger: 1 });
+  clearMobAttackWindup(mob);
+  mob.hitCdMs = Math.max(mob.hitCdMs || 0, MOB_STAGGER_INTERRUPT_CD_MS);
+  return true;
+}
+
+function clearMobScent(mob) {
+  mob.scentTargetId = null;
+  mob.scentUntilMs = 0;
+  mob.scentBoostUntilMs = 0;
+}
+
+function validMobAttackTarget(mob, c) {
+  if (!c || !c.ws || c.ws.readyState !== 1) return false;
+  if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) return false;
+  if (inSafeZone(c)) return false;
+  return Math.hypot(c.x - mob.spawnX, c.z - mob.spawnZ) <= MOB_LEASH_RANGE + 1;
+}
+
+function scentMobTarget(mob, now) {
+  if (!mob.scentTargetId || !mob.scentUntilMs || now > mob.scentUntilMs) {
+    clearMobScent(mob);
+    return null;
+  }
+  const c = clients.get(mob.scentTargetId);
+  if (!validMobAttackTarget(mob, c)) {
+    clearMobScent(mob);
+    return null;
+  }
+  const d = Math.hypot(c.x - mob.x, c.z - mob.z);
+  return [mob.scentTargetId, c, d, true];
+}
+
+function stirCombatNoise(sourceId, source, x, z, kind, now) {
+  const spec = MOB_NOISE[kind] || MOB_NOISE.basic;
+  if (!source || !Number.isFinite(source.x) || !Number.isFinite(source.z)) return 0;
+  if (inSafeZone(source)) return 0;
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
+  const candidates = [];
+  for (const mob of mobs.values()) {
+    if (!mob || mob.hp <= 0) continue;
+    if (!validMobAttackTarget(mob, source)) continue;
+    const d = Math.hypot(mob.x - x, mob.z - z);
+    if (d > spec.range) continue;
+    candidates.push({ mob, d });
+  }
+  candidates.sort((a, b) => a.d - b.d);
+  let stirred = 0;
+  for (const { mob } of candidates) {
+    if (stirred >= spec.max) break;
+    clearMobWander(mob);
+    if (mob.attackDueMs > 0 && mob.attackTargetId !== sourceId) clearMobAttackWindup(mob);
+    mob.targetId = sourceId;
+    mob.scentTargetId = sourceId;
+    mob.scentUntilMs = Math.max(mob.scentUntilMs || 0, now + spec.ms);
+    mob.scentBoostUntilMs = Math.max(mob.scentBoostUntilMs || 0, now + spec.boostMs);
+    mob._engaged = false;
+    stirred++;
+  }
+  return stirred;
+}
+
+function faceMobTarget(mob, c) {
+  mob.h = Math.atan2(c.x - mob.x, c.z - mob.z);
+}
+
+function beginMobAttackWindup(mob, tid, c, now) {
+  faceMobTarget(mob, c);
+  mob.attackTargetId = tid;
+  mob.attackDueMs = now + MOB_ATTACK_WINDUP_MS;
+  mob.attackDmg = mobDamage(mob);
+  mob.hitCdMs = MOB_ATTACK_CD_MS;
+  // GRUNIDO: 10% de las veces se toma 0.8s extra tras golpear (ritmo organico)
+  if (Math.random() < MOB_GROWL_CHANCE) mob.hitCdMs += MOB_GROWL_MS;
+  broadcastAll({ t: 'matk', id: mob.id, target: tid, ms: MOB_ATTACK_WINDUP_MS });
+}
+
+function commitMobAttackWindup(mob, c) {
+  if (validMobAttackTarget(mob, c)) {
+    const d = Math.hypot(c.x - mob.x, c.z - mob.z);
+    if (d <= MOB_ATTACK_COMMIT_RANGE) {
+      faceMobTarget(mob, c);
+      send(c.ws, { t: 'phit', id: mob.id, dmg: mob.attackDmg || mobDamage(mob), hp: null, told: 1 });
+    } else {
+      send(c.ws, { t: 'pmiss', id: mob.id, told: 1 });
+    }
+  }
+  clearMobAttackWindup(mob);
 }
 
 function mobTick() {
@@ -503,19 +629,36 @@ function mobTick() {
     const distHome = Math.hypot(mob.x - mob.spawnX, mob.z - mob.spawnZ);
     let state = 'idle';
     if (distHome > MOB_LEASH_RANGE) {
+      clearMobAttackWindup(mob);
+      clearMobScent(mob);
       mob.targetId = null;
       mob._engaged = false;   // enganche roto: el proximo primer golpe vuelve a desfasarse
       if (stepToward(mob, mob.spawnX, mob.spawnZ, MOB_RETURN_SPEED * dt)) state = 'walk';
+    } else if (mob.attackDueMs > 0) {
+      const pendingTid = mob.attackTargetId;
+      const pendingTarget = clients.get(pendingTid);
+      if (!validMobAttackTarget(mob, pendingTarget)) {
+        clearMobAttackWindup(mob);
+        if (mob.scentTargetId === pendingTid) clearMobScent(mob);
+        mob.targetId = null;
+        mob._engaged = false;
+      } else {
+        mob.targetId = pendingTid;
+        faceMobTarget(mob, pendingTarget);
+        state = 'attack';
+        if (now >= mob.attackDueMs) commitMobAttackWindup(mob, pendingTarget);
+        applyMobSeparation(mob, packs.get(pendingTid), dt);
+      }
     } else {
-      const target = nearestMobTarget(mob);
+      const target = scentMobTarget(mob, now) || nearestMobTarget(mob);
       if (target) {
-        const [tid, c, d] = target;
+        const [tid, c, d, noisy] = target;
         mob.targetId = tid;
         clearMobWander(mob);
         const pk = MOB_PERSONAS[mob.persona] || MOB_PERSONAS.normal;
         if (d > MOB_ATTACK_RANGE) {
           // PANICO: al verte cerca CORREN (x1.7), y en el ultimo tramo EMBISTEN
-          const rush = d < 4 ? 2.3 : (d < 11 ? 1.7 : 1);
+          const rush = (d < 4 ? 2.3 : (d < 11 ? 1.7 : 1)) * (noisy && now < (mob.scentBoostUntilMs || 0) ? MOB_NOISE_RUSH_MULT : 1);
           // RODEO: cerca del objetivo cada mob apunta a SU punto del anillo,
           // no al centro del jugador => la manada rodea en vez de apilarse
           let tx = c.x, tz = c.z;
@@ -530,7 +673,7 @@ function mobTick() {
           const ux = (c.x - mob.x) / d, uz = (c.z - mob.z) / d;
           tx += -uz * zig;
           tz += ux * zig;
-          if (stepToward(mob, tx, tz, MOB_SPEED * rush * pk.speed * dt)) state = 'walk';
+          if (stepToward(mob, tx, tz, MOB_SPEED * rush * pk.speed * (mob.zoneSpeedMult || 1) * dt)) state = 'walk';
         } else {
           mob.h = Math.atan2(c.x - mob.x, c.z - mob.z);
           state = 'attack';
@@ -540,16 +683,14 @@ function mobTick() {
             mob._engaged = true;
             mob.hitCdMs = Math.max(mob.hitCdMs, Math.random() * MOB_FIRST_HIT_JITTER_MS);
           } else if (mob.hitCdMs <= 0) {
-            mob.hitCdMs = MOB_ATTACK_CD_MS;
-            // GRUNIDO: 10% de las veces se toma 0.8s extra tras golpear (ritmo organico)
-            if (Math.random() < MOB_GROWL_CHANCE) mob.hitCdMs += MOB_GROWL_MS;
-            send(c.ws, { t: 'phit', id: mob.id, dmg: mobDamage(mob), hp: null });
+            beginMobAttackWindup(mob, tid, c, now);
           }
         }
         // SEPARACION: acomodo suave contra companeros del mismo pack (walk y attack)
         applyMobSeparation(mob, packs.get(tid), dt);
       } else {
         mob.targetId = null;
+        clearMobScent(mob);
         mob._engaged = false;
         if (stepMobWander(mob, now, dt)) state = 'walk';
       }
@@ -563,72 +704,59 @@ function mobTick() {
 }
 
 spawnInitialMobs();
+console.log('[world-obstacles]', JSON.stringify(obstacleStats()));
 
-// OLEADAS ZOMBIE: cada ~4 min brota una horda temporal alrededor de un jugador
+// OLEADAS ZOMBIE: brotan de forma espaciada; evento fuerte, no ruido constante.
 // al azar. Sin _spawn => no respawnean: limpiarla ES el evento (botin de racha).
-const WAVE_EVERY_MS = Number(process.env.WAVE_EVERY_MS) || 90000;
-const WAVE_SIZE = 14;
-// ciclo dia/noche por reloj compartido: 10 min, el ultimo 40% es NOCHE.
+const WAVE_EVERY_MS = Math.max(900000, Number(process.env.WAVE_EVERY_MS) || 900000);
+const WAVE_SIZE = 4;
+// ciclo dia/noche por reloj compartido: 25 min, el ultimo 40% es NOCHE.
 // El cliente usa la misma formula (Date.now) para el visual: sincronia gratis.
-const DAYNIGHT_MS = 600000;
+const DAYNIGHT_MS = 1500000;
 function isNight() { return (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS >= 0.6; }
 let waveN = 0;
 const waveTimer = setInterval(() => {
-  const players = [...clients.values()].filter((c) => c.ws && c.ws.readyState === 1);
+  const players = [...clients.values()].filter((c) => c.ws && c.ws.readyState === 1 && !inSafeZone(c));
   if (!players.length) return;
   const c = players[Math.floor(Math.random() * players.length)];
   // la oleada ESCALA con el poder del objetivo (estimado por su hpMax):
-  // un novato recibe 4 zombies suaves; un veterano, 10 y de nivel alto
+  // un novato recibe 4 zombies suaves; un veterano, hasta 8 y de nivel alto
   const power = Math.max(0, Math.round(((c.hm || 100) - 100) / 50));
   waveN++;
   const night = isNight();
   // NOCHE DE LOS MUERTOS: la horda nocturna es mas grande y mas brava
-  let size = Math.min(night ? 18 : WAVE_SIZE, Math.round((6 + power * 2) * (night ? 1.5 : 1)));
+  const size = Math.min(8, WAVE_SIZE + Math.min(2, Math.floor(power / 3)) + (night ? 2 : 0));
   const lvlCap = Math.min(5, 2 + Math.ceil(power / 2) + (night ? 1 : 0));
-  // cada 3ra oleada trae un BOSS: la ABOMINACION (hp x4, nivel alto, TTL largo)
-  const withBoss = waveN % 2 === 0;   // ABOMINACION cada 2 oleadas (~3 min)
+  // La ABOMINACION debe sentirse especial, no aparecer cada pocos minutos.
+  const withBoss = waveN % 10 === 0;
+  let bossSpawned = false;
   for (let i = 0; i < size; i++) {
-    const ang = Math.random() * Math.PI * 2;
-    const dist = 16 + Math.random() * 24;
-    let sx = c.x + Math.cos(ang) * dist;
-    let sz = c.z + Math.sin(ang) * dist;
-    // la oleada nunca brota pegada a la gruta (el refugio se respeta)
-    const dg = Math.hypot(sx - SAFE_X, sz - SAFE_Z);
-    if (dg < SAFE_R + 14) {
-      const k = (SAFE_R + 14) / Math.max(dg, 0.01);
-      sx = SAFE_X + (sx - SAFE_X) * k;
-      sz = SAFE_Z + (sz - SAFE_Z) * k;
-    }
+    const open = findOpenSpawnAround(c.x, c.z, 16, 40, { attempts: 32 });
+    if (!open) continue;
     const spawn = {
-      x: sx,
-      z: sz,
+      x: open.x,
+      z: open.z,
       lvl: 1 + Math.floor(Math.random() * lvlCap),
       zone: 'oleada',
     };
     const id = nextMobId++;
     const mob = makeMob(id, spawn);
-    // TTL: si nadie lo mata, se despawnea solo (sin esto las oleadas se
-    // ACUMULAN sin limite y el server se llena de zombies fantasma)
-    mob._dieAtMs = Date.now() + 90000;
+    mob._dieAtMs = Date.now() + 75000;
     mobs.set(id, mob);
     broadcastAll({ t: 'mspawn', mob: mobView(mob) });
   }
   if (withBoss) {
-    const ang = Math.random() * Math.PI * 2;
-    let bx = c.x + Math.cos(ang) * 26, bz = c.z + Math.sin(ang) * 26;
-    const dg = Math.hypot(bx - SAFE_X, bz - SAFE_Z);
-    if (dg < SAFE_R + 14) {
-      const k = (SAFE_R + 14) / Math.max(dg, 0.01);
-      bx = SAFE_X + (bx - SAFE_X) * k;
-      bz = SAFE_Z + (bz - SAFE_Z) * k;
+    const open = findOpenSpawnAround(c.x, c.z, 24, 30, { attempts: 32 });
+    if (open) {
+      const id = nextMobId++;
+      const mob = makeMob(id, { x: open.x, z: open.z, lvl: Math.min(5, 3 + Math.ceil(power / 2)), zone: 'boss', boss: true });
+      mob._dieAtMs = Date.now() + 180000;
+      mobs.set(id, mob);
+      broadcastAll({ t: 'mspawn', mob: mobView(mob) });
+      bossSpawned = true;
     }
-    const id = nextMobId++;
-    const mob = makeMob(id, { x: bx, z: bz, lvl: Math.min(5, 3 + Math.ceil(power / 2)), zone: 'boss', boss: true });
-    mob._dieAtMs = Date.now() + 240000;
-    mobs.set(id, mob);
-    broadcastAll({ t: 'mspawn', mob: mobView(mob) });
   }
-  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z), boss: withBoss ? 1 : 0, night: night ? 1 : 0 });
+  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z), boss: bossSpawned ? 1 : 0, night: night ? 1 : 0 });
   console.log('oleada zombie sobre', c.name, '@', Math.round(c.x), Math.round(c.z));
 }, WAVE_EVERY_MS);
 if (waveTimer.unref) waveTimer.unref();
@@ -701,8 +829,6 @@ function removeFromParty(connId) {
 const PVP_RANGE = 5.0;
 const PVP_DMG_MAX = 300;
 const PVP_CD_MS = 650;
-const SAFE_X = -62, SAFE_Z = -7, SAFE_R = 30;   // gruta / respawn = zona segura
-
 function inSafeZone(c) {
   if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) return true;
   return Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R;
@@ -769,7 +895,10 @@ wss.on('connection', (ws, req) => {
     return;
   }
   const id = nextId++;
-  const me = { ws, name: 'Anon', char: 'char_knight.glb', x: 0, z: 0, h: 0, a: 'Idle', account: null };
+  const me = {
+    ws, name: 'Anon', char: 'char_knight.glb', x: SAFE_X, z: SAFE_Z, h: 0, a: 'Idle', account: null,
+    lastMoveAt: Date.now(), moveCredit: MOVEMENT_MAX_CREDIT,
+  };
   clients.set(id, me);
   console.log('conn', id, 'from', req && req.socket && req.socket.remoteAddress, '| total', clients.size);
   send(ws, { t: 'id', id });
@@ -851,6 +980,17 @@ wss.on('connection', (ws, req) => {
         ? wantChar : 'char_knight.glb';
       // customizacion visual mix-and-match: saneada y rebroadcasteada
       me.cu = sanitizeCu(m.cu);
+      // Initial spawn is server-owned. The movement packet can update position
+      // after join, but non-standard clients cannot override the gruta spawn.
+      me.x = SAFE_X;
+      me.z = SAFE_Z;
+      me.h = Number.isFinite(Number(m.h)) ? clampNum(m.h, -10, 10) : me.h;
+      me.lastMoveAt = Date.now();
+      me.moveCredit = MOVEMENT_MAX_CREDIT;
+      me.a = clean(m.a, 12) || 'Idle';
+      me.hp = clampInt(m.hp ?? 100, 0, 100000);
+      me.hm = clampInt(m.hm ?? 100, 1, 100000);
+      me.lv = clampInt(m.lv ?? 1, 1, 99);
       const players = [];
       for (const [oid, c] of clients) {
         if (oid !== id) players.push({ id: oid, name: c.name, char: c.char, cu: c.cu, lv: c.lv, x: c.x, z: c.z, h: c.h, a: c.a, hp: c.hp, hm: c.hm });
@@ -858,22 +998,45 @@ wss.on('connection', (ws, req) => {
       send(ws, { t: 'roster', players });
       // estado actual de los mobs compartidos (server-authoritative).
       send(ws, { t: 'mobs', list: [...mobs.values()].map(mobView) });
-      broadcast(id, { t: 'join', id, name: me.name, char: me.char, cu: me.cu, x: me.x, z: me.z, h: me.h, a: me.a });
+      broadcast(id, { t: 'join', id, name: me.name, char: me.char, cu: me.cu, lv: me.lv, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm });
       // presencia: avisa a mis amigos conectados que entre, y mandame mi lista
       if (me.account) {
         notifyFriendPresence(me.account);
         send(ws, { t: 'flist', friends: friendsPayload(me.account) });
       }
-      if (topStreaks.length) send(ws, { t: 'top', list: topStreaks });
+      if (topStreaks.length) send(ws, { t: 'top', list: publicTopStreaks() });
     } else if (m.t === 's') {
-      // sanitizar SIEMPRE lo que entra (pos/heading/anim) + vida visible p/ todos
-      me.x = clampNum(m.x, -3000, 3000); me.z = clampNum(m.z, -3000, 3000);
+      // Position remains responsive locally, but impossible jumps are corrected server-side.
+      const rawX = Number(m.x), rawZ = Number(m.z);
+      const requestedX = Number.isFinite(rawX) ? clampNum(rawX, -3000, 3000) : me.x;
+      const requestedZ = Number.isFinite(rawZ) ? clampNum(rawZ, -3000, 3000) : me.z;
+      const movement = guardMovement(me, requestedX, requestedZ, Date.now());
+      me.x = movement.x; me.z = movement.z;
+      if (movement.corrected) {
+        send(ws, { t: 'corr', x: me.x, z: me.z, reason: 'speed' });
+      }
       me.h = clampNum(m.h, -10, 10); me.a = clean(m.a, 12) || 'Idle';
       me.hp = clampInt(m.hp, 0, 100000); me.hm = clampInt(m.hm ?? 100, 1, 100000);
       me.lv = clampInt(m.lv ?? 1, 1, 99);
-      broadcast(id, { t: 's', id, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm, lv: me.lv });
+      const stateMsg = { t: 's', id, x: me.x, z: me.z, h: me.h, a: me.a, hp: me.hp, hm: me.hm, lv: me.lv };
+      const dk = me.a === 'Dash' ? cleanDodgeKey(m.dk) : '';
+      if (dk) stateMsg.dk = dk;
+      broadcast(id, stateMsg);
     } else if (m.t === 'atk') {
-      broadcast(id, { t: 'atk', id });
+      const kind = clean(m.k, 24);
+      const msg = kind ? { t: 'atk', id, k: kind } : { t: 'atk', id };
+      const tt = clean(m.tt, 12);
+      if (tt === 'mob' || tt === 'player' || tt === 'point') msg.tt = tt;
+      const tid = clean(m.tid, 24);
+      if (tid) msg.tid = tid;
+      const tx = Number(m.tx), tz = Number(m.tz);
+      if (Number.isFinite(tx) && Number.isFinite(tz)) {
+        msg.tx = clampNum(tx, -3000, 3000);
+        msg.tz = clampNum(tz, -3000, 3000);
+      }
+      const am = Number(m.am);
+      if (Number.isFinite(am)) msg.am = clampNum(am, 0.75, 1.5);
+      broadcast(id, msg);
     } else if (m.t === 'chat') {
       const text = clean(m.text, 200);   // chat de mundo: saneado + reenviado con el nombre del server
       if (!text) return;
@@ -886,21 +1049,65 @@ wss.on('connection', (ws, req) => {
       if (!Number.isInteger(mid)) return;
       const mob = mobs.get(mid);
       if (!mob || mob.hp <= 0) return;
-      // 12m cubre al arquero/mago legitimos; el FEEL melee lo pone el cliente (2.7)
-      if (Math.hypot(mob.x - me.x, mob.z - me.z) > 12.0) return;
+      // 20m cubre proyectiles y AoE alrededor del target; el feel melee lo pone el cliente.
+      if (Math.hypot(mob.x - me.x, mob.z - me.z) > 20.0) return;
       const now = Date.now();
-      if (me.lastMobHitMs && now - me.lastMobHitMs < 650) return;
-      me.lastMobHitMs = now;
+      if (!me.lastMobHitAt) me.lastMobHitAt = new Map();
+      const rawKind = clean(m.k || 'basic', 12);
+      const hitKind = rawKind === 'skill' || rawKind === 'cleave' || rawKind === 'bleed' || rawKind === 'heavy' ? rawKind : 'basic';
+      const rateKind = hitKind === 'heavy' ? 'basic' : hitKind;
+      const hitRateMs = rateKind === 'bleed' ? MOB_BLEED_HIT_RATE_MS : (rateKind === 'basic' ? MOB_HIT_RATE_MS : MOB_SKILL_HIT_RATE_MS);
+      const hitKey = mid + ':' + rateKind;
+      const lastHitAt = me.lastMobHitAt.get(hitKey) || 0;
+      if (now - lastHitAt < hitRateMs) return;
+      me.lastMobHitAt.set(hitKey, now);
+      if (me.lastMobHitAt.size > 256) {
+        const cutoff = now - 5000;
+        for (const [oldKey, t] of me.lastMobHitAt) if (t < cutoff) me.lastMobHitAt.delete(oldKey);
+      }
       const dmg = clampNum(m.dmg, 0, MOB_DMG_MAX);
+      const hpBefore = mob.hp;
       mob.hp -= dmg;
+      const staggered = mob.hp > 0
+        && (hitKind === 'skill' || hitKind === 'cleave' || hitKind === 'heavy')
+        && interruptMobAttackWindup(mob);
+      stirCombatNoise(id, me, mob.x, mob.z, hitKind, now);
       if (mob.hp > 0) {
-        broadcastAll({ t: 'mhp', id: mob.id, hp: mob.hp });
+        broadcastAll({
+          t: 'mhp',
+          id: mob.id,
+          hp: mob.hp,
+          dmg,
+          k: hitKind,
+          by: id,
+          sx: me.x,
+          sz: me.z,
+          stagger: staggered ? 1 : 0,
+        });
       } else {
         // muerto: sacar del mapa, calcular party del que lo mato, avisar a todos.
         const spawn = mob._spawn;
         const deadId = mob.id;
+        const party = partyMemberIds(id);
+        const deathMsg = {
+          t: 'mdead',
+          id: deadId,
+          by: id,
+          party,
+          x: mob.x,
+          z: mob.z,
+          lvl: mob.lvl,
+          hpMax: mob.hpMax,
+          hpBefore,
+          dmg,
+          k: hitKind,
+          sx: me.x,
+          sz: me.z,
+          boss: !!mob.boss,
+        };
         mobs.delete(deadId);
-        broadcastAll({ t: 'mdead', id: deadId, by: id, party: partyMemberIds(id) });
+        broadcastAll(deathMsg);
+        stirCombatNoise(id, me, deathMsg.x, deathMsg.z, 'kill', now);
         // respawn en MOB_RESPAWN_MS: mismo id, mismo spawn, hp lleno.
         if (spawn) {
           const timer = setTimeout(() => {
@@ -917,15 +1124,20 @@ wss.on('connection', (ws, req) => {
     } else if (m.t === 'rank') {
       // reporte de racha del cliente. Top 5 del dia, upsert por nombre.
       const nowMs = Date.now();
-      if (conn._rankAt && nowMs - conn._rankAt < 4000) return;
-      conn._rankAt = nowMs;
+      if (me._rankAt && nowMs - me._rankAt < 4000) return;
+      me._rankAt = nowMs;
       const v = clampInt(m.v, 2, 80);
-      const name = clean(conn.name || 'Explorador', 20) || 'Explorador';
+      const name = clean(me.name || 'Explorador', 20) || 'Explorador';
       const cur = topStreaks.find((e) => e.name === name);
-      if (cur) { if (v > cur.v) cur.v = v; } else topStreaks.push({ name, v });
-      topStreaks.sort((a, b) => b.v - a.v);
+      if (cur) {
+        if (v > cur.v) cur.v = v;
+        cur.at = nowMs;
+      } else {
+        topStreaks.push({ name, v, at: nowMs });
+      }
+      topStreaks.sort((a, b) => (b.v - a.v) || ((b.at || 0) - (a.at || 0)));
       if (topStreaks.length > 5) topStreaks.length = 5;
-      broadcastAll({ t: 'top', list: topStreaks });
+      broadcastAll({ t: 'top', list: publicTopStreaks() });
     } else if (m.t === 'pskill') {
       // skill de PARTY: reenvia el buff/cura a los miembros del grupo del
       // emisor. Allowlist de tipos + clamps + cooldown anti-spam de 2.5s.
@@ -933,14 +1145,14 @@ wss.on('connection', (ws, req) => {
       const kind = String(m.kind || '');
       if (!PSKILL_KINDS.has(kind)) return;
       const nowMs = Date.now();
-      if (conn._pskillAt && nowMs - conn._pskillAt < 2500) return;
-      conn._pskillAt = nowMs;
+      if (me._pskillAt && nowMs - me._pskillAt < 2500) return;
+      me._pskillAt = nowMs;
       const v = Math.max(0, Math.min(kind === 'shield' ? 60 : 1, Number(m.v) || 0));
       const dur = Math.max(0, Math.min(12, Number(m.dur) || 0));
-      const fromName = (conn.char && conn.char.name) || conn.user || 'aliado';
-      for (const mid of partyMemberIds(conn.id)) {
-        if (mid === conn.id) continue;
-        const c = conns.get(mid);
+      const fromName = me.name || me.account || 'aliado';
+      for (const mid of partyMemberIds(id)) {
+        if (mid === id) continue;
+        const c = clients.get(mid);
         if (c) send(c.ws, { t: 'pskill', kind, v, dur, from: fromName });
       }
     } else if (m.t === 'pinvite') {
@@ -1002,6 +1214,7 @@ wss.on('connection', (ws, req) => {
       target.lastAttackerId = id;
       target.lastAttackerMs = now;
       send(target.ws, { t: 'pvph', from: id, name: me.name, dmg });
+      broadcastAll({ t: 'pvpi', from: id, to, dmg });
 
     } else if (m.t === 'pvpdead') {
       // la victima anuncia su muerte PvP. Solo vale si `by` la golpeo hace poco

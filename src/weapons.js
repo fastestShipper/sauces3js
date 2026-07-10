@@ -1,7 +1,7 @@
 // Cosmetic weapons: attach each class's weapon to the KayKit hand slot bones
 // (handslot.r / handslot.l). Shared by player, NPCs and remote players. The
 // attack uses a REAL animator-made clip (not a hand-rolled bone rotation).
-import { sanitizeImported } from './glbutil.js?v=20260709m';
+import { sanitizeImported } from './glbutil.js?v=20260709g35';
 
 const WEAPON_BY_CHAR = {
   'char_knight.glb': { r: 'sword_1handed', l: 'shield_round' },
@@ -88,7 +88,7 @@ const ATTACK_BY_CHAR = {
   'char_knight.glb': 'Melee_1H_Attack_Chop',
   'char_barbarian.glb': 'Melee_2H_Attack_Chop',
   'char_mage.glb': 'Ranged_Magic_Shoot',
-  'char_ranger.glb': 'Ranged_Bow_Release',
+  'char_ranger.glb': 'Ranged_Bow_Draw',
   'char_rogue.glb': 'Melee_1H_Attack_Stab',
   'char_rogue_hooded.glb': 'Melee_1H_Attack_Stab',
   'char_cernunnos.glb': 'Ranged_Magic_Shoot',
@@ -100,11 +100,11 @@ export function attackClipName(charFile) {
 // COMBO ARPG por ESTILO de combate (los heroes de classes.js declaran el suyo).
 // El ultimo golpe de cada cadena es el finisher; los ranged repiten su cast.
 const COMBO_BY_STYLE = {
-  '1h': ['Melee_1H_Attack_Slice_Horizontal', 'Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop'],
-  '2h': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spin'],
-  'dual': ['Melee_Dualwield_Attack_Stab', 'Melee_Dualwield_Attack_Slice', 'Melee_Dualwield_Attack_Chop'],
+  '1h': ['Melee_1H_Attack_Slice_Diagonal', 'Melee_1H_Attack_Chop', 'Melee_1H_Attack_Slice_Horizontal'],
+  '2h': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spinning'],
+  'dual': ['Melee_Dualwield_Attack_Slice', 'Melee_Dualwield_Attack_Chop', 'Melee_Dualwield_Attack_Stab'],
   'magic': ['Ranged_Magic_Shoot'],
-  'bow': ['Ranged_Bow_Release'],
+  'bow': ['Ranged_Bow_Draw'],
 };
 const STYLE_BY_CHAR = {
   'char_knight.glb': '1h',
@@ -119,6 +119,20 @@ export function comboClips(charFile, style) {
   return COMBO_BY_STYLE[style || STYLE_BY_CHAR[charFile]] || [attackClipName(charFile)];
 }
 
+const ATTACK_FOLLOWUP_BY_STYLE = {
+  'bow': 'Ranged_Bow_Release',
+};
+export function attackFollowupClipName(charFile, style) {
+  return ATTACK_FOLLOWUP_BY_STYLE[style || STYLE_BY_CHAR[charFile]] || '';
+}
+
+export function attackReleaseDelay(charFile, style) {
+  const s = style || STYLE_BY_CHAR[charFile];
+  if (s === 'bow') return 0.11;
+  if (s === 'magic') return 0.09;
+  return 0;
+}
+
 // clip dramatico para las skills con peso (spin / leap / cast largo)
 const SPECIAL_BY_STYLE = {
   '1h': 'Melee_1H_Attack_Jump_Chop',
@@ -131,5 +145,5 @@ export function specialClipName(charFile, style) {
   return SPECIAL_BY_STYLE[style || STYLE_BY_CHAR[charFile]] || attackClipName(charFile);
 }
 
-// cadencia ARPG: clips acelerados para que el combo se sienta snappy
-export const ATTACK_SPEED = 1.45;
+// cadencia ARPG: clips acelerados para que cada golpe tenga lectura y respuesta
+export const ATTACK_SPEED = 1.95;

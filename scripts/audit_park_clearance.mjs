@@ -87,13 +87,21 @@ function nearOtherRoad(index, x, z, ax, az, bx, bz) {
   return false;
 }
 
-function buildParksAccepts(index, ring, gx, gz, x1, z1) {
+function buildParksPaints(ring, gx, gz, x1, z1) {
+  for (const [sx, sz] of sampleCell(gx, gz, x1, z1)) {
+    if (!pointInRing(sx, sz, ring)) return false;
+  }
+  return true;
+}
+
+function buildParksGrassBlades(index, ring, gx, gz, x1, z1) {
+  if (!buildParksPaints(ring, gx, gz, x1, z1)) return false;
   const cx = (gx + x1) * 0.5;
   const cz = (gz + z1) * 0.5;
   const inPlaza = Math.hypot(cx - PLAZA_CENTER[0], cz - PLAZA_CENTER[1]) < PLAZA_R + 0.5;
   if (inPlaza) return false;
   for (const [sx, sz] of sampleCell(gx, gz, x1, z1)) {
-    if (!pointInRing(sx, sz, ring) || onAnyRoad(index, sx, sz, 0.2)) return false;
+    if (onAnyRoad(index, sx, sz, 0.2)) return false;
   }
   return true;
 }
@@ -121,11 +129,14 @@ function sampleRibbon(ax, az, bx, bz, ux, uz, half, offset) {
 
 const zone = JSON.parse(readFileSync(new URL('../assets/zone.json', import.meta.url), 'utf8'));
 const appSource = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+const citymeshSource = readFileSync(new URL('../src/citymesh.js', import.meta.url), 'utf8');
 const roadIndex = buildSegs(zone.roads || []);
 let accepted = 0;
 let roadOverlaps = 0;
 let outsideGreen = 0;
 const examples = [];
+let grassBladeCells = 0;
+let grassBladeRoadOverlaps = 0;
 let bermaCells = 0;
 let bermaRoadOverlaps = 0;
 const greenRoadExamples = [];
@@ -141,7 +152,7 @@ for (let gi = 0; gi < (zone.green || []).length; gi++) {
   for (let gx = minx; gx < maxx; gx += LCELL) {
     for (let gz = minz; gz < maxz; gz += LCELL) {
       const x1 = Math.min(gx + LCELL, maxx), z1 = Math.min(gz + LCELL, maxz);
-      if (!buildParksAccepts(roadIndex, ring, gx, gz, x1, z1)) continue;
+      if (!buildParksPaints(ring, gx, gz, x1, z1)) continue;
       accepted++;
       let badRoad = false;
       let badGreen = false;
@@ -152,6 +163,13 @@ for (let gi = 0; gi < (zone.green || []).length; gi++) {
       if (badRoad) roadOverlaps++;
       if (badGreen) outsideGreen++;
       if ((badRoad || badGreen) && examples.length < 5) examples.push({ greenIndex: gi, center: [+(gx + LCELL * 0.5).toFixed(2), +(gz + LCELL * 0.5).toFixed(2)], badRoad, badGreen });
+      if (!buildParksGrassBlades(roadIndex, ring, gx, gz, x1, z1)) continue;
+      grassBladeCells++;
+      let grassBadRoad = false;
+      for (const [sx, sz] of sampleCell(gx, gz, x1, z1)) {
+        if (onAnyRoad(roadIndex, sx, sz, 0)) grassBadRoad = true;
+      }
+      if (grassBadRoad) grassBladeRoadOverlaps++;
     }
   }
 }
@@ -193,11 +211,15 @@ for (const r of (zone.roads || [])) {
 
 const medianUsesGrass = /addBucket\(R\.median,[^\n]*worldTex\.grass/.test(appSource);
 const roadEndGreenHedgeRenderer = /hedgeGeo[\s\S]*?0x375a22/.test(appSource);
+const parkSidewalkSuppression = /nearGreen\(px, pz, 58\.0\)/.test(citymeshSource)
+  && /quad\(0\.05, 32\.0\)/.test(citymeshSource);
 
-console.log('park clearance audit:', { accepted, roadOverlaps, outsideGreen, examples });
-console.log('green road overlay audit:', { bermaCells, bermaRoadOverlaps, medianUsesGrass, roadEndGreenHedgeRenderer, examples: greenRoadExamples });
-if (roadOverlaps > 0) fail(`lawn cells overlap road samples: ${roadOverlaps}`);
+console.log('park clearance audit:', { accepted, roadOverlaps, outsideGreen, grassBladeCells, grassBladeRoadOverlaps, examples });
+console.log('green road overlay audit:', { bermaCells, bermaRoadOverlaps, medianUsesGrass, roadEndGreenHedgeRenderer, parkSidewalkSuppression, examples: greenRoadExamples });
+if (outsideGreen > 0) fail(`lawn cells escape green samples: ${outsideGreen}`);
+if (grassBladeRoadOverlaps > 0) fail(`3D grass cells overlap road samples: ${grassBladeRoadOverlaps}`);
 if (bermaRoadOverlaps > 0) fail(`green road bermas overlap asphalt samples: ${bermaRoadOverlaps}`);
 if (medianUsesGrass) fail('road medians use grass material on asphalt');
 if (roadEndGreenHedgeRenderer) fail('road-end green hedge blockers render on asphalt');
+if (!parkSidewalkSuppression) fail('park edge concrete suppression is not aggressive enough');
 console.log('PASS: park clearance audit');

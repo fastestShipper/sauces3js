@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709m';
-import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260709m';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709g35';
+import { heroPlacement, buildLosSauces202 } from './landmark.js?v=20260709g35';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -395,12 +395,55 @@ export function buildRoads(city) {
     }
   };
   const white = [1, 1, 1];
+  const roadGreenShare = (r) => {
+    let inside = 0, total = 0;
+    const pts = r.p || [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1];
+      const L = Math.hypot(bx - ax, bz - az);
+      const steps = Math.max(1, Math.ceil(L / 4));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        if (city.inAnyGreen(ax + (bx - ax) * t, az + (bz - az) * t)) inside++;
+        total++;
+      }
+    }
+    return total ? inside / total : 0;
+  };
+  const nearGreen = (x, z, r = 52.0) => {
+    if (city.inAnyGreen(x, z)) return true;
+    const d = r * 0.7;
+    return city.inAnyGreen(x + r, z) || city.inAnyGreen(x - r, z)
+      || city.inAnyGreen(x, z + r) || city.inAnyGreen(x, z - r)
+      || city.inAnyGreen(x + d, z + d) || city.inAnyGreen(x + d, z - d)
+      || city.inAnyGreen(x - d, z + d) || city.inAnyGreen(x - d, z - d);
+  };
+  const roadTouchesGreen = (r, greenShare) => {
+    if (greenShare > 0.01) return true;
+    const pts = r.p || [];
+    for (const p of pts) if (nearGreen(p[0], p[1], 62.0)) return true;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1];
+      if (nearGreen((ax + bx) * 0.5, (az + bz) * 0.5, 62.0)) return true;
+    }
+    return false;
+  };
+  const PARK_PATH_TYPES = new Set(['path', 'footway', 'pedestrian', 'steps', 'cycleway']);
   let ri = 0;
   for (const r of city.data.roads) {
     const pts = r.p;
-    const full = r.w ?? 6.0;
+    const t = r.t || '';
+    const walkType = PARK_PATH_TYPES.has(t);
+    const greenShare = roadGreenShare(r);
+    const parkEdge = roadTouchesGreen(r, greenShare);
+    const parkStonePath = t === 'path' && parkEdge;
+    const rawFull = r.w ?? (walkType ? 2.0 : 6.0);
+    const full = parkStonePath ? Math.min(rawFull, 1.45) : rawFull;
     const hw = full * 0.5;
-    const ped = full < 4.0;
+    const ped = walkType || full < 4.0;
+    // Dentro de parques, solo los senderos "path" quedan como piedra.
+    // El resto de trazos peatonales importados se deja como cesped.
+    if (ped && !parkStonePath && parkEdge) continue;
     // tendido electrico AMBOS lados (desfasados media cuadra) = mas postes,
     // y pares de postes enfrentados para cruzar cables sobre la pista
     const runA = [], runB = [];
@@ -420,11 +463,12 @@ export function buildRoads(city) {
       const ux = (bx - ax) / L, uz = (bz - az) / L;
       const dStart = dAcc, dEnd = dAcc + L; dAcc = dEnd;
       const yaE = ROAD_Y + yo + elevAt(dStart), ybE = ROAD_Y + yo + elevAt(dEnd);
-      // sendas peatonales (parques) son loseta de concreto, NO asfalto
+      // Park paths stay as narrow stone ribbons; non-path concrete imports are grass.
       const RB = ped ? path : road;
-      quadUV(RB, ax, az, bx, bz, ux, uz, hw, 0, yaE, ybE, white, ped ? 0.4 : 0.16);
-      disc(RB, ax, az, yaE + 0.005, hw, white);
-      disc(RB, bx, bz, ybE + 0.005, hw, white);
+      const pathLift = (ped && parkStonePath) ? 0.052 : 0;
+      quadUV(RB, ax, az, bx, bz, ux, uz, hw, 0, yaE + pathLift, ybE + pathLift, white, ped ? 0.4 : 0.16);
+      disc(RB, ax, az, yaE + pathLift + 0.005, hw, white);
+      disc(RB, bx, bz, ybE + pathLift + 0.005, hw, white);
       if (ped) continue;
       // vias elevadas (trebol/puentes): tablero con espesor + parapetos + pilares,
       // SIN veredas/berma/carriles encima (v1). el suelo pasa por debajo.
@@ -457,33 +501,36 @@ export function buildRoads(city) {
           const qax = eax + (-uz) * (hw + 1.5) * side, qaz = eaz + ux * (hw + 1.5) * side;
           const qbx = ebx + (-uz) * (hw + 1.5) * side, qbz = ebz + ux * (hw + 1.5) * side;
           if (!city.onAnyRoad(px, pz, 1.2) && !city.onAnyRoad(qax, qaz, 1.2) && !city.onAnyRoad(qbx, qbz, 1.2)) {
+            const walkInPark = nearGreen(px, pz, 58.0) || nearGreen(qax, qaz, 58.0) || nearGreen(qbx, qbz, 58.0);
             // san borja real: sardinel → BERMA verde con arboles → vereda de losetas
             quadUV(berma, eax, eaz, ebx, ebz, ux, uz, 0.5, (hw + 0.9) * side, WALK_Y + yo - 0.015, WALK_Y + yo - 0.015, white, 0.35);
             {
               const boff = (hw + 0.9) * side;
               bermaStrips.push([eax + (-uz) * boff, eaz + ux * boff, ebx + (-uz) * boff, ebz + ux * boff, WALK_Y + yo - 0.015]);
             }
-            quadUV(walk, eax, eaz, ebx, ebz, ux, uz, 1.0, (hw + 2.4) * side, WALK_Y + yo, WALK_Y + yo, white, 0.30);
+            if (!walkInPark) quadUV(walk, eax, eaz, ebx, ebz, ux, uz, 1.0, (hw + 2.4) * side, WALK_Y + yo, WALK_Y + yo, white, 0.30);
             // sardinel 3D: cara vertical visible desde la pista,
             // pintado AMARILLO cerca de las esquinas (zona rigida limeña)
             const snx = (-uz) * side, snz = ux * side;
             const isCorner = (i === 0 && d < 7) || (i === pts.length - 2 && d + step > L - 7);
             const ccol = isCorner ? [0.93, 0.72, 0.10] : [0.80, 0.79, 0.76];
-            curb.quad(
-              [eax + snx * (hw + 0.4), ROAD_Y + yo - 0.01, eaz + snz * (hw + 0.4)],
-              [ebx + snx * (hw + 0.4), ROAD_Y + yo - 0.01, ebz + snz * (hw + 0.4)],
-              [ebx + snx * (hw + 0.4), WALK_Y + yo + 0.03, ebz + snz * (hw + 0.4)],
-              [eax + snx * (hw + 0.4), WALK_Y + yo + 0.03, eaz + snz * (hw + 0.4)],
-              [-snx, 0, -snz], ccol);
+            if (!walkInPark) {
+              curb.quad(
+                [eax + snx * (hw + 0.4), ROAD_Y + yo - 0.01, eaz + snz * (hw + 0.4)],
+                [ebx + snx * (hw + 0.4), ROAD_Y + yo - 0.01, ebz + snz * (hw + 0.4)],
+                [ebx + snx * (hw + 0.4), WALK_Y + yo + 0.03, ebz + snz * (hw + 0.4)],
+                [eax + snx * (hw + 0.4), WALK_Y + yo + 0.03, eaz + snz * (hw + 0.4)],
+                [-snx, 0, -snz], ccol);
+            }
             // postes de luz cada 40 m POR LADO, desfasados 20 m entre lados
-            if (full >= 6.0) {
+            if (!walkInPark && full >= 6.0) {
               if (side === 1 && phase >= 5 && phase < 8) {
                 runA.push([mx + snx * (hw + 1.42), mz + snz * (hw + 1.42), Math.atan2(ux, uz)]);
               } else if (side === -1 && phase >= 25 && phase < 28) {
                 runB.push([mx + snx * (hw + 1.42), mz + snz * (hw + 1.42), Math.atan2(ux, uz)]);
               }
             }
-            if (full >= 8.0) {
+            if (!walkInPark && full >= 8.0) {
               const fang = Math.atan2(-(-uz) * side, -ux * side);
               if (phase < 3) furniture.trees.push([mx + (-uz) * (hw + 0.9) * side, mz + ux * (hw + 0.9) * side, fang]);
               else if (phase >= 20 && phase < 23) furniture.lamps.push([mx + (-uz) * (hw + 0.85) * side, mz + ux * (hw + 0.85) * side, fang]);
@@ -609,8 +656,7 @@ function gableRoof(B, cx, y, cz, hw, hd, ph, roofc, wallc) {
 // aguas, imagen de la Virgen) al centro. benchOut recibe spots de banca.
 function buildParkLandmark(plaza, feat, benchOut, cx, cz) {
   const R = 11;
-  const CONC = [0.74, 0.71, 0.64], REDB = [0.70, 0.20, 0.16], GREYB = [0.33, 0.33, 0.36];
-  roofCyl(plaza, cx, 0.0, cz, R, 0.04, CONC);               // disco de concreto (cap 0.04)
+  const REDB = [0.70, 0.20, 0.16], GREYB = [0.33, 0.33, 0.36];
   roofCyl(plaza, cx, 0.04, cz, 2.6, 0.022, REDB);           // disco central rojo
   ringBand(plaza, cx, cz, R * 0.97, R * 0.90, 0.055, REDB); // aro rojo exterior (sobre el cap)
   ringBand(plaza, cx, cz, R * 0.60, R * 0.52, 0.055, GREYB); // aro gris medio
@@ -657,12 +703,10 @@ function buildParkLandmark(plaza, feat, benchOut, cx, cz) {
 
   // === JUEGOS PARA NINOS (al OESTE, -X) ===
   const px = cx - 20, pz = cz + 1;                          // centro del area de juegos
-  buildPath(plaza, cx, cz, px, pz, 2.6);                    // sendero plaza -> juegos
   buildPlayground(feat, plaza, px, pz);
 
   // === CASETA DE VIGILANCIA (al SUR-ESTE, +X / -Z) ===
   const kx = cx + 16, kz = cz - 16;
-  buildPath(plaza, cx, cz, kx, kz, 2.6);                    // sendero plaza -> caseta
   buildBooth(feat, kx, kz);
 }
 
@@ -717,35 +761,238 @@ function buildBooth(feat, kx, kz) {
 
 // juegos para ninos: parche de arena + tobogan + columpio + balancin.
 function buildPlayground(feat, plaza, px, pz) {
-  const SAND = [0.85, 0.76, 0.35], RED = [0.82, 0.22, 0.20];
+  const SAND = [0.88, 0.70, 0.44], RED = [0.82, 0.22, 0.20];
   const BLUE = [0.20, 0.42, 0.78], YEL = [0.92, 0.78, 0.18], POST = [0.40, 0.42, 0.46];
-  // parche de arena/caucho (disco bajo, tono calido) en el bucket plaza
-  roofCyl(plaza, px, 0.03, pz, 6.5, 0.025, SAND);
+  const GREEN = [0.25, 0.48, 0.24], RUBBER = [0.72, 0.46, 0.28], DARK_RUBBER = [0.28, 0.27, 0.25];
+  // piso de caucho/arena compacto, mas realista que una losa gris
+  roofCyl(plaza, px, 0.03, pz, 7.2, 0.025, SAND);
+  roofCyl(plaza, px, 0.056, pz, 5.0, 0.012, RUBBER);
+  // safety tiles break the flat disk and read as real playground flooring.
+  roofBox(plaza, px - 3.2, 0.07, pz + 2.2, 1.25, 0.012, 0.72, DARK_RUBBER);
+  roofBox(plaza, px + 2.25, 0.07, pz + 0.5, 1.15, 0.012, 1.35, DARK_RUBBER);
+  roofBox(plaza, px + 0.3, 0.071, pz - 3.2, 1.7, 0.012, 0.5, [0.22, 0.30, 0.25]);
+  // rubber tile grid and low curbs make the surface read like a real main park playground.
+  for (let ix = -3; ix <= 3; ix++) {
+    roofBox(plaza, px + ix * 1.55, 0.083, pz, 0.018, 0.01, 4.55, [0.36, 0.34, 0.30]);
+  }
+  for (let iz = -3; iz <= 3; iz++) {
+    roofBox(plaza, px, 0.084, pz + iz * 1.35, 4.8, 0.01, 0.018, [0.36, 0.34, 0.30]);
+  }
+  // borde bajo de caucho para que el area lea como juegos infantiles reales.
+  roofBox(feat, px - 7.15, 0.08, pz, 0.08, 0.16, 5.0, GREEN);
+  roofBox(feat, px + 7.15, 0.08, pz, 0.08, 0.16, 5.0, GREEN);
+  roofBox(feat, px, 0.08, pz - 5.05, 7.1, 0.16, 0.08, GREEN);
+  roofBox(feat, px, 0.08, pz + 5.05, 7.1, 0.16, 0.08, GREEN);
 
   // TOBOGAN: torre + rampa azul + escalera roja (al lado -X del area)
   const tx = px - 2.6, tz = pz - 1.5;
   roofBox(feat, tx, 0.05, tz, 0.7, 1.4, 0.7, RED);                 // torre
   roofBox(feat, tx, 1.45, tz, 0.8, 0.1, 0.8, YEL);                 // plataforma
+  roofBox(feat, tx, 2.05, tz, 0.92, 0.08, 0.92, GREEN);            // techo plano
+  roofBox(feat, tx - 0.72, 1.62, tz, 0.05, 0.36, 0.72, POST);      // baranda
+  roofBox(feat, tx + 0.72, 1.62, tz, 0.05, 0.36, 0.72, POST);
   // rampa azul inclinada (caja girada a mano por vertices)
   slide(feat, tx, tz, BLUE);
   // escalones rojos
   for (let s = 0; s < 3; s++) roofBox(feat, tx + 0.0, 0.25 + s * 0.4, tz + 0.75 + s * 0.22, 0.55, 0.06, 0.12, RED);
+  roofBox(feat, tx - 0.68, 0.72, tz + 1.05, 0.05, 0.72, 0.05, POST);
+  roofBox(feat, tx + 0.68, 0.72, tz + 1.05, 0.05, 0.72, 0.05, POST);
+  for (let r = 0; r < 4; r++) roofBox(feat, tx, 0.35 + r * 0.24, tz + 1.05 + r * 0.13, 0.66, 0.025, 0.035, YEL);
 
-  // COLUMPIO: 2 postes en A + barra + 2 asientos (al lado +X)
+  // COLUMPIO: estructura mas ancha + 2 asientos (al lado +X)
   const sx = px + 2.2, sz = pz + 0.5;
-  roofBox(feat, sx, 0.05, sz - 1.0, 0.1, 1.6, 0.1, POST);          // poste izq
-  roofBox(feat, sx, 0.05, sz + 1.0, 0.1, 1.6, 0.1, POST);          // poste der
-  roofBox(feat, sx, 1.6, sz, 0.1, 0.1, 1.15, POST);               // barra superior
-  for (const so of [-0.45, 0.45]) {                               // 2 asientos colgando
-    roofBox(feat, sx, 0.55, sz + so, 0.06, 0.55, 0.04, POST);     // cuerda
-    roofBox(feat, sx, 0.45, sz + so, 0.26, 0.05, 0.16, YEL);      // tablita
+  for (const xo of [-0.45, 0.45]) {
+    roofBox(feat, sx + xo, 0.05, sz - 1.0, 0.08, 1.7, 0.08, POST);
+    roofBox(feat, sx + xo, 0.05, sz + 1.0, 0.08, 1.7, 0.08, POST);
+    roofBox(feat, sx + xo * 1.12, 0.85, sz - 0.55, 0.05, 0.92, 0.045, POST);
+    roofBox(feat, sx + xo * 1.12, 0.85, sz + 0.55, 0.05, 0.92, 0.045, POST);
   }
+  roofBox(feat, sx, 1.72, sz, 0.62, 0.09, 1.18, POST);             // barra superior
+  for (const so of [-0.45, 0.45]) {                               // 2 asientos colgando
+    roofBox(feat, sx - 0.18, 0.72, sz + so, 0.035, 0.76, 0.025, POST);
+    roofBox(feat, sx + 0.18, 0.72, sz + so, 0.035, 0.76, 0.025, POST);
+    roofBox(feat, sx, 0.44, sz + so, 0.30, 0.05, 0.17, YEL);      // tablita
+  }
+  roofBox(feat, sx, 1.92, sz, 0.82, 0.04, 1.38, RED);              // sun shade / cross brace
 
   // BALANCIN (sube y baja) al frente del area (-Z)
   const bx = px, bz = pz + 3.0;
   roofBox(feat, bx, 0.05, bz, 0.18, 0.45, 0.18, POST);            // pivote
   // viga inclinada: roja un extremo, azul el otro
   seesaw(feat, bx, bz, RED, BLUE);
+  roofBox(feat, bx - 0.34, 0.83, bz - 1.45, 0.05, 0.05, 0.24, YEL);
+  roofBox(feat, bx + 0.34, 0.83, bz + 1.45, 0.05, 0.05, 0.24, YEL);
+
+  // CARRUSEL BAJO: punto de juego reconocible desde camara alta
+  const cx = px + 0.25, cz = pz - 0.45;
+  roofCyl(feat, cx, 0.10, cz, 0.95, 0.16, YEL);
+  roofCyl(feat, cx, 0.29, cz, 0.22, 0.35, POST);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const hx = cx + Math.cos(a) * 0.55, hz = cz + Math.sin(a) * 0.55;
+    roofBox(feat, hx, 0.34, hz, Math.abs(Math.cos(a)) * 0.36 + 0.05, 0.05, Math.abs(Math.sin(a)) * 0.36 + 0.05, i % 2 ? BLUE : RED);
+  }
+
+  // trepador simple con barras verdes y amarillas
+  const gx = px - 0.8, gz = pz - 3.45;
+  for (let i = 0; i < 4; i++) {
+    roofBox(feat, gx - 1.2 + i * 0.8, 0.12, gz, 0.06, 0.8 + i * 0.08, 0.06, GREEN);
+    roofBox(feat, gx - 1.2 + i * 0.8, 0.86 + i * 0.08, gz, 0.08, 0.05, 0.56, YEL);
+  }
+  // pasamanos bajos tipo monkey bars, legibles desde la camara alta
+  const mx = px + 1.1, mz = pz - 3.2;
+  for (let i = 0; i < 5; i++) {
+    const x = mx - 1.0 + i * 0.5;
+    roofBox(feat, x, 0.12, mz, 0.045, 0.86, 0.045, POST);
+    roofBox(feat, x, 0.98, mz, 0.045, 0.04, 0.72, i % 2 ? BLUE : YEL);
+  }
+
+  // climbing net and spring riders add real playground density without new assets.
+  const nx = px - 4.75, nz = pz + 2.55;
+  roofBox(feat, nx - 0.9, 0.08, nz, 0.055, 1.25, 0.055, POST);
+  roofBox(feat, nx + 0.9, 0.08, nz, 0.055, 1.25, 0.055, POST);
+  roofBox(feat, nx, 1.28, nz, 0.96, 0.05, 0.055, GREEN);
+  for (let i = 0; i < 4; i++) {
+    roofBox(feat, nx - 0.72 + i * 0.48, 0.55 + i * 0.12, nz, 0.035, 0.035, 0.58, i % 2 ? YEL : BLUE);
+    roofBox(feat, nx - 0.72 + i * 0.48, 0.95 - i * 0.10, nz, 0.035, 0.035, 0.58, i % 2 ? BLUE : YEL);
+  }
+  for (const [rx, rz, col] of [[px + 4.65, pz + 2.65, RED], [px + 5.25, pz + 0.95, BLUE]]) {
+    roofCyl(feat, rx, 0.16, rz, 0.16, 0.32, POST);
+    roofBox(feat, rx, 0.48, rz, 0.46, 0.14, 0.24, col);
+    roofBox(feat, rx + 0.38, 0.56, rz, 0.16, 0.13, 0.18, YEL);
+    roofBox(feat, rx - 0.42, 0.48, rz, 0.18, 0.08, 0.06, POST);
+  }
+
+  // playhouse: small house shape makes the main park playground recognizable.
+  const hx = px + 4.45, hz = pz - 2.45;
+  roofBox(feat, hx, 0.08, hz, 0.78, 0.82, 0.62, [0.88, 0.66, 0.30]);
+  gableRoof(feat, hx, 0.92, hz, 0.9, 0.72, 0.45, RED, [0.88, 0.66, 0.30]);
+  roofBox(feat, hx, 0.1, hz - 0.63, 0.22, 0.55, 0.025, DARK_RUBBER);
+  roofBox(feat, hx - 0.42, 0.45, hz - 0.64, 0.16, 0.2, 0.02, BLUE);
+  roofBox(feat, hx + 0.42, 0.45, hz - 0.64, 0.16, 0.2, 0.02, BLUE);
+
+  // shade canopy, hopscotch and balance blocks make the playground read better
+  // from the high ARPG camera without adding heavy assets.
+  const shx = px - 4.5, shz = pz - 1.35;
+  for (const [ox, oz] of [[-0.85, -0.65], [0.85, -0.65], [-0.85, 0.65], [0.85, 0.65]]) {
+    roofBox(feat, shx + ox, 0.08, shz + oz, 0.055, 1.35, 0.055, POST);
+  }
+  roofBox(feat, shx, 1.46, shz, 1.08, 0.055, 0.84, [0.86, 0.18, 0.22]);
+  roofBox(feat, shx, 1.53, shz, 0.86, 0.055, 0.64, YEL);
+  const hopX = px - 1.9, hopZ = pz + 2.25;
+  for (let i = 0; i < 5; i++) {
+    const off = (i % 2) ? 0.22 : -0.22;
+    roofBox(plaza, hopX + off, 0.085, hopZ - i * 0.38, 0.18, 0.01, 0.14, i % 2 ? BLUE : YEL);
+  }
+  for (let i = 0; i < 4; i++) {
+    roofBox(feat, px + 3.05 + i * 0.46, 0.12, pz + 3.85, 0.15, 0.16, 0.15, i % 2 ? RED : BLUE);
+  }
+
+  // Extra recognizable playground volume for the high camera: rope dome,
+  // crawling tunnel and small sport goals. All lightweight procedural boxes.
+  const domeX = px - 5.05, domeZ = pz - 3.05;
+  roofCyl(feat, domeX, 0.09, domeZ, 0.18, 0.42, POST);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const x = domeX + Math.cos(a) * 1.05;
+    const z = domeZ + Math.sin(a) * 1.05;
+    roofBox(feat, x, 0.08, z, 0.045, 0.92, 0.045, i % 2 ? YEL : BLUE);
+    roofBox(feat, (x + domeX) * 0.5, 0.92, (z + domeZ) * 0.5,
+      Math.abs(x - domeX) * 0.5 + 0.035, 0.035, Math.abs(z - domeZ) * 0.5 + 0.035, GREEN);
+  }
+  const tunX = px + 5.45, tunZ = pz - 0.85;
+  roofBox(feat, tunX, 0.23, tunZ, 0.88, 0.34, 0.46, [0.82, 0.22, 0.20]);
+  roofBox(feat, tunX, 0.62, tunZ, 0.7, 0.16, 0.36, YEL);
+  for (const gz of [pz - 4.65, pz + 4.65]) {
+    roofBox(feat, px + 2.25, 0.1, gz, 0.9, 0.08, 0.06, POST);
+    roofBox(feat, px + 1.4, 0.1, gz, 0.06, 0.6, 0.06, POST);
+    roofBox(feat, px + 3.1, 0.1, gz, 0.06, 0.6, 0.06, POST);
+    roofBox(feat, px + 2.25, 0.7, gz, 0.9, 0.055, 0.055, YEL);
+  }
+
+  // rope bridge and crawl bars make the main park feel built, not decorative.
+  const brx = px - 0.1, brz = pz - 1.9;
+  roofBox(feat, brx, 0.82, brz, 1.55, 0.06, 0.18, [0.56, 0.36, 0.20]);
+  for (let i = 0; i < 5; i++) {
+    const x = brx - 1.15 + i * 0.58;
+    roofBox(feat, x, 0.28, brz, 0.045, 0.72, 0.045, POST);
+    roofBox(feat, x, 1.02, brz, 0.045, 0.04, 0.46, i % 2 ? GREEN : YEL);
+  }
+  roofBox(feat, brx, 1.14, brz - 0.28, 1.45, 0.045, 0.05, BLUE);
+  roofBox(feat, brx, 1.14, brz + 0.28, 1.45, 0.045, 0.05, BLUE);
+  for (let i = 0; i < 6; i++) {
+    const x = brx - 1.2 + i * 0.48;
+    roofBox(feat, x, 0.94, brz - 0.28, 0.035, 0.28, 0.035, GREEN);
+    roofBox(feat, x, 0.94, brz + 0.28, 0.035, 0.28, 0.035, GREEN);
+  }
+  const spinX = px - 3.75, spinZ = pz + 0.3;
+  roofCyl(feat, spinX, 0.12, spinZ, 0.7, 0.18, BLUE);
+  roofCyl(feat, spinX, 0.34, spinZ, 0.13, 0.45, POST);
+  for (let i = 0; i < 3; i++) {
+    const a = i * Math.PI * 2 / 3;
+    roofBox(feat, spinX + Math.cos(a) * 0.42, 0.46, spinZ + Math.sin(a) * 0.42,
+      Math.abs(Math.cos(a)) * 0.34 + 0.05, 0.045, Math.abs(Math.sin(a)) * 0.34 + 0.05, YEL);
+  }
+
+  // cerco bajo, deja entradas libres y mejora la escala del area infantil
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    if (Math.abs(Math.sin(a)) < 0.22 && Math.cos(a) > 0) continue;
+    const fx = px + Math.cos(a) * 7.0, fz = pz + Math.sin(a) * 7.0;
+    roofBox(feat, fx, 0.08, fz, 0.055, 0.42, 0.055, POST);
+  }
+  for (const [qx, qz] of [[px - 6.25, pz + 4.3], [px + 5.95, pz + 4.25]]) {
+    roofBox(feat, qx, 0.18, qz, 0.72, 0.12, 0.24, [0.56, 0.34, 0.18]);
+    roofBox(feat, qx - 0.52, 0.06, qz, 0.06, 0.36, 0.06, POST);
+    roofBox(feat, qx + 0.52, 0.06, qz, 0.06, 0.36, 0.06, POST);
+  }
+
+  // Extra realistic pieces: tire swing, climbing wall and tiny toy markers.
+  const tireX = sx + 0.75, tireZ = sz + 0.1;
+  roofBox(feat, tireX - 0.18, 0.78, tireZ, 0.025, 0.72, 0.025, DARK_RUBBER);
+  roofBox(feat, tireX + 0.18, 0.78, tireZ, 0.025, 0.72, 0.025, DARK_RUBBER);
+  roofCyl(feat, tireX, 0.42, tireZ, 0.28, 0.12, DARK_RUBBER);
+  roofCyl(feat, tireX, 0.44, tireZ, 0.14, 0.14, [0.08, 0.08, 0.08]);
+  const wallX = tx + 0.92, wallZ = tz - 0.05;
+  roofBox(feat, wallX, 0.72, wallZ, 0.08, 0.98, 0.58, BLUE);
+  for (let i = 0; i < 5; i++) {
+    roofBox(feat, wallX + 0.055, 0.34 + i * 0.16, wallZ - 0.34 + (i % 3) * 0.28, 0.045, 0.055, 0.06, i % 2 ? YEL : RED);
+  }
+  for (const [toyX, toyZ, col] of [[px - 3.7, pz + 3.8, RED], [px - 3.15, pz + 3.35, BLUE], [px - 2.62, pz + 3.72, YEL]]) {
+    roofCyl(plaza, toyX, 0.12, toyZ, 0.16, 0.12, col);
+    roofBox(plaza, toyX, 0.25, toyZ, 0.18, 0.05, 0.18, col);
+  }
+
+  // Toddler zone: small blocks, stepping logs and parent benches add believable scale.
+  const kidX = px + 0.6, kidZ = pz + 4.25;
+  for (let i = 0; i < 5; i++) {
+    roofCyl(feat, kidX - 1.0 + i * 0.5, 0.11, kidZ + (i % 2) * 0.18, 0.18, 0.16 + i * 0.025, i % 2 ? GREEN : YEL);
+  }
+  for (const [bx2, bz2, rotWide] of [[px - 5.8, pz - 4.25, true], [px + 5.9, pz + 4.0, false]]) {
+    roofBox(feat, bx2, 0.18, bz2, rotWide ? 0.84 : 0.24, 0.12, rotWide ? 0.22 : 0.84, [0.56, 0.34, 0.18]);
+    roofBox(feat, bx2 - (rotWide ? 0.52 : 0), 0.06, bz2 - (rotWide ? 0 : 0.52), 0.055, 0.34, 0.055, POST);
+    roofBox(feat, bx2 + (rotWide ? 0.52 : 0), 0.06, bz2 + (rotWide ? 0 : 0.52), 0.055, 0.34, 0.055, POST);
+  }
+  const miniX = px + 4.1, miniZ = pz + 3.15;
+  roofBox(feat, miniX, 0.12, miniZ, 0.62, 0.52, 0.62, BLUE);
+  roofBox(feat, miniX, 0.68, miniZ, 0.72, 0.06, 0.72, YEL);
+  roofBox(feat, miniX - 0.48, 0.45, miniZ, 0.05, 0.52, 0.05, RED);
+  roofBox(feat, miniX + 0.48, 0.45, miniZ, 0.05, 0.52, 0.05, GREEN);
+  const tableX = px + 6.05, tableZ = pz - 4.15;
+  roofBox(feat, tableX, 0.32, tableZ, 0.92, 0.08, 0.42, [0.56, 0.34, 0.18]);
+  roofBox(feat, tableX - 0.56, 0.22, tableZ, 0.08, 0.22, 0.34, POST);
+  roofBox(feat, tableX + 0.56, 0.22, tableZ, 0.08, 0.22, 0.34, POST);
+  roofBox(feat, tableX, 0.16, tableZ - 0.58, 0.86, 0.07, 0.13, [0.56, 0.34, 0.18]);
+  roofBox(feat, tableX, 0.16, tableZ + 0.58, 0.86, 0.07, 0.13, [0.56, 0.34, 0.18]);
+  const fountainX = px - 6.2, fountainZ = pz - 0.15;
+  roofCyl(feat, fountainX, 0.18, fountainZ, 0.18, 0.42, [0.30, 0.54, 0.62]);
+  roofBox(feat, fountainX + 0.16, 0.58, fountainZ, 0.08, 0.09, 0.18, [0.74, 0.84, 0.86]);
+  roofBox(feat, fountainX + 0.32, 0.58, fountainZ, 0.08, 0.03, 0.05, [0.08, 0.10, 0.12]);
+  roofBox(feat, px - 6.65, 0.32, pz - 2.15, 0.08, 0.55, 0.28, [0.92, 0.78, 0.18]);
+  roofBox(feat, px - 6.62, 0.74, pz - 2.15, 0.06, 0.22, 0.24, [0.20, 0.42, 0.78]);
+  for (let i = 0; i < 5; i++) {
+    roofBox(feat, px - 2.2 + i * 0.55, 0.12, pz + 4.85 + (i % 2) * 0.16, 0.2, 0.14, 0.2, i % 2 ? [0.54, 0.36, 0.22] : [0.64, 0.42, 0.24]);
+  }
 }
 
 // rampa de tobogan: prisma azul inclinado desde la plataforma al suelo (+Z).
@@ -776,18 +1023,76 @@ function seesaw(B, bx, bz, cA, cB) {
   }
 }
 
-function clearLawnCell(city, ring, x0, z0, x1, z1) {
+function sampleLawnCell(x0, z0, x1, z1) {
   const cx = (x0 + x1) * 0.5;
   const cz = (z0 + z1) * 0.5;
-  const samples = [
+  return [
     [x0, z0], [cx, z0], [x1, z0],
     [x0, cz], [cx, cz], [x1, cz],
     [x0, z1], [cx, z1], [x1, z1],
   ];
-  for (const [x, z] of samples) {
-    if (!city.pointInRing(x, z, ring) || city.onAnyRoad(x, z, 0.2)) return false;
+}
+
+function lawnCellInsidePark(city, ring, x0, z0, x1, z1) {
+  for (const [x, z] of sampleLawnCell(x0, z0, x1, z1)) {
+    if (!city.pointInRing(x, z, ring)) return false;
   }
   return true;
+}
+
+function lawnCellTouchesRoad(city, x0, z0, x1, z1, margin = 0.2) {
+  for (const [x, z] of sampleLawnCell(x0, z0, x1, z1)) {
+    if (city.onAnyRoad(x, z, margin)) return true;
+  }
+  return false;
+}
+
+function clearLawnCell(city, ring, x0, z0, x1, z1) {
+  return lawnCellInsidePark(city, ring, x0, z0, x1, z1) &&
+    !lawnCellTouchesRoad(city, x0, z0, x1, z1, 0.2);
+}
+
+function paintableLawnCell(city, ring, x0, z0, x1, z1) {
+  return lawnCellInsidePark(city, ring, x0, z0, x1, z1);
+}
+
+function parkEdgeGrassApron(B, city, ring) {
+  const area = ringArea(ring);
+  const sign = area >= 0 ? 1 : -1;
+  const col = [0.34, 0.64, 0.25];
+  const y = 0.064;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz);
+    if (L < 0.05) continue;
+    const ux = dx / L, uz = dz / L;
+    const nx = uz * sign, nz = -ux * sign;
+    const mx = (a[0] + b[0]) * 0.5, mz = (a[1] + b[1]) * 0.5;
+    const quad = (o0, o1) => {
+      B.quad(
+        [a[0] + nx * o0, y, a[1] + nz * o0],
+        [b[0] + nx * o0, y, b[1] + nz * o0],
+        [b[0] + nx * o1, y, b[1] + nz * o1],
+        [a[0] + nx * o1, y, a[1] + nz * o1],
+        [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
+    };
+    if (!city.onAnyRoad(mx - nx * 1.75, mz - nz * 1.75, 0.8) &&
+      !city.onAnyRoad(mx - nx * 5.75, mz - nz * 5.75, 0.65) &&
+      !city.onAnyRoad(mx - nx * 10.5, mz - nz * 10.5, 0.5) &&
+      !city.onAnyRoad(mx - nx * 15.0, mz - nz * 15.0, 0.4)) quad(-18.0, -0.05);
+    if (!city.onAnyRoad(mx + nx * 1.85, mz + nz * 1.85, 1.1) &&
+      !city.onAnyRoad(mx + nx * 3.55, mz + nz * 3.55, 0.9) &&
+      !city.onAnyRoad(mx + nx * 5.75, mz + nz * 5.75, 0.75) &&
+      !city.onAnyRoad(mx + nx * 7.35, mz + nz * 7.35, 0.65) &&
+      !city.onAnyRoad(mx + nx * 9.9, mz + nz * 9.9, 0.55) &&
+      !city.onAnyRoad(mx + nx * 12.4, mz + nz * 12.4, 0.5) &&
+      !city.onAnyRoad(mx + nx * 15.3, mz + nz * 15.3, 0.45) &&
+      !city.onAnyRoad(mx + nx * 20.5, mz + nz * 20.5, 0.35) &&
+      !city.onAnyRoad(mx + nx * 27.5, mz + nz * 27.5, 0.28)) {
+      quad(0.05, 32.0);
+    }
+  }
 }
 
 export function buildParks(city) {
@@ -816,18 +1121,27 @@ export function buildParks(city) {
     if (ring.length < 3) continue;
     let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
     for (const p of ring) { minx = Math.min(minx, p[0]); minz = Math.min(minz, p[1]); maxx = Math.max(maxx, p[0]); maxz = Math.max(maxz, p[1]); }
+    // Base exacta de cesped para que no asome el concreto global entre
+    // senderos empedrados y bordes del parque.
+    const baseCol = [0.78, 0.90, 0.65];
+    for (const [a, b, c] of triangulate(ring)) {
+      lawn.vert([a[0], 0.012, a[1]], [0, 1, 0], baseCol, [a[0] * 0.35, a[1] * 0.35]);
+      lawn.vert([b[0], 0.012, b[1]], [0, 1, 0], baseCol, [b[0] * 0.35, b[1] * 0.35]);
+      lawn.vert([c[0], 0.012, c[1]], [0, 1, 0], baseCol, [c[0] * 0.35, c[1] * 0.35]);
+    }
+    parkEdgeGrassApron(lawn, city, ring);
     const LCELL = 2.5;
     for (let gx = minx; gx < maxx; gx += LCELL) {
       for (let gz = minz; gz < maxz; gz += LCELL) {
         const cx = gx + LCELL * 0.5, cz = gz + LCELL * 0.5;
         const x1 = Math.min(gx + LCELL, maxx), z1 = Math.min(gz + LCELL, maxz);
-        if (!clearLawnCell(city, ring, gx, gz, x1, z1) || inPlaza(cx, cz)) continue;
+        if (!paintableLawnCell(city, ring, gx, gz, x1, z1)) continue;
         // variacion sutil de tono, sin parches de color (leian como tierra)
         const shade = 0.86 + rng() * 0.14;
         const patch = hashF(Math.floor(gx * 3.1) + Math.floor(gz * 5.7)) * 0.08;
         const col = [shade * (0.90 + patch), shade * (0.98 + patch * 0.5), shade * (0.82 - patch * 0.3)];
         lawn.quad([gx, 0.015, gz], [gx, 0.015, z1], [x1, 0.015, z1], [x1, 0.015, gz], [0, 1, 0], col, (p) => [p[0] * 0.35, p[2] * 0.35]);
-        if (!inSand(cx, cz)) grassRects.push([gx, gz, x1, z1]);
+        if (!inSand(cx, cz) && !inPlaza(cx, cz) && clearLawnCell(city, ring, gx, gz, x1, z1)) grassRects.push([gx, gz, x1, z1]);
       }
     }
     const want = Math.max(2, Math.min(60, Math.floor((maxx - minx) * (maxz - minz) / 170)));
