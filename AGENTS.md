@@ -481,6 +481,14 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - QA: `smoke_light_pool_stable` (new regression guard for constant light count), `smoke_effect_caps`/`smoke_effect_shared_geometry`/`smoke_effect_vfx_lod`/`smoke_motion_trails`/`smoke_damage_number_cache` updated to count non-light scene nodes, `smoke_gameplay_teaser_mode` stamp bumped; combat/skill/gore/mob smokes green; `node --check` on changed sources; external HTTPS 200, served hashes at g50, relay healthy with 86 mobs.
   - Backup: `/root/deploy-backups/sauces-web-20260710T184555Z-before-20260710g50.tar.gz` (index.html + src only).
 
+- **Production patch 20260710g51**: `sauces.controla.group` runs `APP_VERSION=20260710g51` (client + server `mob_balance.js`; relay reiniciado, sin reset de cuentas).
+  - Rediseno de game-feel a algo tipo God of War. El combate se sentia autoclicker: matabas ~200 mobs a nivel 1 en 10s. Tres causas apiladas: matar/combear ACELERABA (kill-chain 0.04s, hastes, cadencia colapsaba a ~0.11s), enemigos morian de 1-2 golpes (18-46 HP vs ~15-30 dmg), y el cleave borraba 3 enemigos por swing.
+  - Peso (cliente `combat.js`): cadencia base 0.34->0.46s, piso `_attackCooldown` 0.19->0.40s; toda la aceleracion a 1.0 (KILL_FRENZY_SPEED/MAX 1.2/1.55->1.0/1.06, COMBO/SKILL_FOLLOW hastes->1.0, cooldowns de combo/kill-chain/pack floored a ~0.40-0.44s); anim del swing 1.5->1.06 (no fast-forward). Cleave alcanza 1 enemigo adyacente al 50% (antes 3 al 70%).
+  - Durabilidad (server `mob_balance.js`): HP base `(30+lv*16)`->`(72+lv*22)`, starter zone 0.40->0.58, fodder 0.45->0.55; dmg `(4+lv*2)`->`(5+lv*2)`. Un enemigo basico aguanta ~4-6 tajos comprometidos, no 1-2.
+  - Verificado en prod live: mob `hpMax` de muestra 75-236 (antes ~18-46), `_attackCooldown()` 0.46s, anim speed 1.0, 86 mobs, consola limpia, HTTPS 200, g51 servido.
+  - QA: smokes de combate reescritos al contrato deliberado (cleave 1 objetivo, combo/kill-frenzy/skill-follow encadenan la ventana pero NO aceleran); resto de combate/gore/mob en verde; `node --check` sobre cliente y server.
+  - Backups: `/root/deploy-backups/sauces-web-20260710T191030Z-before-20260710g51.tar.gz` y `/root/deploy-backups/sauces-server-mob_balance-20260710T191030Z-before-20260710g51.js`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.
