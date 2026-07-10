@@ -7,6 +7,7 @@ import { projectileSpeed } from './effects.js?v=20260709g41';
 import { skillReleaseDelay } from '../animmap.js?v=20260709g41';
 import { attackReleaseDelay } from '../weapons.js?v=20260709g41';
 import { matchesAction } from '../keybinds.js?v=20260709g41';
+import { BloodCoat } from './bloodcoat.js?v=20260710g42';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -185,6 +186,10 @@ export class Combat {
     this._holoOn = false;    // materiales holograficos activos
     this.shieldT = 0;
     this.classSpec = opts.classSpec || null;   // heroe: aura/proyectil/estilo
+    this.bloodCoat = opts.bloodCoat || new BloodCoat({
+      player: this.player,
+      combatStyle: this.classSpec?.combatStyle || this.player?.combatStyle,
+    });
     this.inputSurface = opts.inputSurface || (typeof document !== 'undefined' ? document.querySelector?.('canvas') : null);
     this.dead = false;
     this.respawnT = 0;
@@ -1097,6 +1102,7 @@ export class Combat {
   }
 
   update(dt) {
+    this.bloodCoat.update(dt);
     if (this.dead) {
       this._clearImpacts();
       this.respawnT -= dt;
@@ -1815,6 +1821,7 @@ export class Combat {
     // RACHA: kills encadenados = multiplicador de oro/XP + contador en pantalla
     this.streak++;
     this.streakT = STREAK_WINDOW;
+    this.bloodCoat.recordKill(this.streak);
     const mult = 1 + Math.min(2, (this.streak - 1) * 0.15);
     if (this.streak >= 2) this.hud.showStreak?.(this.streak, mult);
     if (this.sfx) { this.sfx.kill(); this.sfx.streak?.(this.streak); }
@@ -1901,6 +1908,7 @@ export class Combat {
 
   _die() {
     this._clearImpacts();
+    this.bloodCoat.clear();
     this.dead = true;
     this.respawnT = RESPAWN_T;
     this._clearMobTarget();
@@ -1915,6 +1923,7 @@ export class Combat {
   }
 
   _respawn() {
+    this.bloodCoat.clear();
     this.dead = false;
     this.hp = this.hpMax;
     this.spawnGraceT = SPAWN_GRACE_T;
