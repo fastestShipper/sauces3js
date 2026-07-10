@@ -17,7 +17,7 @@ import { ChatUI, showBubble } from './chat.js?v=20260710g42';
 import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g42';
 import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g42';
 import { equipWeapon } from './weapons.js?v=20260710g42';
-import { authRequest } from './rpg/account.js?v=20260710g42';
+import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g42';
 import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g42';
 import { Inventory } from './rpg/loot.js?v=20260710g42';
 import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g42';
@@ -220,6 +220,77 @@ const GRUTA_SPAWN = [-62, -7];
 const MOD = './assets/models/';
 const worldTex = createTextureKit();
 
+// Si venimos del redirect de Google/Discord, Privy dejo un `?privy_oauth_code` en
+// la URL. Hay que terminar ese login ANTES de pintar la pantalla de cuenta, o le
+// pediriamos al jugador que entre justo despues de haber entrado.
+//
+// Devuelve el objeto de auth si el login social prospero, o null para seguir con
+// la pantalla normal.
+async function resumePrivySession() {
+  if (!PRIVY_APP_ID) return null;
+  const hasReturn = new URLSearchParams(location.search).has('privy_oauth_code');
+  const wasLinked = (() => { try { return localStorage.getItem('sauces_privy') === '1'; } catch { return false; } })();
+  if (!hasReturn && !wasLinked) return null;   // no molestamos a quien nunca uso login social
+
+  let privy;
+  try { privy = await loadPrivy(); } catch { return null; }
+  const res = await privy.resumeLogin(PRIVY_APP_ID).catch(() => ({ ok: false }));
+  if (!res.ok || !res.token) return null;
+
+  let r = await privyAuthRequest(res.token);
+  // DID nuevo: el relay pide un nombre de cuenta.
+  while (!r.ok && r.needsUsername) {
+    const name = await askUsername(r.error);
+    if (!name) return null;          // se arrepintio: cae a la pantalla normal
+    r = await privyAuthRequest(res.token, name);
+  }
+  if (!r.ok) return null;
+  try { localStorage.setItem('sauces_privy', '1'); } catch { /* noop */ }
+  return r;
+}
+
+// Primer login social: hace falta un nombre de cuenta. Overlay propio, no
+// `prompt()`: el modal nativo bloquea el hilo y se ve como un error del navegador.
+function askUsername(errorText) {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.id = 'login';
+    ov.className = 'sky-scene gscrim';
+    const card = document.createElement('div');
+    card.className = 'gcard';
+    card.style.cssText = 'padding:26px 30px;width:340px;color:#f2f0fa;text-align:center';
+    const title = document.createElement('div');
+    title.textContent = 'Elige tu nombre';
+    title.style.cssText = 'font-size:17px;font-weight:600;margin-bottom:6px';
+    const sub = document.createElement('div');
+    sub.textContent = '3 a 16 caracteres: letras, numeros o guion bajo.';
+    sub.style.cssText = 'font-size:12px;font-weight:500;color:#a9a4c4;margin-bottom:12px';
+    const input = document.createElement('input');
+    input.className = 'ginput'; input.maxLength = 16; input.placeholder = 'Tu nombre'; input.autocomplete = 'off';
+    const err = document.createElement('div');
+    err.style.cssText = 'min-height:16px;font-size:11.5px;font-weight:500;color:#ff8a7a;margin:6px 0 2px';
+    if (errorText) err.textContent = errorText;
+    const go = document.createElement('button');
+    go.textContent = 'Continuar'; go.className = 'gbtn'; go.style.cssText = 'margin-top:8px';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancelar'; cancel.className = 'gbtn-ghost'; cancel.style.cssText = 'margin-top:10px';
+
+    const submit = () => {
+      const v = input.value.trim();
+      if (!/^[a-zA-Z0-9_]{3,16}$/.test(v)) { err.textContent = 'Nombre invalido'; return; }
+      ov.remove(); resolve(v);
+    };
+    go.onclick = submit;
+    cancel.onclick = () => { ov.remove(); resolve(null); };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+
+    card.append(title, sub, input, err, go, cancel);
+    ov.append(card);
+    document.body.appendChild(ov);
+    input.focus();
+  });
+}
+
 // pantalla de cuenta: Entrar o Crear cuenta (contra el server). Resuelve con el
 // objeto de auth { ok, god, char, token, user }. La cuenta zpw = GOD la valida el server.
 function showAuth() {
@@ -284,7 +355,35 @@ function showAuth() {
     guestBtn.textContent = 'Explorar sin guardar';
     guestBtn.className = 'gbtn-ghost';
     guestBtn.style.cssText = 'margin-top:12px';
-    card.append(sub, tabs, u, p, err, btn, guestBtn, hint);
+
+    // --- Login social (Privy). Solo si el app id esta configurado. ---
+    const social = document.createElement('div');
+    if (PRIVY_APP_ID) {
+      social.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:6px';
+      for (const [provider, label] of [['google', 'Entrar con Google'], ['discord', 'Entrar con Discord']]) {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.className = 'gbtn';
+        b.onclick = async () => {
+          if (busy) return;
+          busy = true; err.textContent = '';
+          try {
+            const privy = await loadPrivy();
+            await privy.loginWithProvider(PRIVY_APP_ID, provider);   // se va a OAuth y vuelve
+          } catch (e) {
+            busy = false;
+            err.textContent = 'No se pudo abrir el login: ' + (e?.message || e);
+          }
+        };
+        social.append(b);
+      }
+      const sep = document.createElement('div');
+      sep.textContent = 'o con usuario y contraseña';
+      sep.style.cssText = 'font-size:10.5px;font-weight:500;color:#77729a;margin:12px 0 2px';
+      social.append(sep);
+    }
+
+    card.append(sub, social, tabs, u, p, err, btn, guestBtn, hint);
     ov.append(logo, card); document.body.appendChild(ov);
     styleTabs();
     const savedUser = localStorage.getItem(LS_USER);
@@ -1051,7 +1150,12 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   // onboarding: cuenta o invitado antes de spawnear
   setProgress(1, 'Cuenta…');
   document.getElementById('loading').remove();
-  const auth = trailerConfig.enabled ? getTrailerAuth() : await showAuth();   // { ok, god, char, token, user, guest? }
+  // volver del OAuth de Google/Discord se resuelve ANTES de pintar el login
+  const resumed = trailerConfig.enabled ? null : await resumePrivySession();
+  if (resumed) saveAuthSession(resumed);
+  const auth = trailerConfig.enabled
+    ? getTrailerAuth()
+    : (resumed || await showAuth());   // { ok, god, char, token, user, guest? }
   let choice;
   if (trailerConfig.enabled) {
     choice = getTrailerChoice(trailerConfig);
