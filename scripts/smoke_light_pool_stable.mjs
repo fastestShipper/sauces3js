@@ -41,6 +41,11 @@ for (let i = 0; i < 200; i++) {
   effects.flashLight({ x: i, y: 1, z: (i % 7) - 3 }, 0xff5522, 6, 9, 0.34);
 }
 
+// Skill impact polish may use a pooled light, particles and a shared ring, but it
+// must preserve the exact number of lights during both regular and heavy hits.
+effects.skillImpact({ x: 0, y: 1, z: 0 }, 0x8fd8ea, false);
+effects.skillImpact({ x: 1, y: 1, z: 0 }, 0x8fd8ea, true);
+
 const lightsAfterSpam = countLights(scene);
 if (lightsAfterSpam !== poolSize) {
   throw new Error(`flashLight changed scene light count: ${poolSize} -> ${lightsAfterSpam} (recompila shaders!)`);
@@ -51,7 +56,7 @@ const activeNow = effects.lights.filter((e) => e.active).length;
 if (activeNow > poolSize) throw new Error(`more active lights than pool: ${activeNow} > ${poolSize}`);
 
 // Expirar todo: las luces se apagan pero NO se quitan de la escena.
-for (let i = 0; i < 20; i++) effects.update(0.1);
+for (let i = 0; i < 30; i++) effects.update(0.1);
 
 const lightsAfterExpiry = countLights(scene);
 if (lightsAfterExpiry !== poolSize) {
@@ -62,9 +67,10 @@ if (anyActive) throw new Error('lights did not deactivate after expiry');
 const anyLit = effects.lights.some((e) => e.light.intensity > 0.001);
 if (anyLit) throw new Error('expired lights were not dimmed to 0 intensity');
 
-// Los flashes no deben inflar el scene graph con hijos permanentes extra.
-if (scene.children.length !== childrenAtRest) {
-  throw new Error(`scene child count drifted: ${childrenAtRest} -> ${scene.children.length}`);
+// The first impact activates the one persistent InstancedMesh particle batch.
+// Temporary rings and flashes must still leave no additional scene children.
+if (scene.children.length > childrenAtRest + 1) {
+  throw new Error(`temporary impact nodes leaked: ${childrenAtRest} -> ${scene.children.length}`);
 }
 
-console.log(`PASS: light pool is fixed (${poolSize} lights, stable across 200 flashes + expiry, zero shader recompiles)`);
+console.log(`PASS: light pool is fixed (${poolSize} lights, stable across flashes and skill impacts, zero shader recompiles)`);

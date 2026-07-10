@@ -3,42 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g51';
-import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g51';
-import { GrassSystem } from './veg/grass.js?v=20260710g51';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260710g51';
-import { Player } from './player.js?v=20260710g51';
-import { MiniMap } from './minimap.js?v=20260710g51';
-import { StreetLife } from './npcs.js?v=20260710g51';
-import { sanitizeImported } from './glbutil.js?v=20260710g51';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g51';
-import { Net } from './net.js?v=20260710g51';
-import { ChatUI, showBubble } from './chat.js?v=20260710g51';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g51';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g51';
-import { equipWeapon } from './weapons.js?v=20260710g51';
-import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g51';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g51';
-import { Inventory } from './rpg/loot.js?v=20260710g51';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g51';
-import { Combat } from './rpg/combat.js?v=20260710g51';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g51';
-import { Effects } from './rpg/effects.js?v=20260710g51';
-import { attachWeaponByName } from './weapons.js?v=20260710g51';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g51';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g51';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g51';
-import { SocialPanel, showSocialInvite } from './social.js?v=20260710g51';
-import { SkillSystem } from './rpg/skills.js?v=20260710g51';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g51';
-import { createSfx } from './sfx.js?v=20260710g51';
-import { installTouchControls } from './touch.js?v=20260710g51';
-import { createIntroScene } from './introscene.js?v=20260710g51';
-import { styleCarShell } from './carstyle.js?v=20260710g51';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g51';
-import { FrameMeter, fpsBand } from './perf.js?v=20260710g51';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g52';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g52';
+import { GrassSystem } from './veg/grass.js?v=20260710g52';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260710g52';
+import { Player } from './player.js?v=20260710g52';
+import { MiniMap } from './minimap.js?v=20260710g52';
+import { StreetLife } from './npcs.js?v=20260710g52';
+import { sanitizeImported } from './glbutil.js?v=20260710g52';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g52';
+import { Net } from './net.js?v=20260710g52';
+import { ChatUI, showBubble } from './chat.js?v=20260710g52';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g52';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g52';
+import { equipWeapon } from './weapons.js?v=20260710g52';
+import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g52';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g52';
+import { Inventory } from './rpg/loot.js?v=20260710g52';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g52';
+import { Combat } from './rpg/combat.js?v=20260710g52';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g52';
+import { Effects } from './rpg/effects.js?v=20260710g52';
+import { attachWeaponByName } from './weapons.js?v=20260710g52';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g52';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g52';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g52';
+import { SocialPanel, showSocialInvite } from './social.js?v=20260710g52';
+import { SkillSystem } from './rpg/skills.js?v=20260710g52';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g52';
+import { createSfx } from './sfx.js?v=20260710g52';
+import { installTouchControls } from './touch.js?v=20260710g52';
+import { createIntroScene } from './introscene.js?v=20260710g52';
+import { styleCarShell } from './carstyle.js?v=20260710g52';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g52';
+import { FrameMeter, fpsBand } from './perf.js?v=20260710g52';
 
-const APP_VERSION = '20260710g51';
+const APP_VERSION = '20260710g52';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -1382,9 +1382,9 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   // ===== BODEGA OJEDA: mercader real del barrio (el oro POR FIN sirve) =====
   const OJEDA = [-53.2, 88.6];
   const shopProducts = () => [
-    { id: 'potion_s', name: '\ud83e\uddea Poci\u00f3n de la abuela', desc: 'Cura 40 HP', price: 30 },
-    { id: 'potion_l', name: '\ud83c\udf76 Tónico del bigote', desc: 'Cura toda la vida', price: 90 },
-    { id: 'weapon', name: '\u2694\ufe0f Arma de tu clase', desc: 'Tier seg\u00fan tu nivel (roll)', price: 240 },
+    { id: 'potion_s', icon: '\ud83e\uddea', name: 'Poción de la abuela', desc: 'Recupera 40 HP. Se apila en el inventario.', price: 30 },
+    { id: 'potion_l', icon: '\ud83c\udf76', name: 'Tónico del bigote', desc: 'Recupera toda tu vida. Se apila en el inventario.', price: 90 },
+    { id: 'weapon', icon: '\u2694\ufe0f', name: 'Arma de tu clase', desc: 'Poder ajustado a tu nivel. Resultado identificado al comprar.', price: 240 },
   ];
   let nearOjeda = false;
   inventory.getGold = () => wallet.gold;

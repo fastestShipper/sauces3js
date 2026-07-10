@@ -3,7 +3,7 @@
 // de modulo, materiales clonados por particula para opacidad independiente, y caps
 // duros de cantidad para no acumular nodos en la escena.
 import * as THREE from 'three';
-import { ParticleBatch } from './particles.js?v=20260710g51';
+import { ParticleBatch } from './particles.js?v=20260710g52';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
@@ -695,6 +695,34 @@ export class Effects {
     sprite.renderOrder = 998;
     this.scene.add(sprite);
     this._pushCapped(this.flashes, { sprite, life: FLASH_LIFE, max: FLASH_LIFE }, flashCap());
+    return true;
+  }
+
+  // Compact impact stack for committed skill hits. It reuses the fixed light pool
+  // and shared geometry, so a heavy read does not introduce runtime light churn.
+  skillImpact(pos, colorHex, heavy = false) {
+    const p = readPos(pos);
+    const detail = this._vfxDetail(p);
+    if (detail <= 0) return false;
+    const color = colorHex != null ? colorHex : 0x8fd8ea;
+    this.hitFlash({ x: p.x, y: (p.y || 0.8) + 0.18, z: p.z }, color);
+    if (detail >= 2) {
+      this.flashLight(p, color, heavy ? 5.2 : 3.2, heavy ? 7 : 5, heavy ? 0.22 : 0.14);
+      this._spurt({ x: p.x, y: p.y || 0.8, z: p.z }, heavy ? 9 : 5, heavy ? 4.8 : 3.2, 0.28, color);
+    }
+    if (heavy && detail >= 2) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(color), transparent: true, opacity: 0.72,
+        side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(NOVA_FINE_RING_GEO, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(p.x, 0.16, p.z);
+      mesh.scale.setScalar(0.22);
+      this.scene.add(mesh);
+      this._pushCapped(this.rings, { mesh, life: 0.26, max: 0.26, radius: 1.8 },
+        isLowEndProfile() ? 12 : isMobileProfile() ? 18 : 30);
+    }
     return true;
   }
 
