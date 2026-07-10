@@ -448,6 +448,19 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Production state after deploy: service active, health clean and 86 mobs.
   - Backups: `/root/deploy-backups/sauces-web-20260710T063940Z-before-20260709g41-selective.tar.gz` and `/root/deploy-backups/sauces-server-20260710T063940Z-before-20260709g41.js`.
 
+- **Production patch 20260710g42**: `sauces.controla.group` runs `APP_VERSION=20260710g42`.
+  - Horde pacing: dynamic waves have a 25 minute minimum interval, spawn 3 to 5 enemies, cannot overlap, and normal wave mobs expire after 60 seconds. Fixed mobs now respawn after 16 seconds instead of 7, slowing XP farming without changing zone difficulty.
+  - Combat input: holding the primary mouse button over the render surface repeats manual attacks through the existing target, chase, cooldown and action windows. Releasing, leaving the canvas, losing focus, hiding the page, opening UI or dying cancels the hold. Manual idle still never attacks by itself.
+  - Background auto mode: hidden tabs use a bounded heartbeat only while explicit auto mode is enabled. A throttled one second tick is consumed in at most four 250 ms substeps, including skill cooldowns, without duplicating visible rAF updates or creating a resume burst.
+  - Kill presentation: owned kills accumulate capped shader-based blood residue on the hero. Streak 10 and above adds a stronger coat, and melee weapons receive their own capped layer. The effect adds no scene nodes or geometry, decays gradually and clears on death/respawn.
+  - World and audio loading: trees, bushes, parked cars and StreetLife now load progressively after the playable world is calm instead of competing with boot. The 3.1 MB SFX library loads per sound family on demand. A low-gain procedural mysterious ambience starts after the first allowed audio gesture and follows the master mute.
+  - Enemy identity: mob materials preserve their original textures and animation geometry while adding deterministic yellow, blue and red bands with a small white star motif. Level scaling changes value only, not the palette.
+  - Compact HUD: HP/XP, level, skills and desktop consumables occupy about 20 to 25 percent less screen area. Desktop consumables sit beside the lower-left status panel; touch controls keep at least 44 px targets. Responsive variables remove the old low-height overlap.
+  - Social UX: friend and party requests now show a top-center accessible notice with sender, current rebound key, Accept button, close action and timeout. Keyboard acceptance and panel acceptance use the same state path.
+  - Capture mode: `F9` toggles a hidden cinematic mode with three smooth automatic camera shots. It hides DOM UI, cursor, nametags and world health bars, then restores their exact state without changing player position, network state, pointer lock or auto mode.
+  - QA: 47 tracked JavaScript syntax checks, 89 selected pure smokes, the foundation suite, TypeScript `--noEmit`, focused manual/auto/blood/audio/shader regressions, and five Playwright viewports at 714x522, 967x546, 1366x768, 390x844 and 896x414. Local browser QA had a nonblank canvas, clean console, live FPS and reversible cinematic capture. Production deployment matched 22/22 web/server hashes and the relay restarted healthy with 86 mobs.
+  - Backups: `/root/deploy-backups/sauces-web-20260710T072945Z-before-20260710g42-selective.tar.gz` and `/root/deploy-backups/sauces-server-20260710T072945Z-before-20260710g42.js`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.
