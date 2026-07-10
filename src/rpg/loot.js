@@ -187,8 +187,8 @@ function injectStyleOnce() {
   font-family:inherit;font-weight:700;font-size:11px;color:#241a04;
   background:linear-gradient(180deg,#ffe08a,#ffbe4d)}
 .rpg-shop-row button:disabled{opacity:.4;cursor:not-allowed}
-.rpg-cons{position:fixed;left:50%;right:auto;
-  top:auto;bottom:calc(166px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);scale:.5;transform-origin:50% 100%;z-index:46;display:flex;flex-direction:row;
+.rpg-cons{position:fixed;left:calc(var(--rpg-hud-left,12px) + var(--rpg-hud-bottom-width,270px) + 10px);right:auto;
+  top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));transform:none;scale:.5;transform-origin:0 100%;z-index:46;display:flex;flex-direction:row;
   align-items:center;gap:8px;
   font-family:'Fredoka',system-ui,'Segoe UI',sans-serif;pointer-events:auto;contain:layout style}
 body.ui-panel-open .rpg-cons,
@@ -198,14 +198,14 @@ body.ui-panel-open .rpg-skill-root,
 body.ui-panel-open .rpg-hud-bottom,
 body.ui-panel-open .tc-stick,
 body.ui-panel-open .tc-btn{opacity:0;pointer-events:none}
-.rpg-cons-btn{position:relative;width:88px;height:88px;border-radius:20px;border:1.5px solid transparent;
+.rpg-cons-btn{position:relative;width:70px;height:70px;border-radius:16px;border:1.5px solid transparent;
   display:grid;place-items:center;flex:0 0 auto;aspect-ratio:1;cursor:pointer;color:#fff0bd;
   background:radial-gradient(circle at 34% 20%, rgba(255,245,203,.28), transparent 34%) padding-box,
     linear-gradient(145deg, rgba(43,35,58,.82), rgba(10,9,20,.9)) padding-box,
     conic-gradient(from 225deg, rgba(105,67,24,.96), rgba(255,230,151,.95), rgba(168,104,34,.94), rgba(105,67,24,.96)) border-box;
   box-shadow:0 16px 32px rgba(3,2,12,.48),0 0 0 1px rgba(255,240,184,.16),0 0 22px rgba(255,210,105,.1), inset 0 1px 0 rgba(255,255,255,.18);
   -webkit-backdrop-filter:blur(12px) saturate(1.24);backdrop-filter:blur(12px) saturate(1.24);
-  font:900 32px 'Fredoka',system-ui,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;
+  font:900 27px 'Fredoka',system-ui,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;
   contain:layout style;transition:transform 120ms ease,filter 140ms ease,box-shadow 160ms ease,opacity 160ms ease;
   -webkit-tap-highlight-color:transparent}
 .rpg-cons-btn:before{content:"";position:absolute;inset:7px;border-radius:12px;border:1px solid rgba(255,231,156,.16);
@@ -230,8 +230,8 @@ body.ui-panel-open .tc-btn{opacity:0;pointer-events:none}
 .rpg-cons-btn .c-name{position:absolute;left:0;right:0;top:32px;text-align:center;font:900 8px 'Fredoka',system-ui,sans-serif;
   color:#fff4c9;letter-spacing:.3px;text-shadow:0 1px 3px rgba(0,0,0,.9);max-width:100%;padding:0 8px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rpg-cons-btn:first-child{width:110px;height:110px;border-radius:24px;box-shadow:0 20px 38px rgba(3,2,12,.54),0 0 0 1px rgba(255,240,184,.24),0 0 30px rgba(141,232,102,.25),inset 0 1px 0 rgba(255,255,255,.22)}
-.rpg-cons-btn:first-child .c-icon{font-size:42px}
+.rpg-cons-btn:first-child{width:88px;height:88px;border-radius:19px;box-shadow:0 20px 38px rgba(3,2,12,.54),0 0 0 1px rgba(255,240,184,.24),0 0 30px rgba(141,232,102,.25),inset 0 1px 0 rgba(255,255,255,.22)}
+.rpg-cons-btn:first-child .c-icon{font-size:34px}
 .rpg-cons-btn:first-child .c-type{font-size:10px}
 .rpg-cons-btn:first-child .c-name{top:43px;font-size:9px;padding:0 10px}
 .rpg-cons-btn:first-child .c-heal{bottom:9px;font-size:12px}
@@ -259,10 +259,8 @@ body .tc-pot{aspect-ratio:1;contain:layout style;touch-action:manipulation;-webk
   45%{transform:scale(.96);filter:saturate(.72) brightness(.9)}
 }
 @media (max-width:1120px) and (min-width:681px){
-  .rpg-cons{left:50%;right:auto;top:auto;bottom:calc(154px + env(safe-area-inset-bottom, 0px));
-    transform:translateX(-50%);gap:7px;flex-direction:row}
-  .rpg-cons-btn{width:76px;height:76px;border-radius:17px;font-size:27px}
-  .rpg-cons-btn:first-child{width:92px;height:92px;border-radius:20px}
+  .rpg-cons{left:calc(var(--rpg-hud-left,12px) + var(--rpg-hud-bottom-width,260px) + 10px);right:auto;top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));
+    transform:none;gap:7px;flex-direction:row}
 }
 @media (max-width:680px){
   .rpg-inv{right:10px;left:10px;bottom:auto;top:max(74px, env(safe-area-inset-top));
@@ -294,11 +292,11 @@ body .tc-pot{aspect-ratio:1;contain:layout style;touch-action:manipulation;-webk
   .rpg-cons-btn:first-child .c-icon{font-size:26px}
 }
 @media (max-height:660px) and (min-width:681px) and (hover:hover){
-  .rpg-cons{left:50%;right:auto;
-    top:auto;bottom:calc(146px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);flex-direction:row;gap:7px}
-  .rpg-cons-btn{width:74px;height:74px;border-radius:17px;font-size:26px}
-  .rpg-cons-btn:first-child{width:88px;height:88px;border-radius:20px;font-size:30px}
-  .rpg-cons-btn:first-child .c-icon{font-size:33px}
+  .rpg-cons{left:calc(var(--rpg-hud-left,10px) + var(--rpg-hud-bottom-width,236px) + 10px);right:auto;
+    top:auto;bottom:max(8px,env(safe-area-inset-bottom,0px));transform:none;flex-direction:row;gap:6px}
+  .rpg-cons-btn{width:64px;height:64px;border-radius:15px;font-size:24px}
+  .rpg-cons-btn:first-child{width:76px;height:76px;border-radius:17px;font-size:27px}
+  .rpg-cons-btn:first-child .c-icon{font-size:29px}
   .rpg-cons-btn .c-key{top:-6px;left:-6px;min-width:22px;height:21px;font-size:10px;border-radius:7px}
   .rpg-cons-btn .c-count{right:-5px;bottom:-5px;min-width:22px;height:22px;font-size:11px}
   .rpg-cons-btn .c-type{top:8px;right:8px;font-size:8px}
