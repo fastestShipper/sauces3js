@@ -1,4 +1,4 @@
-import { actionLabel, keybindChangeEvent } from './keybinds.js?v=20260710g42';
+import { actionLabel, keybindChangeEvent } from './keybinds.js?v=20260710g43';
 
 // Controles tactiles: joystick virtual (mitad izquierda) + botones ATK/SALTO
 // (derecha) + drag de camara en la mitad derecha. Solo se monta en dispositivos
