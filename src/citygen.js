@@ -6,17 +6,84 @@ export const ROAD_Y = 0.02;
 export const WALK_Y = 0.09;
 const SEG_CELL = 24.0;
 
-// paleta TOON: pasteles brillantes y variados (KayKit-style), no tierra apagada
+// paleta TOON: pasteles VIVOS estilo Lima (croma alto; la anterior era tan
+// pálida que con luz de día leía blanco lavado)
 export const WALL_COLORS = [
-  [0.92, 0.84, 0.62], [0.86, 0.55, 0.42], [0.60, 0.74, 0.84],
-  [0.64, 0.80, 0.60], [0.92, 0.74, 0.62], [0.72, 0.66, 0.82],
-  [0.90, 0.82, 0.50], [0.80, 0.78, 0.74], [0.85, 0.66, 0.66],
-  [0.55, 0.76, 0.78], [0.72, 0.78, 0.58], [0.82, 0.62, 0.52],
+  [0.97, 0.82, 0.42], [0.93, 0.51, 0.34], [0.42, 0.67, 0.88],
+  [0.55, 0.80, 0.50], [0.96, 0.66, 0.42], [0.66, 0.57, 0.88],
+  [0.95, 0.76, 0.28], [0.89, 0.84, 0.74], [0.91, 0.53, 0.58],
+  [0.36, 0.74, 0.76], [0.70, 0.79, 0.40], [0.87, 0.47, 0.36],
 ];
 export const TRIM_COLORS = [
   [0.92, 0.91, 0.88], [0.30, 0.24, 0.18], [0.45, 0.46, 0.48],
   [0.92, 0.91, 0.88], [0.25, 0.30, 0.28],
 ];
+
+// ancla del mundo: centro de la gruta del Parque Los Sauces (coord pinneada)
+export const WORLD_ANCHOR = [-62, -15];
+// radio jugable: 1 km a la redonda de la gruta
+export const WORLD_RADIUS = 1000;
+
+// Recorta la data OSM a un radio desde el ancla. Calles y barreras se clipean
+// al circulo (con punto de interseccion exacto); poligonos (edificios/verde)
+// entran o salen completos por centroide; arboles y POIs por distancia.
+export function cropZoneData(data, cx = WORLD_ANCHOR[0], cz = WORLD_ANCHOR[1], radius = WORLD_RADIUS) {
+  const r2 = radius * radius;
+  const d2 = (x, z) => { const dx = x - cx, dz = z - cz; return dx * dx + dz * dz; };
+  const inside = (p) => d2(p[0], p[1]) <= r2;
+  // punto donde el segmento a(dentro)->b(fuera) cruza el circulo
+  const edgePoint = (a, b) => {
+    const ax = a[0] - cx, az = a[1] - cz;
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const A = dx * dx + dz * dz;
+    if (A < 1e-9) return [a[0], a[1]];
+    const B = 2 * (ax * dx + az * dz);
+    const C = ax * ax + az * az - r2;
+    const disc = Math.max(0, B * B - 4 * A * C);
+    const t = Math.max(0, Math.min(1, (-B + Math.sqrt(disc)) / (2 * A)));
+    return [+(a[0] + dx * t).toFixed(2), +(a[1] + dz * t).toFixed(2)];
+  };
+  // parte una polilinea en tramos que quedan dentro del circulo
+  const clipPolyline = (pts) => {
+    const runs = [];
+    let cur = null;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (inside(p)) {
+        if (!cur) {
+          cur = [];
+          if (i > 0) cur.push(edgePoint(p, pts[i - 1]));
+        }
+        cur.push(p);
+      } else if (cur) {
+        cur.push(edgePoint(pts[i - 1], p));
+        if (cur.length >= 2) runs.push(cur);
+        cur = null;
+      }
+    }
+    if (cur && cur.length >= 2) runs.push(cur);
+    return runs;
+  };
+  const centroidIn = (ring) => {
+    let sx = 0, sz = 0;
+    for (const p of ring) { sx += p[0]; sz += p[1]; }
+    return d2(sx / ring.length, sz / ring.length) <= r2;
+  };
+  const clipAll = (list) => {
+    const out = [];
+    for (const item of list || []) {
+      for (const run of clipPolyline(item.p || [])) out.push({ ...item, p: run });
+    }
+    return out;
+  };
+  data.roads = clipAll(data.roads);
+  data.barriers = clipAll(data.barriers);
+  data.buildings = (data.buildings || []).filter((b) => b.p?.length >= 3 && centroidIn(b.p));
+  data.green = (data.green || []).filter((g) => g.p?.length >= 3 && centroidIn(g.p));
+  data.trees = (data.trees || []).filter((t) => d2(t[0], t[1]) <= r2);
+  data.pois = (data.pois || []).filter((p) => d2(p.x, p.z) <= r2);
+  return data;
+}
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -45,6 +112,7 @@ export class City {
     this.osmBuildingCount = (data.buildings || []).length;
     for (const b of this.data.buildings) b.osm = true;
     this.carColliders = [];
+    this.extraBuildingColliders = [];
     this.buildSegGrid();
     this.cachePolys();
     if (this.genOpts.frontageStrips || this.genOpts.interiorCarpet) {
@@ -165,20 +233,42 @@ export class City {
     });
     this.ringGrid = new Map();
     this.rings = [];
+    this.buildingColliderKeys = new Map();
     for (const b of this.data.buildings) {
-      let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
-      for (const p of b.p) { minx = Math.min(minx, p[0]); minz = Math.min(minz, p[1]); maxx = Math.max(maxx, p[0]); maxz = Math.max(maxz, p[1]); }
-      const idx = this.rings.length;
-      this.rings.push({ ring: b.p, bb: [minx, minz, maxx, maxz], h: b.h ?? 5 });
-      for (let cx = Math.floor((minx - 3) / SEG_CELL); cx <= Math.floor((maxx + 3) / SEG_CELL); cx++) {
-        for (let cz = Math.floor((minz - 3) / SEG_CELL); cz <= Math.floor((maxz + 3) / SEG_CELL); cz++) {
-          const key = cx + ',' + cz;
-          let arr = this.ringGrid.get(key);
-          if (!arr) { arr = []; this.ringGrid.set(key, arr); }
-          arr.push(idx);
-        }
+      this._indexBuildingCollider(b.p, b.h ?? 5);
+    }
+    for (const collider of this.extraBuildingColliders) {
+      const idx = this._indexBuildingCollider(collider.ring, collider.h);
+      if (collider.key) this.buildingColliderKeys.set(collider.key, idx);
+    }
+  }
+
+  _indexBuildingCollider(ring, h) {
+    let minx = 1e18, minz = 1e18, maxx = -1e18, maxz = -1e18;
+    for (const p of ring) { minx = Math.min(minx, p[0]); minz = Math.min(minz, p[1]); maxx = Math.max(maxx, p[0]); maxz = Math.max(maxz, p[1]); }
+    const idx = this.rings.length;
+    this.rings.push({ ring, bb: [minx, minz, maxx, maxz], h });
+    for (let cx = Math.floor((minx - 3) / SEG_CELL); cx <= Math.floor((maxx + 3) / SEG_CELL); cx++) {
+      for (let cz = Math.floor((minz - 3) / SEG_CELL); cz <= Math.floor((maxz + 3) / SEG_CELL); cz++) {
+        const key = cx + ',' + cz;
+        let arr = this.ringGrid.get(key);
+        if (!arr) { arr = []; this.ringGrid.set(key, arr); }
+        arr.push(idx);
       }
     }
+    return idx;
+  }
+
+  addBuildingCollider(ring, h = 5, key = '') {
+    if (!Array.isArray(ring) || ring.length < 3 || ring.some((p) => (
+      !Array.isArray(p) || p.length < 2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])
+    ))) return -1;
+    if (key && this.buildingColliderKeys.has(key)) return this.buildingColliderKeys.get(key);
+    const collider = { ring: ring.map((p) => [p[0], p[1]]), h: Number(h) || 5, key };
+    this.extraBuildingColliders.push(collider);
+    const idx = this._indexBuildingCollider(collider.ring, collider.h);
+    if (key) this.buildingColliderKeys.set(key, idx);
+    return idx;
   }
 
   inAnyGreen(x, z) {
@@ -200,6 +290,24 @@ export class City {
       if (margin > 0 && this.pointInRing(Math.max(bb[0], Math.min(bb[2], x)), Math.max(bb[1], Math.min(bb[3], z)), rr.ring)) return true;
     }
     return false;
+  }
+
+  buildingHeightAt(x, z, margin = 0) {
+    const key = Math.floor(x / SEG_CELL) + ',' + Math.floor(z / SEG_CELL);
+    let height = 0;
+    for (const ri of (this.ringGrid.get(key) || [])) {
+      const rr = this.rings[ri];
+      const bb = rr.bb;
+      if (x < bb[0] - margin || x > bb[2] + margin || z < bb[1] - margin || z > bb[3] + margin) continue;
+      let inside = this.pointInRing(x, z, rr.ring);
+      if (!inside && margin > 0) {
+        const px = Math.max(bb[0], Math.min(bb[2], x));
+        const pz = Math.max(bb[1], Math.min(bb[3], z));
+        inside = this.pointInRing(px, pz, rr.ring);
+      }
+      if (inside) height = Math.max(height, Number(rr.h) || 5);
+    }
+    return height;
   }
 
   inTallerBuilding(x, z, minH) {
@@ -237,6 +345,28 @@ export class City {
       if (Math.abs(lz) < c.hw + pad && Math.abs(lx) < c.hd + pad) return true;
     }
     return false;
+  }
+
+  // Si (x,z) quedo DENTRO de un auto (p. ej. un auto en movimiento barrio al
+  // jugador), devuelve el punto mas cercano fuera del collider; null si libre.
+  carPushOut(x, z, pad = 0.25) {
+    for (const c of this.carColliders) {
+      const dx = x - c.x, dz = z - c.z;
+      if (dx * dx + dz * dz > 16) continue;
+      const s = Math.sin(-c.ang), co = Math.cos(-c.ang);
+      const lx = dx * co - dz * s;
+      const lz = dx * s + dz * co;
+      const penD = (c.hd + pad) - Math.abs(lx);
+      const penW = (c.hw + pad) - Math.abs(lz);
+      if (penD <= 0 || penW <= 0) continue;
+      // empuja por el eje de menor penetracion hasta el borde del collider
+      let nlx = lx, nlz = lz;
+      if (penD < penW) nlx = (lx >= 0 ? 1 : -1) * (c.hd + pad);
+      else nlz = (lz >= 0 ? 1 : -1) * (c.hw + pad);
+      // local -> mundo: rotacion +ang (cos(ang) = co, sin(ang) = -s)
+      return [c.x + nlx * co + nlz * s, c.z + (-nlx * s + nlz * co)];
+    }
+    return null;
   }
 
   parcelHeight(full, rng, mcx, mcz) {
@@ -291,7 +421,14 @@ export class City {
               if (ok && (this.inRealBuilding(mcx, mcz, 0.6) || this.inAnyGreen(mcx, mcz))) ok = false;
               if (ok) break;
             }
-            if (ok) fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz), osm: false, generated: 'frontage' });
+            if (ok) {
+              // variedad party-wall: ±15% de altura por parcela (seed por posicion,
+              // determinista) para que la fila de fillers no lea como una caja
+              // repetida. Gratis para colision: el jugador solo usa el footprint 2D
+              // y cachePolys() se rehace despues de fillGaps con esta h ya aplicada.
+              const hj = 0.85 + (hashF(Math.trunc(mcx * 3.7) + Math.trunc(mcz * 5.3) * 57) - 0.5) * 0.6;
+              fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz) * hj, osm: false, generated: 'frontage' });
+            }
             d += frontage;
           }
         }

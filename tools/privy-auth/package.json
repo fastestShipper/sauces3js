@@ -1,0 +1,16 @@
+{
+  "name": "sauces-privy-auth-build",
+  "private": true,
+  "type": "module",
+  "description": "Build-only: pre-bundlea el login de Privy a assets/js/privy-auth.js. El juego NO usa bundler.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@privy-io/js-sdk-core": "0.68.1",
+    "sauces3js-modern": "file:../.."
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

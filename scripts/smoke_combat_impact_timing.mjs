@@ -1,0 +1,150 @@
+globalThis.localStorage = {
+  getItem() { return null; },
+  setItem() {},
+};
+globalThis.addEventListener = () => {};
+
+const { Combat } = await import('../src/rpg/combat.js');
+
+async function waitFor(predicate, timeoutMs = 260) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 8));
+  }
+  return predicate();
+}
+
+function makeCombat({ comboStep = 0 } = {}) {
+  const hits = [];
+  const attacks = [];
+  const sentAttacks = [];
+  const effects = [];
+  const mobMap = new Map([[7, { id: 7, x: 1.8, z: 0, hp: 40, hpMax: 40, lvl: 1 }]]);
+  const player = {
+    charFile: 'char_knight.glb',
+    pos: { x: 0, z: 0 },
+    keys: {},
+    locked: false,
+    dead: false,
+    heading: 0,
+    root: { rotation: { y: 0 } },
+    comboStep: 0,
+    comboT: 0,
+    attackT: 0,
+    speedBuffT: 0,
+    speedBuffMult: 1,
+    attack() { this.comboStep = comboStep; attacks.push('attack'); return true; },
+  };
+
+  const combat = new Combat({
+    scene: null,
+    camera: null,
+    player,
+    mobField: {
+      setTargeted() {},
+      meshes() { return []; },
+      pickFromIntersections() { return null; },
+    },
+    net: {
+      myId: 1,
+      mobs: mobMap,
+      remotes: new Map(),
+      party: [],
+      attackMob(id, dmg, kind) { hits.push({ id, dmg, kind }); },
+      sendAttack() { sentAttacks.push('atk'); },
+      partySkill() {},
+      reportStreak() {},
+    },
+    inventory: { equippedWeapon: null },
+    progress: { hpMax: 100, xp: 0, xpNext: 10, level: 1, gainXp() { return false; } },
+    hud: {
+      setHP() {},
+      setXP() {},
+      showTarget() {},
+      hideTarget() {},
+      toast() {},
+      hideStreak() {},
+    },
+    sfx: { hit() {} },
+    effects: {
+      slashArc() { effects.push('slash'); },
+      bloodHit() { effects.push('blood'); },
+      damageNumber() { effects.push('number'); },
+      goreBurst() { effects.push('gore'); },
+      shake() { effects.push('shake'); },
+    },
+  });
+  return { combat, hits, attacks, sentAttacks, effects, mobMap, player };
+}
+
+const { combat, hits, attacks, sentAttacks } = makeCombat();
+
+combat.targetId = 7;
+combat.autoAttack = true;
+
+combat.update(0.016);
+if (attacks.length !== 1) throw new Error('attack animation did not start');
+if (sentAttacks.length !== 1) throw new Error('attack broadcast was not sent');
+if (hits.length !== 0) throw new Error('damage was applied before impact timing');
+combat.net.mobs.get(7).x = 0;
+combat.net.mobs.get(7).z = 1.8;
+combat.player.heading = Math.PI;
+combat.player.root.rotation.y = Math.PI;
+combat.update(0.016);
+if (Math.abs(combat.player.heading) > 1e-9 || Math.abs(combat.player.root.rotation.y) > 1e-9) {
+  throw new Error('basic attack did not keep facing its moving target before commitment');
+}
+
+await new Promise((resolve) => setTimeout(resolve, 50));
+if (hits.length !== 0) throw new Error('damage landed too early');
+
+await waitFor(() => hits.length === 1);
+const basicKind = hits[0]?.kind;
+const basicKindOk = basicKind === undefined || basicKind === 'heavy';
+if (hits.length !== 1 || hits[0].id !== 7 || !basicKindOk) {
+  throw new Error('basic impact did not apply one delayed mob hit');
+}
+// hit-stop nuevo: solo el REMATE (crit/finisher = kind 'heavy') congela; un
+// golpe normal NO. Antes freezaba en cada golpe y se sentia como un tiron.
+{
+  const wasRemate = basicKind === 'heavy';
+  if (wasRemate && combat.hitStopT <= 0) throw new Error('el remate deberia congelar');
+  if (!wasRemate && combat.hitStopT > 0) throw new Error('un golpe normal NO deberia congelar');
+}
+// GOW: la cadencia queda DELIBERADA (~0.44s). Antes el combo abria el siguiente
+// golpe en ~0.16s y aceleraba con haste: se sentia autoclicker. Ahora encadena la
+// ventana de combo pero NO acelera.
+if (combat.attackCd < 0.40 || combat.attackCd > 0.50) throw new Error(`basic combo cadence should be deliberate ~0.44s (GOW), got ${combat.attackCd}`);
+if (combat.player.attackT > 0.091) throw new Error(`basic combo momentum left attack lock too high: ${combat.player.attackT}`);
+if (combat.player.comboT < 0.58) throw new Error(`basic combo momentum did not carry combo window: ${combat.player.comboT}`);
+if (combat.player.speedBuffT <= 0) throw new Error('basic combo should keep the momentum window open (trail/identity)');
+if (combat.player.speedBuffMult > 1.02) {
+  throw new Error(`basic combo must NOT accelerate attacks (GOW deliberate cadence), got mult ${combat.player.speedBuffMult}`);
+}
+
+console.log('PASS: combat applies basic damage on impact timing');
+
+{
+  const oldRandom = Math.random;
+  Math.random = () => 0.99;
+  try {
+    const finisher = makeCombat({ comboStep: 2 });
+    finisher.combat.targetId = 7;
+    finisher.combat.autoAttack = true;
+    finisher.combat.update(0.016);
+    await waitFor(() => finisher.hits.length === 1);
+    if (finisher.hits.length !== 1) throw new Error('finisher impact did not apply delayed hit');
+    if (finisher.hits[0].kind !== 'heavy') throw new Error(`finisher basic impact did not send heavy metadata: ${finisher.hits[0].kind}`);
+    if (finisher.combat.hitStopT < 0.069) throw new Error(`finisher hit-stop too weak: ${finisher.combat.hitStopT}`);
+    if (finisher.combat.attackCd < 0.40 || finisher.combat.attackCd > 0.50) throw new Error(`finisher cadence should be deliberate ~0.42s (GOW): ${finisher.combat.attackCd}`);
+    if (finisher.combat.player.attackT > 0.076) throw new Error(`finisher combo momentum lock too high: ${finisher.combat.player.attackT}`);
+    if (finisher.combat.player.speedBuffMult > 1.06) throw new Error(`finisher must not strongly accelerate attacks (GOW): ${finisher.combat.player.speedBuffMult}`);
+    if (!finisher.effects.includes('shake') || !finisher.effects.includes('gore')) {
+      throw new Error('finisher impact did not trigger heavy feedback');
+    }
+    console.log('PASS: combo finisher has heavy non-crit impact feedback');
+  } finally {
+    Math.random = oldRandom;
+  }
+}

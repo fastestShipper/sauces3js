@@ -1,0 +1,114 @@
+{
+  "worldId": "los_sauces",
+  "version": "20260620p4",
+  "pois": [
+    {
+      "id": "osm-shop-nautitech-peru",
+      "x": -60.69,
+      "z": -101.39,
+      "category": "shop",
+      "title": "Nautitech Perú",
+      "description": "Comercio público registrado en el mapa de la zona.",
+      "source": "osm"
+    },
+    {
+      "id": "osm-clinic-asmat-node",
+      "x": -191.81,
+      "z": -12.65,
+      "category": "clinic",
+      "title": "Asmat",
+      "description": "Referencia pública de salud cerca de Los Sauces.",
+      "source": "osm"
+    },
+    {
+      "id": "osm-services-southwest",
+      "x": -60.33,
+      "z": -173.86,
+      "category": "services",
+      "title": "Servicios públicos",
+      "description": "Punto de servicios registrado en OpenStreetMap.",
+      "source": "osm"
+    },
+    {
+      "id": "osm-services-west",
+      "x": -90.52,
+      "z": -220.79,
+      "category": "services",
+      "title": "Servicios públicos",
+      "description": "Punto de servicios registrado en OpenStreetMap.",
+      "source": "osm"
+    },
+    {
+      "id": "osm-minimarket-ojeda",
+      "x": -53.24,
+      "z": 88.6,
+      "category": "bodega",
+      "title": "Ojeda",
+      "description": "Bigote forever ❤️",
+      "source": "osm"
+    },
+    {
+      "id": "osm-parking-boulevard",
+      "x": 188.59,
+      "z": 285.24,
+      "category": "parking",
+      "title": "Entrada de estacionamiento",
+      "description": "Acceso público registrado cerca del Boulevard.",
+      "source": "osm"
+    },
+    {
+      "id": "osm-clinica-asmat",
+      "x": -234.88,
+      "z": 26.83,
+      "category": "clinic",
+      "title": "Clínica Asmat",
+      "description": "Referencia pública de salud dentro del recorrido del barrio.",
+      "source": "osm"
+    },
+    {
+      "id": "street-jiron-los-sauces",
+      "x": -326.33,
+      "z": 50.27,
+      "category": "street",
+      "title": "Jirón Los Sauces",
+      "description": "Eje residencial que da identidad al recorrido principal.",
+      "source": "osm-road"
+    },
+    {
+      "id": "street-jiron-nicolas-poussin",
+      "x": -99.02,
+      "z": 137.54,
+      "category": "street",
+      "title": "Jirón Nicolás Poussin",
+      "description": "Calle reconocible para ubicarse dentro del barrio.",
+      "source": "osm-road"
+    },
+    {
+      "id": "street-boulevard-de-surco",
+      "x": -57.4,
+      "z": 289.91,
+      "category": "street",
+      "title": "Avenida Boulevard de Surco",
+      "description": "Avenida pública que conecta el borde sur del mapa.",
+      "source": "osm-road"
+    },
+    {
+      "id": "street-calle-pissarro",
+      "x": -328.49,
+      "z": 193.37,
+      "category": "street",
+      "title": "Calle Pissarro",
+      "description": "Calle residencial usada como punto de orientación local.",
+      "source": "osm-road"
+    },
+    {
+      "id": "street-calle-corot",
+      "x": -349.05,
+      "z": 254.38,
+      "category": "street",
+      "title": "Calle Corot",
+      "description": "Calle pública del tejido residencial de Los Sauces.",
+      "source": "osm-road"
+    }
+  ]
+}

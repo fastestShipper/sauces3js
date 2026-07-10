@@ -4,13 +4,14 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node --env-file-if-exists=.env server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "jose": "^6.2.3",
     "ws": "^8.21.0"
   }
 }

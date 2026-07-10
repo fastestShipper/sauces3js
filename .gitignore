@@ -7,6 +7,9 @@ node_modules/
 # Secrets / env
 .env
 .env.*
+# ...pero el ejemplo SI se versiona (no lleva valores)
+!.env.example
+!**/.env.example
 *.key
 *.pem
 id_*
@@ -31,3 +34,11 @@ server/accounts.json
 
 # Archivos fuente de Blender (~136MB; el runtime usa los GLB de assets/models/)
 assets/source/
+clips/
+scripts/__pycache__/
+/tmp/
+/dist-modern/
+
+# Godot generated editor/cache state
+godot/.godot/
+godot/export_presets.cfg
