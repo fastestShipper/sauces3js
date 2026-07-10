@@ -397,6 +397,17 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Backups: `/root/deploy-backups/sauces-web-20260710T041700Z-before-20260709g36.tar.gz` and `/root/deploy-backups/sauces-server-20260710T041700Z-before-20260709g36.js`.
   - Next performance priorities for g37: O(1) target-ring updates and cached target HUD writes, shared mob HP/ring geometry, and throttled low-end spawn-queue selection.
 
+- **Production patch 20260709g37**: `sauces.controla.group` runs `APP_VERSION=20260709g37`.
+  - Stable target cache: unchanged mob id, lock mode, name and HP no longer call `_setSoftTarget`, rewrite rings or touch target DOM every frame. HP, lock, target id, pressure retarget and death still update immediately.
+  - O(1) target rings: `MobField` stores the current target and touches only the previous/new ring. A target selected before its visual is created receives the correct ring when it materializes, and death clears deferred state.
+  - Shared mob UI geometry: all mob HP backgrounds, HP fills and target rings reuse three immutable geometries. Per-mob materials remain independent, and corpse disposal never destroys shared shapes.
+  - Low-end spawn queue: distant candidates use a linear eligible selection at 7.5 Hz instead of sorting/reinserting every frame. Moving 1.5 m wakes the queue immediately, keeping nearby materialization below 200 ms.
+  - Measured gates: the target cache remained write-free after initial state across 600 frames with 90 mobs; the potential 270 per-mob UI geometries collapse to three shared shapes; 600 stationary low-end updates performed zero queue sorts/unshifts.
+  - Gameplay and visual contract: target choice, pressure scoring, HP feedback, ring styles, mob appearance, spawn radius, damage, balance and server behavior remain unchanged.
+  - QA: 45 JavaScript syntax checks, 73 selected pure smokes, TypeScript `--noEmit`, instrumented cache/geometry/queue tests, local and production browser runs at 1280x720 and 390x844, clean consoles, no overflow, nonblank pixel checks, external `WSS_OPEN` and 20/20 production file hashes.
+  - Production state after deploy: service active, health clean and 86 mobs. Root disk remains critical at 99% with about 2.0 GB free.
+  - Backup: `/root/deploy-backups/sauces-web-20260710T043102Z-before-20260709g37.tar.gz`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.

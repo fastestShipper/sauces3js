@@ -12,8 +12,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { plantClip } from '../animclip.js?v=20260709g36';
-import { sanitizeImported } from '../glbutil.js?v=20260709g36';
+import { plantClip } from '../animclip.js?v=20260709g37';
+import { sanitizeImported } from '../glbutil.js?v=20260709g37';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -50,6 +50,8 @@ const DEATH_MIXER_STEP = 1 / 24;
 const MOB_ACTION_BLEND = 0.08;     // entrada corta para ataques, hit y spawn sin cortes secos
 const MOB_LOCOMOTION_BLEND = 0.12; // salida legible hacia idle/walk sin frenar el root autoritativo
 const MOB_ACTION_STOP_PAD = 0.035; // limpia la accion anterior cuando el crossfade ya termino
+const SPAWN_QUEUE_RETRY_INTERVAL = 0.125;
+const SPAWN_QUEUE_MOVE_WAKE = 1.5;
 
 // kind % 4 -> tipo de esqueleto. El server manda kind; el cliente solo lo mapea a un look.
 const KIND_TO_TYPE = ['Minion', 'Rogue', 'Warrior', 'Mage'];
@@ -72,6 +74,16 @@ const PROJECTILE_BY_CHAR = {
   'char_ranger.glb': 'arrow',
 };
 const MOB_GLB_URL = './assets/models/kaykit_skeletons.glb';
+
+// These immutable shapes are shared by every mob. Their mutable materials stay per visual.
+const SHARED_HP_BG_GEOMETRY = new THREE.PlaneGeometry(HP_W, HP_H);
+const SHARED_HP_FILL_GEOMETRY = new THREE.PlaneGeometry(HP_W, HP_H);
+const SHARED_TARGET_RING_GEOMETRY = new THREE.RingGeometry(0.7, 0.92, 28);
+const SHARED_MOB_GEOMETRIES = new Set([
+  SHARED_HP_BG_GEOMETRY,
+  SHARED_HP_FILL_GEOMETRY,
+  SHARED_TARGET_RING_GEOMETRY,
+]);
 
 let sharedMobGltfPromise = null;
 
@@ -169,16 +181,14 @@ export function plantMobClips(clips) {
 function makeHpBar() {
   const group = new THREE.Group();
   group.position.y = HP_Y;
-  const bgGeo = new THREE.PlaneGeometry(HP_W, HP_H);
-  const bg = new THREE.Mesh(bgGeo, new THREE.MeshBasicMaterial({ color: 0x14161c, depthTest: false, transparent: true, opacity: 0.85 }));
+  const bg = new THREE.Mesh(SHARED_HP_BG_GEOMETRY, new THREE.MeshBasicMaterial({ color: 0x14161c, depthTest: false, transparent: true, opacity: 0.85 }));
   bg.renderOrder = 998;
-  const fillGeo = new THREE.PlaneGeometry(HP_W, HP_H);
-  const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x46d35a, depthTest: false, transparent: true }));
+  const fill = new THREE.Mesh(SHARED_HP_FILL_GEOMETRY, new THREE.MeshBasicMaterial({ color: 0x46d35a, depthTest: false, transparent: true }));
   fill.position.z = 0.001;         // delante del fondo para evitar z-fighting
   fill.renderOrder = 999;
   group.add(bg);
   group.add(fill);
-  return { group, fill };
+  return { group, bg, fill };
 }
 
 // Ajusta el relleno de la barra al ratio hp/hpMax. El plano se ancla a la izquierda
@@ -195,9 +205,8 @@ const TARGET_RING_LOCKED = Object.freeze({ color: 0xffd24a, opacity: 0.85, scale
 
 // Anillo plano de seleccion bajo el mob, oculto hasta que se le apunta.
 function makeRing() {
-  const geo = new THREE.RingGeometry(0.7, 0.92, 28);
   const mat = new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
-  const ring = new THREE.Mesh(geo, mat);
+  const ring = new THREE.Mesh(SHARED_TARGET_RING_GEOMETRY, mat);
   ring.rotation.x = -Math.PI / 2;             // acostado en el piso
   ring.position.y = 0.02;
   ring.visible = false;
@@ -217,6 +226,12 @@ export class MobField {
     this.dying = [];         // [{ id, t }] mobs en su ventana de muerte antes de quitarse
     this.spawnQueue = [];
     this.spawnQueuedIds = new Set();
+    this.spawnQueueBlocked = false;
+    this.spawnQueueRetryT = 0;
+    this.spawnQueuePlayerX = NaN;
+    this.spawnQueuePlayerZ = NaN;
+    this.targetedId = null;
+    this.targetLocked = false;
     this.ready = false;
     this.effects = null;     // lo setea app.js: gore compartido de muertes server-side
   }
@@ -323,34 +338,80 @@ export class MobField {
         this.spawnQueuedIds.add(String(mob.id));
       }
     }
+    this.spawnQueueBlocked = false;
+    this.spawnQueueRetryT = 0;
   }
 
-  _processSpawnQueue() {
+  _spawnQueuePlayerMoved(pp) {
+    const x = Number(pp && pp.x);
+    const z = Number(pp && pp.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+    if (!Number.isFinite(this.spawnQueuePlayerX) || !Number.isFinite(this.spawnQueuePlayerZ)) return true;
+    return Math.hypot(x - this.spawnQueuePlayerX, z - this.spawnQueuePlayerZ) >= SPAWN_QUEUE_MOVE_WAKE;
+  }
+
+  _rememberSpawnQueuePlayer(pp) {
+    const x = Number(pp && pp.x);
+    const z = Number(pp && pp.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+    this.spawnQueuePlayerX = x;
+    this.spawnQueuePlayerZ = z;
+  }
+
+  // Find and remove the nearest eligible candidate without sorting or rotating the queue.
+  _takeSpawnCandidate(pp, createRadius) {
+    let bestIndex = -1;
+    let bestDistance = Infinity;
+    let bestMob = null;
+    for (let i = 0; i < this.spawnQueue.length;) {
+      const queued = this.spawnQueue[i];
+      const live = queued && this.net && this.net.mobs && this.net.mobs.get(queued.id);
+      const missing = !queued || queued.id == null || (this.net && this.net.mobs && !live);
+      const src = live || queued;
+      if (missing || (src.hp != null && src.hp <= 0)) {
+        this.spawnQueue.splice(i, 1);
+        if (queued && queued.id != null) this.spawnQueuedIds.delete(String(queued.id));
+        continue;
+      }
+      const distance = pp ? this._mobDistance(src) : 0;
+      const eligible = !pp || this.mobs.size === 0 || distance <= createRadius;
+      if (eligible && (bestIndex < 0 || distance < bestDistance)) {
+        bestIndex = i;
+        bestDistance = distance;
+        bestMob = src;
+      }
+      i++;
+    }
+    if (bestIndex < 0) return null;
+    const queued = this.spawnQueue[bestIndex];
+    this.spawnQueue.splice(bestIndex, 1);
+    this.spawnQueuedIds.delete(String(queued.id));
+    return bestMob;
+  }
+
+  _processSpawnQueue(dt = 0) {
     if (!this.ready || !this.spawnQueue.length) return;
     const pp = this.net && this.net.player && this.net.player.pos;
-    if (pp && this.spawnQueue.length > 1) {
-      this.spawnQueue.sort((a, b) => this._mobDistance(a) - this._mobDistance(b));
-    }
     const mobile = !!(globalThis.window && window.__SAUCES_MOBILE__);
     const lowEnd = !!(globalThis.window && window.__SAUCES_LOW_END__);
+    if (lowEnd && this.spawnQueueBlocked) {
+      const elapsed = Number.isFinite(dt) && dt > 0 ? dt : SPAWN_QUEUE_RETRY_INTERVAL;
+      this.spawnQueueRetryT = Math.max(0, this.spawnQueueRetryT - elapsed);
+      if (this.spawnQueueRetryT > 0 && !this._spawnQueuePlayerMoved(pp)) return;
+    }
     const budget = lowEnd ? 1 : mobile ? 2 : 4;
     const createRadius = lowEnd ? 46 : mobile ? 62 : 105;
     let made = 0;
     while (made < budget && this.spawnQueue.length) {
-      const mob = this.spawnQueue.shift();
-      this.spawnQueuedIds.delete(String(mob && mob.id));
-      if (!mob || mob.id == null) continue;
-      const live = this.net && this.net.mobs && this.net.mobs.get(mob.id);
-      if (this.net && this.net.mobs && !live) continue;
-      const src = live || mob;
-      if (src.hp != null && src.hp <= 0) continue;
-      if (pp && this.mobs.size > 0 && this._mobDistance(src) > createRadius) {
-        this.spawnQueue.unshift(src);
-        this.spawnQueuedIds.add(String(src.id));
-        break;
-      }
-      this._createMob(src);
+      const mob = this._takeSpawnCandidate(pp, createRadius);
+      if (!mob) break;
+      this._createMob(mob);
       made++;
+    }
+    if (lowEnd) {
+      this._rememberSpawnQueuePlayer(pp);
+      this.spawnQueueBlocked = made === 0 && this.spawnQueue.length > 0;
+      this.spawnQueueRetryT = this.spawnQueueBlocked ? SPAWN_QUEUE_RETRY_INTERVAL : 0;
     }
   }
 
@@ -513,6 +574,7 @@ export class MobField {
       attackTellT: 0, attackTellMax: ATTACK_TELL_FLASH, attackClawPending: false,
     };
     this.mobs.set(mob.id, v);
+    if (this.targetedId === mob.id) this._applyTargetRing(v, true, this.targetLocked);
     if (this.net && this.net.mobVisualIds) this.net.mobVisualIds.add(String(mob.id));
     return v;
   }
@@ -785,6 +847,10 @@ export class MobField {
   _onDead(id, by, party, meta = {}) {
     const v = this.mobs.get(id);
     if (this.net && this.net.mobVisualIds) this.net.mobVisualIds.delete(String(id));
+    if (this.targetedId === id) {
+      this.targetedId = null;
+      this.targetLocked = false;
+    }
     if (!v || v.dead) return;
     v.dead = true;
     v.busyT = 0;
@@ -832,7 +898,7 @@ export class MobField {
   }
 
   update(dt) {
-    this._processSpawnQueue();
+    this._processSpawnQueue(dt);
     const cam = this.getCamera ? this.getCamera() : null;
     // culling por distancia: animar 90 esqueletos SIEMPRE mata el fps (sobre
     // todo en movil). Lejos: invisible + congelado. Medio: mixer a mitad.
@@ -1033,7 +1099,9 @@ export class MobField {
     for (const m of v.mats || []) { try { m.dispose(); } catch {} }
     v.root.traverse((o) => {
       if (o.isMesh && !o.isSkinnedMesh) {
-        try { o.geometry.dispose(); } catch {}
+        if (o.geometry && !SHARED_MOB_GEOMETRIES.has(o.geometry)) {
+          try { o.geometry.dispose(); } catch {}
+        }
         try { if (o.material && o.material.map) o.material.map.dispose(); } catch {}
         try { o.material && o.material.dispose(); } catch {}
       }
@@ -1079,17 +1147,35 @@ export class MobField {
     return this.mobs.get(id) || null;
   }
 
-  // Keep assisted selection quiet while making an explicit lock unmistakable in packs.
+  _applyTargetRing(v, selected, locked = false) {
+    if (!v || !v.ring) return;
+    const applied = selected
+      ? (locked ? TARGET_RING_LOCKED : TARGET_RING_SOFT)
+      : TARGET_RING_LOCKED;
+    v.ring.visible = !!selected;
+    v.ring.material?.color?.setHex?.(applied.color);
+    if (v.ring.material) v.ring.material.opacity = applied.opacity;
+    v.ring.scale?.setScalar?.(applied.scale);
+  }
+
+  // Keep targeting updates O(1) by touching only the previous and current visuals.
   setTargeted(id, on, locked = false) {
-    const style = locked ? TARGET_RING_LOCKED : TARGET_RING_SOFT;
-    for (const v of this.mobs.values()) {
-      if (!v.ring) continue;
-      const selected = !!on && v.id === id;
-      v.ring.visible = selected;
-      const applied = selected ? style : TARGET_RING_LOCKED;
-      v.ring.material?.color?.setHex?.(applied.color);
-      if (v.ring.material) v.ring.material.opacity = applied.opacity;
-      v.ring.scale?.setScalar?.(applied.scale);
+    if (!on || id == null) {
+      const clearedId = id == null ? this.targetedId : id;
+      if (this.targetedId === clearedId) {
+        this.targetedId = null;
+        this.targetLocked = false;
+      }
+      this._applyTargetRing(this.mobs.get(clearedId), false);
+      return;
     }
+
+    const previousId = this.targetedId;
+    this.targetedId = id;
+    this.targetLocked = !!locked;
+    if (previousId != null && previousId !== id) {
+      this._applyTargetRing(this.mobs.get(previousId), false);
+    }
+    this._applyTargetRing(this.mobs.get(id), true, this.targetLocked);
   }
 }

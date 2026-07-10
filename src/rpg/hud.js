@@ -467,6 +467,9 @@ export class HUD {
     this._xpLevel = null;
     this._targetRatio = null;
     this._targetName = '';
+    this._targetHp = null;
+    this._targetHpMax = null;
+    this._targetLocked = null;
     this._goldAmount = null;
   }
 
@@ -570,12 +573,18 @@ export class HUD {
   }
 
   showTarget(name, hp, hpMax, locked = false) {
-    this.elTargetName.textContent = name || '';
+    const targetName = name || '';
     const h = Math.max(0, Math.round(hp || 0));
     const hm = Math.max(1, Math.round(hpMax || 1));
+    const isLocked = !!locked;
+    if (this._targetName === targetName
+      && this._targetHp === h
+      && this._targetHpMax === hm
+      && this._targetLocked === isLocked) return false;
+    this.elTargetName.textContent = targetName;
     const ratio = clamp01(h / hm);
     const pct = (ratio * 100).toFixed(1) + '%';
-    const prev = this._targetName === (name || '') && this._targetRatio != null ? this._targetRatio : ratio;
+    const prev = this._targetName === targetName && this._targetRatio != null ? this._targetRatio : ratio;
     this.elTargetFill.style.width = pct;
     if (this.elTargetGhost) {
       if (ratio < prev) {
@@ -594,7 +603,7 @@ export class HUD {
     }
     if (this.elTargetHp) this.elTargetHp.textContent = Math.round(ratio * 100) + '%';
     this.elTarget.classList.toggle('is-low', ratio > 0 && ratio <= 0.25);
-    this.elTarget.classList.toggle('is-locked', !!locked);
+    this.elTarget.classList.toggle('is-locked', isLocked);
     if (ratio < prev) {
       this.elTarget.classList.remove('is-hit');
       void this.elTarget.offsetWidth;
@@ -604,7 +613,11 @@ export class HUD {
     }
     this.elTarget.classList.add('is-on');
     this._targetRatio = ratio;
-    this._targetName = name || '';
+    this._targetName = targetName;
+    this._targetHp = h;
+    this._targetHpMax = hm;
+    this._targetLocked = isLocked;
+    return true;
   }
 
   hideTarget() {
@@ -614,6 +627,9 @@ export class HUD {
     this.elTarget.classList.remove('is-locked');
     this._targetRatio = null;
     this._targetName = '';
+    this._targetHp = null;
+    this._targetHpMax = null;
+    this._targetLocked = null;
   }
 
   setQuest(text, cur, goal) {

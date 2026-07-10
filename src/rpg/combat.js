@@ -3,10 +3,10 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260709g36';
-import { skillReleaseDelay } from '../animmap.js?v=20260709g36';
-import { attackReleaseDelay } from '../weapons.js?v=20260709g36';
-import { matchesAction } from '../keybinds.js?v=20260709g36';
+import { projectileSpeed } from './effects.js?v=20260709g37';
+import { skillReleaseDelay } from '../animmap.js?v=20260709g37';
+import { attackReleaseDelay } from '../weapons.js?v=20260709g37';
+import { matchesAction } from '../keybinds.js?v=20260709g37';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -160,6 +160,7 @@ export class Combat {
     this.hitStopT = 0;       // congela el mundo unos ms al conectar (game feel)
     this.slowMoT = 0;        // micro camara-lenta en kills con racha alta
     this.targetLocked = false; // true = target FIJADO por TAB/clic (opcional)
+    this._targetHudState = null;
     // Modo normal = manual en cada arranque. El autoataque solo existe si X lo
     // activa en la sesion actual; no se restaura para evitar golpes inesperados.
     this.autoAttack = false;
@@ -281,30 +282,61 @@ export class Combat {
   }
 
   _clearMobTarget() {
-    if (this.targetId != null) this.mobField.setTargeted(this.targetId, false);
+    if (this.targetId != null) {
+      this.mobField.setTargeted(this.targetId, false);
+      this._targetHudState = null;
+    }
     this.targetId = null;
     this.targetLocked = false;
   }
 
+  _syncTargetHud(kind, id, name, hp, hpMax, locked = false) {
+    const next = { kind, id, name: name || '', hp, hpMax, locked: !!locked };
+    const prev = this._targetHudState;
+    if (prev
+      && prev.kind === next.kind
+      && Object.is(prev.id, next.id)
+      && prev.name === next.name
+      && Object.is(prev.hp, next.hp)
+      && Object.is(prev.hpMax, next.hpMax)
+      && prev.locked === next.locked) return false;
+    this.hud.showTarget(next.name, next.hp, next.hpMax, next.locked);
+    this._targetHudState = next;
+    return true;
+  }
+
+  _syncMobTargetHud(m, locked = this.targetLocked) {
+    if (!m) return false;
+    const name = (m.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + m.lvl;
+    return this._syncTargetHud('mob', m.id, name, m.hp, m.hpMax, locked);
+  }
+
+  _hideTarget() {
+    this._targetHudState = null;
+    this.hud.hideTarget();
+  }
+
   _setTarget(id) {
+    const sameState = this.pvpId == null && this.targetId === id && this.targetLocked;
     this.pvpId = null;
     if (this.targetId != null && this.targetId !== id) this.mobField.setTargeted(this.targetId, false);
     this.targetId = id;
     this.targetLocked = true;
-    this.mobField.setTargeted(id, true, true);
+    if (!sameState) this.mobField.setTargeted(id, true, true);
     const m = this.net.mobs.get(id);
-    if (m) this.hud.showTarget((m.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + m.lvl, m.hp, m.hpMax, true);
+    if (m) this._syncMobTargetHud(m, true);
   }
 
   _setSoftTarget(id) {
     if (id == null || !this.net.mobs.has(id)) return;
+    const sameState = this.pvpId == null && this.targetId === id && !this.targetLocked;
     this.pvpId = null;
     if (this.targetId != null && this.targetId !== id) this.mobField.setTargeted(this.targetId, false);
     this.targetId = id;
     this.targetLocked = false;
-    this.mobField.setTargeted(id, true, false);
+    if (!sameState) this.mobField.setTargeted(id, true, false);
     const m = this.net.mobs.get(id);
-    if (m) this.hud.showTarget((m.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + m.lvl, m.hp, m.hpMax, false);
+    if (m) this._syncMobTargetHud(m, false);
   }
 
   _setPvpTarget(pid) {
@@ -312,7 +344,7 @@ export class Combat {
     this.pvpId = pid;
     const r = this.net.remotes.get(pid);
     // vida del rival es de SU cliente: mostramos frame con barra llena
-    this.hud.showTarget('⚔ ' + ((r && r.name) || 'Jugador'), 1, 1, true);
+    this._syncTargetHud('player', pid, '⚔ ' + ((r && r.name) || 'Jugador'), 1, 1, true);
   }
 
   // golpe manual: abre una ventana corta para que el loop conecte UN ataque
@@ -1075,13 +1107,13 @@ export class Combat {
     } else if (dg > 30) {
       this._inGruta = false;
     }
-    if (this.targetId && !this.net.mobs.has(this.targetId)) { this._clearMobTarget(); this.hud.hideTarget(); }
+    if (this.targetId && !this.net.mobs.has(this.targetId)) { this._clearMobTarget(); this._hideTarget(); }
     if (this.targetId && this.net.mobs.has(this.targetId)) {
       const staleTarget = this.net.mobs.get(this.targetId);
       if (staleTarget && (staleTarget.hp ?? 0) <= 0) {
         const staleId = this.targetId;
         this._clearMobTarget();
-        this.hud.hideTarget();
+        this._hideTarget();
         if (this.attackIntentId === staleId) this._clearAttackIntent();
         if (this.autoAttack) this._autoRetarget(staleId);
       }
@@ -1120,12 +1152,12 @@ export class Combat {
         }
       }
       if (best) {
-        this._setSoftTarget(best.id);
+        if (this.targetId !== best.id || this.targetLocked || this.pvpId != null) this._setSoftTarget(best.id);
         if (hasAttackIntent && this.attackIntentId == null) this.attackIntentId = best.id;
       }
-      else if (this.targetId && !this.targetLocked) { this._clearMobTarget(); this.hud.hideTarget(); }
+      else if (this.targetId && !this.targetLocked) { this._clearMobTarget(); this._hideTarget(); }
     }
-    if (this.pvpId != null && !this.net.remotes.has(this.pvpId)) { this.pvpId = null; this._pvpPunchT = 0; this.hud.hideTarget(); }
+    if (this.pvpId != null && !this.net.remotes.has(this.pvpId)) { this.pvpId = null; this._pvpPunchT = 0; this._hideTarget(); }
 
     // racha: la ventana decae; al vencer se corta y desaparece el contador
     if (this.streakT > 0) {
@@ -1152,6 +1184,7 @@ export class Combat {
     this._dashStrike();
     const target = this.targetId ? this.net.mobs.get(this.targetId) : null;
     if (target) {
+      this._syncMobTargetHud(target);
       let d = Math.hypot(target.x - this.player.pos.x, target.z - this.player.pos.z);
       const ptype = PROJECTILE_BY_CHAR[this.player.charFile];
       const chainShot = ptype && (this.chainShotT || 0) > 0;
@@ -1163,7 +1196,6 @@ export class Combat {
       const wantsAttack = this.autoAttack || this._punchT > 0;
       if (wantsAttack && this._isDodgeActionActive()) {
         if (this._punchT > 0) this._punchT = Math.max(this._punchT, ATTACK_CHAIN_RETRY_T);
-        this.hud.showTarget((target.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + target.lvl, target.hp, target.hpMax, this.targetLocked);
         return;
       }
       if (wantsAttack && !skillPriority && !ptype && d > range && d < RANGE_LUNGE && this.attackCd <= 0 && !this.player.locked) {
@@ -1276,7 +1308,6 @@ export class Combat {
             }
           }
         }, 'basic', { action, commit: true });
-        this.hud.showTarget((target.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + target.lvl, target.hp, target.hpMax, this.targetLocked);
       }
       return;
     }
@@ -1285,7 +1316,7 @@ export class Combat {
     // solo sale con CLIC deliberado (manualAttack), a diferencia de los zombies.
     const rival = this.pvpId != null ? this.net.remotes.get(this.pvpId) : null;
     if (rival && rival.ready) {
-      this.hud.showTarget('⚔ ' + (rival.name || 'Jugador'), rival.hp ?? 1, rival.hpMax ?? 1, true);
+      this._syncTargetHud('player', this.pvpId, '⚔ ' + (rival.name || 'Jugador'), rival.hp ?? 1, rival.hpMax ?? 1, true);
       if (this._pvpPunchT > 0) this._tryPvpAttack(rival, { keepQueued: true });
     }
   }
@@ -1750,7 +1781,7 @@ export class Combat {
 
   _onMobDead(id, by, party, meta = {}) {
     const wasMyTarget = this.targetId === id;
-    if (wasMyTarget) { this._clearMobTarget(); this.hud.hideTarget(); }
+    if (wasMyTarget) { this._clearMobTarget(); this._hideTarget(); }
     const mine = (by === this.net.myId) || (Array.isArray(party) && party.includes(this.net.myId));
     if (!mine) return;
     const source = this.net.mobs.get(id);   // aun existe: net lo borra DESPUES de avisar
@@ -1855,7 +1886,7 @@ export class Combat {
     this.respawnT = RESPAWN_T;
     this._clearMobTarget();
     this.pvpId = null;
-    this.hud.hideTarget();
+    this._hideTarget();
     this.player.locked = true;
     this.player.setDead(true);
     if (this.sfx) this.sfx.death();
