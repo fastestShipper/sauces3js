@@ -56,7 +56,7 @@ const v = {
   id: 77,
   root,
   ch: new THREE.Group(),
-  bar: { group: { visible: true } },
+  bar: { visible: true },
   ring: { visible: true },
   mats: [],
   hp: 4,
@@ -80,7 +80,7 @@ field._onDead(77, 123, [123], {
 
 assert.equal(v.dead, true, 'mob should be marked dead');
 assert.equal(v.ring.visible, false, 'target ring should hide on death');
-assert.equal(v.bar.group.visible, false, 'hp bar should hide on death');
+assert.equal(v.bar.visible, false, 'hp bar should hide on death');
 assert.equal(field.mobs.has(77), false, 'dead mob should leave live mob map');
 assert.equal(field.dying.length, 1, 'dead mob should enter dying list');
 assert.ok(Math.abs(field.dying[0].mixT - (1.1 / 1.15 + 0.08)) < 1e-6, 'death mixer window should follow the selected clip duration');
@@ -119,7 +119,7 @@ assert.ok(calls.some((c) => c.type === 'bloodPool'), 'sliding corpse should leav
     id: 78,
     root: heavyRoot,
     ch: new THREE.Group(),
-    bar: { group: { visible: true } },
+    bar: { visible: true },
     ring: { visible: true },
     mats: [],
     hp: 4,

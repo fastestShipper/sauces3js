@@ -22,7 +22,7 @@ function makeMob(id, x) {
     ch: new THREE.Group(),
     mixer: makeMixer(),
     actions: {},
-    bar: { group: new THREE.Group() },
+    bar: { visible: true },
     ring: { visible: false },
     mats: [],
     tx: x,

@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { plantClip } from '../animclip.js?v=20260709g38';
-import { sanitizeImported } from '../glbutil.js?v=20260709g38';
+import { plantClip } from '../animclip.js?v=20260709g39';
+import { sanitizeImported } from '../glbutil.js?v=20260709g39';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -53,6 +53,7 @@ const MOB_LOCOMOTION_BLEND = 0.12; // salida legible hacia idle/walk sin frenar 
 const MOB_ACTION_STOP_PAD = 0.035; // limpia la accion anterior cuando el crossfade ya termino
 const SPAWN_QUEUE_RETRY_INTERVAL = 0.125;
 const SPAWN_QUEUE_MOVE_WAKE = 1.5;
+const HP_BAR_CAPACITY = 128;
 
 // kind % 4 -> tipo de esqueleto. El server manda kind; el cliente solo lo mapea a un look.
 const KIND_TO_TYPE = ['Minion', 'Rogue', 'Warrior', 'Mage'];
@@ -77,10 +78,8 @@ const PROJECTILE_BY_CHAR = {
 const MOB_GLB_URL = './assets/models/kaykit_skeletons.glb';
 
 // These immutable shapes are shared by every mob. Their mutable materials stay per visual.
-const SHARED_HP_GEOMETRY = new THREE.PlaneGeometry(HP_W, HP_H);
 const SHARED_TARGET_RING_GEOMETRY = new THREE.RingGeometry(0.7, 0.92, 28);
 const SHARED_MOB_GEOMETRIES = new Set([
-  SHARED_HP_GEOMETRY,
   SHARED_TARGET_RING_GEOMETRY,
 ]);
 
@@ -180,7 +179,61 @@ export function plantMobClips(clips) {
 // multiplies draw calls. Merge compatible groups once on the prototype; cloned
 // mobs keep independent skeletons and materials while sharing the merged shape.
 export function mergeMobSkinnedParts(root) {
-  if (!root || !root.traverse) return { groups: 0, before: 0, after: 0 };
+  if (!root || !root.traverse) return { groups: 0, before: 0, after: 0, rigidConverted: 0 };
+  root.updateMatrixWorld?.(true);
+  const skinned = [];
+  const rigid = [];
+  root.traverse((o) => {
+    if (o.isSkinnedMesh) skinned.push(o);
+    else if (o.isMesh && o.parent?.isBone && o.geometry && !Array.isArray(o.material)) rigid.push(o);
+  });
+
+  // Bone-parented accessories already follow one rigid bone. Convert them to
+  // 100% weighted skin vertices in the body coordinate space, then let the same
+  // compatible-geometry merge remove their standalone draw calls.
+  let rigidConverted = 0;
+  for (const accessory of rigid) {
+    const body = skinned.find((mesh) => (
+      mesh.parent
+      && mesh.material === accessory.material
+      && mesh.skeleton?.bones?.includes(accessory.parent)
+      && mesh.geometry?.index
+      && accessory.geometry?.index
+    ));
+    if (!body) continue;
+    const boneIndex = body.skeleton.bones.indexOf(accessory.parent);
+    if (boneIndex < 0) continue;
+    const geometry = accessory.geometry.clone();
+    const toBody = new THREE.Matrix4().copy(body.parent.matrixWorld).invert().multiply(accessory.matrixWorld);
+    geometry.applyMatrix4(toBody);
+    const count = geometry.attributes.position.count;
+    const bodyIndices = body.geometry.getAttribute('skinIndex');
+    const bodyWeights = body.geometry.getAttribute('skinWeight');
+    const indices = new bodyIndices.array.constructor(count * bodyIndices.itemSize);
+    const weights = new bodyWeights.array.constructor(count * bodyWeights.itemSize);
+    for (let i = 0; i < count; i++) {
+      indices[i * bodyIndices.itemSize] = boneIndex;
+      weights[i * bodyWeights.itemSize] = 1;
+    }
+    const skinIndex = new THREE.BufferAttribute(indices, bodyIndices.itemSize, bodyIndices.normalized);
+    const skinWeight = new THREE.BufferAttribute(weights, bodyWeights.itemSize, bodyWeights.normalized);
+    skinIndex.gpuType = bodyIndices.gpuType;
+    skinWeight.gpuType = bodyWeights.gpuType;
+    geometry.setAttribute('skinIndex', skinIndex);
+    geometry.setAttribute('skinWeight', skinWeight);
+    const converted = new THREE.SkinnedMesh(geometry, accessory.material);
+    converted.name = `${accessory.name}_Weighted`;
+    converted.bindMode = body.bindMode;
+    converted.bind(body.skeleton, body.bindMatrix);
+    converted.castShadow = accessory.castShadow;
+    converted.receiveShadow = accessory.receiveShadow;
+    converted.frustumCulled = body.frustumCulled;
+    body.parent.add(converted);
+    accessory.parent.remove(accessory);
+    skinned.push(converted);
+    rigidConverted++;
+  }
+
   const buckets = new Map();
   let before = 0;
   root.traverse((o) => {
@@ -225,35 +278,74 @@ export function mergeMobSkinnedParts(root) {
     groups++;
     removed += meshes.length;
   }
-  return { groups, before, after: before - removed + groups };
+  return { groups, before, after: before - removed + groups, rigidConverted };
 }
 
-// One shader plane draws both the dark background and colored fill. This keeps
-// the same readable bar while halving its draw-call cost.
-function makeHpBar() {
-  const group = new THREE.Group();
-  group.position.y = HP_Y;
-  const material = new THREE.ShaderMaterial({
+// SkeletonUtils r161 creates one Skeleton wrapper per SkinnedMesh even when the
+// meshes reference the same cloned bones. Rebind matching meshes to one wrapper
+// so each mob uploads and updates one bone texture instead of one per material.
+export function shareMobSkeletons(root) {
+  if (!root?.traverse) return { meshes: 0, unique: 0, shared: 0 };
+  const canonical = new Map();
+  let meshes = 0;
+  let shared = 0;
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh || !o.skeleton?.bones?.length) return;
+    meshes++;
+    const bones = o.skeleton.bones.map((bone) => bone.uuid).join(',');
+    const bind = o.bindMatrix?.elements?.join(',') || '';
+    const key = `${o.bindMode || ''}|${bones}|${bind}`;
+    const existing = canonical.get(key);
+    if (!existing) {
+      canonical.set(key, o.skeleton);
+      return;
+    }
+    if (o.skeleton !== existing) {
+      o.bind(existing, o.bindMatrix);
+      shared++;
+    }
+  });
+  return { meshes, unique: canonical.size, shared };
+}
+
+function makeHpBarState(ratio = 1) {
+  const bar = { visible: true, ratio: 1, color: new THREE.Color(0x46d35a), instanceIndex: -1 };
+  setHpFill(bar, ratio);
+  return bar;
+}
+
+// One InstancedMesh renders every visible mob bar in one draw call. Per-instance
+// fill and color attributes preserve independent HP feedback without per-mob
+// materials or scene nodes.
+export class MobHpBarBatch {
+  constructor(scene, capacity = HP_BAR_CAPACITY) {
+    this.scene = scene;
+    this.capacity = Math.max(1, Math.floor(Number(capacity) || HP_BAR_CAPACITY));
+    this.material = new THREE.ShaderMaterial({
     uniforms: {
-      fillRatio: { value: 1 },
-      fillColor: { value: new THREE.Color(0x46d35a) },
       bgColor: { value: new THREE.Color(0x14161c) },
     },
     vertexShader: `
+      attribute float instanceFill;
+      attribute vec3 instanceFillColor;
       varying vec2 vBarUv;
+      varying float vBarFill;
+      varying vec3 vBarColor;
       void main() {
         vBarUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vBarFill = instanceFill;
+        vBarColor = instanceFillColor;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
-      uniform float fillRatio;
-      uniform vec3 fillColor;
       uniform vec3 bgColor;
       varying vec2 vBarUv;
+      varying float vBarFill;
+      varying vec3 vBarColor;
       void main() {
-        float filled = 1.0 - step(fillRatio, vBarUv.x);
-        vec3 color = mix(bgColor, fillColor, filled);
+        float filled = 1.0 - step(vBarFill, vBarUv.x);
+        vec3 color = mix(bgColor, vBarColor, filled);
         float alpha = mix(0.85, 1.0, filled);
         gl_FragColor = vec4(color, alpha);
       }
@@ -263,19 +355,122 @@ function makeHpBar() {
     transparent: true,
     toneMapped: false,
   });
-  const mesh = new THREE.Mesh(SHARED_HP_GEOMETRY, material);
-  mesh.renderOrder = 999;
-  group.add(mesh);
-  return { group, mesh };
+    this.count = 0;
+    this.instanceMobIds = [];
+    this.matrix = new THREE.Matrix4();
+    this.position = new THREE.Vector3();
+    this.quaternion = new THREE.Quaternion();
+    this.scale = new THREE.Vector3(1, 1, 1);
+    this.fallbackColor = new THREE.Color();
+    this._createMesh(this.capacity);
+  }
+
+  _createMesh(capacity) {
+    this.geometry = new THREE.PlaneGeometry(HP_W, HP_H);
+    this.fill = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    this.fillColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+    this.fill.setUsage(THREE.DynamicDrawUsage);
+    this.fillColor.setUsage(THREE.DynamicDrawUsage);
+    this.geometry.setAttribute('instanceFill', this.fill);
+    this.geometry.setAttribute('instanceFillColor', this.fillColor);
+    this.mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity);
+    this.mesh.name = 'MobHpBars';
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.count = this.count;
+    this.mesh.visible = this.count > 0;
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 999;
+    this.scene?.add?.(this.mesh);
+  }
+
+  ensureCapacity(required) {
+    const needed = Math.max(0, Math.floor(Number(required) || 0));
+    if (needed <= this.capacity) return false;
+    let next = this.capacity;
+    while (next < needed) next *= 2;
+    const oldMesh = this.mesh;
+    const oldGeometry = this.geometry;
+    const oldFill = this.fill;
+    const oldFillColor = this.fillColor;
+    this.capacity = next;
+    this._createMesh(next);
+    const copyCount = Math.min(this.count, oldMesh.instanceMatrix.count);
+    for (let i = 0; i < copyCount; i++) {
+      oldMesh.getMatrixAt(i, this.matrix);
+      this.mesh.setMatrixAt(i, this.matrix);
+      this.fill.setX(i, oldFill.getX(i));
+      this.fillColor.setXYZ(i, oldFillColor.getX(i), oldFillColor.getY(i), oldFillColor.getZ(i));
+    }
+    this.scene?.remove?.(oldMesh);
+    oldMesh.dispose?.();
+    oldGeometry.dispose();
+    return true;
+  }
+
+  begin(camera, expected = 0) {
+    this.ensureCapacity(expected);
+    this.count = 0;
+    this.instanceMobIds.length = 0;
+    if (camera?.getWorldQuaternion) camera.getWorldQuaternion(this.quaternion);
+    else if (camera?.quaternion) this.quaternion.copy(camera.quaternion);
+    else this.quaternion.identity();
+  }
+
+  add(v) {
+    if (!v?.root || !v.bar?.visible) return false;
+    this.ensureCapacity(this.count + 1);
+    const index = this.count++;
+    this.position.set(v.root.position.x, v.root.position.y + HP_Y, v.root.position.z);
+    this.matrix.compose(this.position, this.quaternion, this.scale);
+    this.mesh.setMatrixAt(index, this.matrix);
+    const ratio = Number.isFinite(Number(v.bar.ratio))
+      ? Math.max(0, Math.min(1, Number(v.bar.ratio)))
+      : Math.max(0, Math.min(1, Number(v.hp) / Math.max(1, Number(v.hpMax) || 1)));
+    const color = v.bar.color || this.fallbackColor.setHSL(0.33 * ratio, 0.7, 0.5);
+    this.fill.setX(index, ratio);
+    this.fillColor.setXYZ(index, color.r, color.g, color.b);
+    v.bar.instanceIndex = index;
+    this.instanceMobIds[index] = v.id;
+    return true;
+  }
+
+  finish() {
+    this.mesh.count = this.count;
+    this.mesh.visible = this.count > 0;
+    this.instanceMobIds.length = this.count;
+    if (this.count > 0) {
+      this.mesh.instanceMatrix.needsUpdate = true;
+      this.fill.needsUpdate = true;
+      this.fillColor.needsUpdate = true;
+    }
+  }
+
+  mobIdAt(instanceId) {
+    const index = Number(instanceId);
+    return Number.isInteger(index) && index >= 0 && index < this.count
+      ? this.instanceMobIds[index]
+      : null;
+  }
+
+  updateBounds() {
+    if (this.mesh.visible) this.mesh.computeBoundingSphere?.();
+  }
+
+  dispose() {
+    this.mesh.parent?.remove(this.mesh);
+    this.mesh.dispose?.();
+    this.geometry.dispose();
+    this.material.dispose();
+    this.instanceMobIds.length = 0;
+  }
 }
 
-// Updates shader uniforms without changing geometry or layout.
+// Updates per-mob bar state consumed by the shared instance batch.
 function setHpFill(bar, ratio) {
   const r = Math.min(1, Math.max(0, ratio));
-  const uniforms = bar?.mesh?.material?.uniforms;
-  if (!uniforms) return;
-  uniforms.fillRatio.value = r;
-  uniforms.fillColor.value.setHSL(0.33 * r, 0.7, 0.5);
+  if (!bar) return;
+  bar.ratio = r;
+  bar.color?.setHSL?.(0.33 * r, 0.7, 0.5);
 }
 
 export function shouldShowMobHpBar(v, distance, { mobile = false, lowEnd = false, currentVisible = false } = {}) {
@@ -322,6 +517,7 @@ export class MobField {
     this.targetLocked = false;
     this.ready = false;
     this.effects = null;     // lo setea app.js: gore compartido de muertes server-side
+    this.hpBars = new MobHpBarBatch(scene);
   }
 
   async load() {
@@ -590,6 +786,7 @@ export class MobField {
     let ch;
     try { ch = cloneSkeleton(proto); }
     catch { return null; }
+    shareMobSkeletons(ch);
     // ABOMINACION (boss de oleada): mole de 1.5x que impone
     const baseScale = mob.b ? SCALE * 1.5 : SCALE;
     ch.scale.setScalar(baseScale);
@@ -607,9 +804,7 @@ export class MobField {
       }
     });
     root.add(ch);
-    const bar = makeHpBar();
-    setHpFill(bar, (mob.hp != null && mob.hpMax) ? mob.hp / mob.hpMax : 1);
-    root.add(bar.group);
+    const bar = makeHpBarState((mob.hp != null && mob.hpMax) ? mob.hp / mob.hpMax : 1);
     const ring = makeRing();
     root.add(ring);
     this.scene.add(root);
@@ -944,7 +1139,7 @@ export class MobField {
     v.dead = true;
     v.busyT = 0;
     if (v.ring) v.ring.visible = false;
-    if (v.bar && v.bar.group) v.bar.group.visible = false;
+    if (v.bar) v.bar.visible = false;
     this._deathImpact(v, { ...meta, by, party });
     this._deathKick(v, meta);
     const action = v.actions.Death;
@@ -989,6 +1184,7 @@ export class MobField {
   update(dt) {
     this._processSpawnQueue(dt);
     const cam = this.getCamera ? this.getCamera() : null;
+    this.hpBars.begin(cam, this.mobs.size);
     // culling por distancia: animar 90 esqueletos SIEMPRE mata el fps (sobre
     // todo en movil). Lejos: invisible + congelado. Medio: mixer a mitad.
     const pp = this.net && this.net.player && this.net.player.pos;
@@ -1071,13 +1267,13 @@ export class MobField {
         }
       }
       const { tellPulse, tellAge } = this._tickAttackTell(v, dt, visible);
-      if (v.bar?.group) {
+      if (v.bar) {
         const showBar = visible && shouldShowMobHpBar(v, dLod, {
           mobile,
           lowEnd,
-          currentVisible: v.bar.group.visible,
+          currentVisible: v.bar.visible,
         });
-        if (v.bar.group.visible !== showBar) v.bar.group.visible = showBar;
+        if (v.bar.visible !== showBar) v.bar.visible = showBar;
       }
       if (!visible) {
         if (v.busyT > 0) v.busyHidden = true;
@@ -1144,8 +1340,9 @@ export class MobField {
         const k = Math.max(0, v.flashT / (v.flashMax || 0.14));
         for (const m of v.mats) if (m.emissive) m.emissive.setScalar(k * 0.9);
       }
-      if (cam && v.bar?.group?.visible) v.bar.group.quaternion.copy(cam.quaternion);
+      if (v.bar?.visible) this.hpBars.add(v);
     }
+    this.hpBars.finish();
     // mobs muriendo: terminar la pose y retirarlos al expirar el temporizador
     for (let i = this.dying.length - 1; i >= 0; i--) {
       const d = this.dying[i];
@@ -1221,6 +1418,10 @@ export class MobField {
   meshes() {
     const out = [];
     for (const v of this.mobs.values()) out.push(v.root);
+    if (this.hpBars.mesh.visible) {
+      this.hpBars.updateBounds();
+      out.push(this.hpBars.mesh);
+    }
     return out;
   }
 
@@ -1228,18 +1429,25 @@ export class MobField {
   // del mob y devuelve su estado de red {id,x,z,...} (o null).
   pickFromIntersections(intersects) {
     if (!intersects || !intersects.length) return null;
+    const stateForId = (id) => {
+      if (id == null) return null;
+      if (this.net && this.net.mobs && this.net.mobs.get) {
+        const mob = this.net.mobs.get(id);
+        if (mob) return mob;
+      }
+      return { id };
+    };
     const roots = new Map();
     for (const v of this.mobs.values()) roots.set(v.root, v.id);
     for (const hit of intersects) {
+      if (hit.object === this.hpBars.mesh && hit.instanceId != null) {
+        const mob = stateForId(this.hpBars.mobIdAt(hit.instanceId));
+        if (mob) return mob;
+      }
       let o = hit.object;
       while (o) {
         if (roots.has(o)) {
-          const id = roots.get(o);
-          if (this.net && this.net.mobs && this.net.mobs.get) {
-            const m = this.net.mobs.get(id);
-            if (m) return m;
-          }
-          return { id };
+          return stateForId(roots.get(o));
         }
         o = o.parent;
       }

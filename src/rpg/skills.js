@@ -1,8 +1,8 @@
 // Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
 // (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
 // Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
-import { classById, CERNUNNOS } from './classes.js?v=20260709g38';
-import { actionLabel, keybindChangeEvent, matchesAction } from '../keybinds.js?v=20260709g38';
+import { classById, CERNUNNOS } from './classes.js?v=20260709g39';
+import { actionLabel, keybindChangeEvent, matchesAction } from '../keybinds.js?v=20260709g39';
 
 const STYLE_ID = 'rpg-skill-style';
 

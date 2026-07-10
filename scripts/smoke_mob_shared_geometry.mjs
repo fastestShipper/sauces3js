@@ -31,33 +31,47 @@ const secondAccessory = second.ch.children.find((o) => o.isMesh);
 assert.equal(firstAccessory.geometry, secondAccessory.geometry, 'mob accessories share immutable geometry');
 assert.notEqual(firstAccessory.material, secondAccessory.material, 'mob accessories keep independent tint materials');
 
-assert.equal(first.bar.mesh.geometry, second.bar.mesh.geometry, 'HP bars share geometry');
+assert.ok(field.hpBars.mesh.isInstancedMesh, 'all HP bars use one instanced mesh');
 assert.equal(first.ring.geometry, second.ring.geometry, 'target rings share geometry');
-assert.notEqual(first.bar.mesh.material, second.bar.mesh.material, 'HP bar materials remain independent');
-assert.notEqual(first.bar.mesh.material.uniforms, second.bar.mesh.material.uniforms, 'HP bar uniforms remain independent');
+assert.notEqual(first.bar, second.bar, 'HP bar state remains independent per mob');
 assert.notEqual(first.ring.material, second.ring.material, 'ring materials remain independent');
+field.hpBars.begin(null);
+assert.equal(field.hpBars.add(first), true);
+assert.equal(field.hpBars.add(second), true);
+field.hpBars.finish();
+assert.equal(field.hpBars.mesh.count, 2, 'two visible bars occupy two instances in one draw mesh');
+assert.equal(field.hpBars.fill.getX(first.bar.instanceIndex), 1, 'first instance keeps full HP ratio');
+assert.ok(field.meshes().includes(field.hpBars.mesh), 'bar batch participates in combat picking');
+assert.equal(
+  field.pickFromIntersections([{ object: field.hpBars.mesh, instanceId: second.bar.instanceIndex }]),
+  net.mobs.get(second.id),
+  'bar instance picking resolves the correct mob state',
+);
+field._onHp(first.id, 5, { dmg: 5 });
+assert.equal(first.bar.ratio, 0.5, 'HP updates mutate only the first bar state');
+assert.equal(second.bar.ratio, 1, 'HP updates preserve unrelated bar state');
 
 const geometryDisposeCalls = new Map();
-for (const geometry of [first.bar.mesh.geometry, first.ring.geometry]) {
+for (const geometry of [field.hpBars.geometry, first.ring.geometry]) {
   geometryDisposeCalls.set(geometry, 0);
   geometry.dispose = () => geometryDisposeCalls.set(geometry, geometryDisposeCalls.get(geometry) + 1);
 }
-let barMaterialDisposed = 0;
+let batchMaterialDisposed = 0;
 let ringMaterialDisposed = 0;
 let accessoryGeometryDisposed = 0;
 let accessoryTextureDisposed = 0;
-first.bar.mesh.material.addEventListener('dispose', () => barMaterialDisposed++);
+field.hpBars.material.addEventListener('dispose', () => batchMaterialDisposed++);
 first.ring.material.addEventListener('dispose', () => ringMaterialDisposed++);
 accessoryGeometry.addEventListener('dispose', () => accessoryGeometryDisposed++);
 accessoryTexture.addEventListener('dispose', () => accessoryTextureDisposed++);
 field._disposeMob(first);
 
 assert.deepEqual([...geometryDisposeCalls.values()], [0, 0], 'disposing one mob preserves shared geometries');
-assert.equal(barMaterialDisposed, 1, 'disposing one mob releases its bar material');
+assert.equal(batchMaterialDisposed, 0, 'disposing one mob preserves the shared bar material');
 assert.equal(ringMaterialDisposed, 1, 'disposing one mob releases its ring material');
 assert.equal(accessoryGeometryDisposed, 0, 'disposing one mob preserves shared model geometry');
 assert.equal(accessoryTextureDisposed, 0, 'disposing one mob preserves shared model textures');
-assert.equal(second.bar.mesh.geometry, first.bar.mesh.geometry, 'remaining mobs retain the shared bar geometry');
+assert.equal(field.hpBars.mesh.geometry, field.hpBars.geometry, 'remaining mobs retain the shared bar geometry');
 assert.equal(secondAccessory.geometry, accessoryGeometry, 'remaining mobs retain valid accessory geometry');
 
 const writes = new Map([[first.id, 0], [second.id, 0], [third.id, 0]]);

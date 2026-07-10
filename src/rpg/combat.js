@@ -3,10 +3,10 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260709g38';
-import { skillReleaseDelay } from '../animmap.js?v=20260709g38';
-import { attackReleaseDelay } from '../weapons.js?v=20260709g38';
-import { matchesAction } from '../keybinds.js?v=20260709g38';
+import { projectileSpeed } from './effects.js?v=20260709g39';
+import { skillReleaseDelay } from '../animmap.js?v=20260709g39';
+import { attackReleaseDelay } from '../weapons.js?v=20260709g39';
+import { matchesAction } from '../keybinds.js?v=20260709g39';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie

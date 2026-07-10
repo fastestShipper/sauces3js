@@ -420,6 +420,16 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Production state after deploy: service active, health clean and 86 mobs. Root disk remains critical at 99% with about 2.2 GB free.
   - Backups: `/root/deploy-backups/sauces-web-20260710T051527Z-before-20260709g38.tar.gz` and `/root/deploy-backups/sauces-server-20260710T051527Z-before-20260709g38.tar.gz`.
 
+- **Production patch 20260709g39**: `sauces.controla.group` runs `APP_VERSION=20260709g39`.
+  - Rig consolidation: rigid hats, hoods, capes and helmets are converted to single-bone skinned geometry in bind space, then merged into the animated body without changing their silhouettes or materials. Mage, rogue, ranger and warrior prototypes now use exactly two skinned meshes each: body plus accessories, and glow eyes.
+  - Skeleton sharing: matching body and eye meshes reuse one skeleton wrapper per mob. The 90-mob stress scene keeps the same animation bones while reducing allocated bone textures from 181 to 91.
+  - Batched health bars: all visible mob HP bars render through one dynamic `InstancedMesh` with per-instance fill and color data. Capacity grows without truncation, billboards face the camera in world space, and instance picking still resolves to the authoritative mob id.
+  - Measured rendering: four representative mobs dropped from 16 to 9 draw calls at the same 20,900 triangles. A 90-mob scene measured 181 calls, 470,274 triangles, seven geometries, 91 textures and zero WebGL errors.
+  - Gameplay and visual contract: mob stats, damage, targeting, AI, spawn rules, animation clips, timing, materials and silhouettes remain unchanged.
+  - QA: 46 JavaScript syntax checks, 78 selected pure smokes, TypeScript `--noEmit`, Blender 5.1.2 accessory audits, Three.js r161 render and picking tests, dynamic batch growth through 129 visible bars, clean production browser console, external `WSS_OPEN`, and 19/19 production web hashes.
+  - Production state after deploy: service active, health clean and 86 mobs. The root disk remains critical at 99% with about 2.2 GB free.
+  - Backup: `/root/deploy-backups/sauces-web-20260710T054204Z-before-20260709g39-selective.tar.gz`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.
