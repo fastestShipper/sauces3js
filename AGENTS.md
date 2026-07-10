@@ -439,6 +439,15 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Production state after deploy: service active, health clean and 86 mobs. The root disk remains critical at 99% with about 2.2 GB free.
   - Backup: `/root/deploy-backups/sauces-web-20260710T061718Z-before-20260709g40-selective.tar.gz`.
 
+- **Production patch 20260709g41**: `sauces.controla.group` runs `APP_VERSION=20260709g41`.
+  - Permanent daylight: the client no longer computes or renders a night phase. Exposure remains `1.0`, directional light `2.5`, hemisphere light `0.55`, fog `#dceefa`, and the world indicator remains `Day` on desktop and mobile.
+  - Server parity: zombie waves no longer receive hidden nighttime size or level bonuses. The relay preserves `night: 0` in the legacy wave payload so older clients remain protocol-compatible.
+  - Target-facing commitment: basic mob attacks, auto attacks and targeted skills store their target in the active action. During windup they update both gameplay heading and visible root rotation toward the target's current position, preventing backwards shots while movement or target motion continues.
+  - Gameplay contract: damage, cooldowns, projectile speed, hit timing, movement authority, wave interval, base wave scaling and boss cadence remain unchanged.
+  - QA: 152 JavaScript syntax checks, 79 selected pure smokes, TypeScript `--noEmit`, moving-target basic/skill commitment regressions, clean 1280x720 and 390x844 daylight browser runs, zero WebGL errors, no horizontal overflow, clean production browser console, external `WSS_OPEN`, 19/19 web hashes and 1/1 server hash.
+  - Production state after deploy: service active, health clean and 86 mobs.
+  - Backups: `/root/deploy-backups/sauces-web-20260710T063940Z-before-20260709g41-selective.tar.gz` and `/root/deploy-backups/sauces-server-20260710T063940Z-before-20260709g41.js`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.

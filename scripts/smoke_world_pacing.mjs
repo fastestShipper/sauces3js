@@ -9,8 +9,11 @@ const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
 const server = readFileSync(new URL('../server/server.js', import.meta.url), 'utf8');
 const citymesh = readFileSync(new URL('../src/citymesh.js', import.meta.url), 'utf8');
 
-if (!/const DAYNIGHT_MS = 1500000\b/.test(app)) fail('client day/night cycle must stay 25 minutes');
-if (!/const DAYNIGHT_MS = 1500000\b/.test(server)) fail('server day/night cycle must stay 25 minutes');
+if (/DAYNIGHT_MS|nightK|FOG_NIGHT/.test(app)) fail('client must not retain a night transition');
+if (!/daytimeEl\.textContent = '☀️ Día'/.test(app)) fail('world status must remain permanently in daylight');
+if (/DAYNIGHT_MS|function isNight\(/.test(server)) fail('server must not retain a night phase');
+if (!/boss: bossSpawned \? 1 : 0, night: 0/.test(server)) fail('legacy wave payload must explicitly report daytime');
+if (/\+ \(night \?/.test(server)) fail('waves must not receive hidden nighttime bonuses');
 if (!/const GRUTA_SPAWN = \[-62, -7\]/.test(app)) fail('new players must spawn in the gruta');
 if (!/playerSpawn = GRUTA_SPAWN/.test(app)) fail('player spawn must use GRUTA_SPAWN');
 if (!/player\.pos\.set\(GRUTA_SPAWN\[0\], 0, GRUTA_SPAWN\[1\]\)/.test(app)) fail('respawn must return to the gruta');

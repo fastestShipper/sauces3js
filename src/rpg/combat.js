@@ -3,10 +3,10 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260709g40';
-import { skillReleaseDelay } from '../animmap.js?v=20260709g40';
-import { attackReleaseDelay } from '../weapons.js?v=20260709g40';
-import { matchesAction } from '../keybinds.js?v=20260709g40';
+import { projectileSpeed } from './effects.js?v=20260709g41';
+import { skillReleaseDelay } from '../animmap.js?v=20260709g41';
+import { attackReleaseDelay } from '../weapons.js?v=20260709g41';
+import { matchesAction } from '../keybinds.js?v=20260709g41';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -839,7 +839,8 @@ export class Combat {
       if (buffer || keepQueued) return this._bufferPvpAttack(keepQueued ? ATTACK_CHAIN_RETRY_T : ATTACK_INPUT_BUFFER_T);
       return false;
     }
-    this.player.heading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
+    const attackHeading = Math.atan2(rival.x - this.player.pos.x, rival.z - this.player.pos.z);
+    this._applyActionHeading(attackHeading);
     if (!this.player.attack(false, this._attackAnimSpeed())) {
       if ((buffer || keepQueued) && (this.player.attackT || 0) > 0) return this._bufferPvpAttack(ATTACK_CHAIN_RETRY_T);
       return false;
@@ -1019,11 +1020,13 @@ export class Combat {
     return true;
   }
 
-  _beginAction(kind, heading = null) {
+  _beginAction(kind, heading = null, target = null) {
     const action = {
       seq: ++this._actionSeq,
       kind,
       heading: Number.isFinite(heading) ? heading : null,
+      targetType: target?.type || null,
+      targetId: target?.id ?? null,
       committed: false,
       invalidated: false,
     };
@@ -1038,10 +1041,21 @@ export class Combat {
     return true;
   }
 
+  _trackedActionHeading(action) {
+    if (!action || action.targetId == null) return action?.heading ?? null;
+    const target = action.targetType === 'player'
+      ? this.net.remotes?.get?.(action.targetId)
+      : this.net.mobs?.get?.(action.targetId);
+    if (!target || target.hp === 0 || target.dead) return action.heading;
+    const heading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
+    action.heading = heading;
+    return heading;
+  }
+
   _holdActionHeading() {
     const action = this._activeAction;
     if (!action || action.invalidated || action.committed || action.heading == null) return false;
-    return this._applyActionHeading(action.heading);
+    return this._applyActionHeading(this._trackedActionHeading(action));
   }
 
   _cancelUncommittedAction() {
@@ -1230,14 +1244,15 @@ export class Combat {
       }
       // ARPG: se pega EN MOVIMIENTO (kitear y tajear es el core loop)
       if (!skillPriority && d < range && this.attackCd <= 0 && !this.player.locked && wantsAttack) {
-        this.player.heading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
+        const attackHeading = Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z);
+        this._applyActionHeading(attackHeading);
         if (!ptype) d = this._settleMeleeAttack(target, d);
         const animSpeed = this._attackAnimSpeed();
         if (!this.player.attack(false, animSpeed)) {
           if (this._punchT > 0 && (this.player.attackT || 0) > 0) this._punchT = Math.max(this._punchT, ATTACK_CHAIN_RETRY_T);
           return;
         }
-        const action = this._beginAction('basic');
+        const action = this._beginAction('basic', attackHeading, { type: 'mob', id: target.id });
         this._breakSpawnGrace();
         this.net.sendAttack?.('', { type: 'mob', id: target.id, x: target.x, z: target.z, animSpeed });
         this._punchT = 0;
@@ -1261,7 +1276,7 @@ export class Combat {
           }
         }
         const targetId = target.id;
-        const swingHeading = this.player.heading;
+        const swingHeading = attackHeading;
         const delay = ptype ? this._projectileImpactDelay(shotFrom, shotTo, ptype, PROJECTILE_MIN_DELAY, PROJECTILE_MAX_DELAY, releaseDelay) : IMPACT_DELAY_MELEE;
         this._queueImpact(delay, () => {
           let impactId = targetId;
@@ -1560,7 +1575,11 @@ export class Combat {
       if (ok) {
         this._breakSpawnGrace();
         this._clearImpacts('basic');
-        action = this._beginAction('skill', targetHeading);
+        action = this._beginAction(
+          'skill',
+          targetHeading,
+          target ? { type: 'mob', id: target.id } : null,
+        );
         this._punchT = 0;
         const heavy = HEAVY_SKILL_TYPES.has(s.type);
         this.skillPriorityT = Math.max(this.skillPriorityT || 0, heavy ? SKILL_HEAVY_PRIORITY_T : SKILL_PRIORITY_T);

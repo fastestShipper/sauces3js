@@ -718,10 +718,6 @@ console.log('[world-obstacles]', JSON.stringify(obstacleStats()));
 // al azar. Sin _spawn => no respawnean: limpiarla ES el evento (botin de racha).
 const WAVE_EVERY_MS = Math.max(900000, Number(process.env.WAVE_EVERY_MS) || 900000);
 const WAVE_SIZE = 4;
-// ciclo dia/noche por reloj compartido: 25 min, el ultimo 40% es NOCHE.
-// El cliente usa la misma formula (Date.now) para el visual: sincronia gratis.
-const DAYNIGHT_MS = 1500000;
-function isNight() { return (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS >= 0.6; }
 let waveN = 0;
 const waveTimer = setInterval(() => {
   const players = [...clients.values()].filter((c) => c.ws && c.ws.readyState === 1 && !inSafeZone(c));
@@ -731,10 +727,8 @@ const waveTimer = setInterval(() => {
   // un novato recibe 4 zombies suaves; un veterano, hasta 8 y de nivel alto
   const power = Math.max(0, Math.round(((c.hm || 100) - 100) / 50));
   waveN++;
-  const night = isNight();
-  // NOCHE DE LOS MUERTOS: la horda nocturna es mas grande y mas brava
-  const size = Math.min(8, WAVE_SIZE + Math.min(2, Math.floor(power / 3)) + (night ? 2 : 0));
-  const lvlCap = Math.min(5, 2 + Math.ceil(power / 2) + (night ? 1 : 0));
+  const size = Math.min(8, WAVE_SIZE + Math.min(2, Math.floor(power / 3)));
+  const lvlCap = Math.min(5, 2 + Math.ceil(power / 2));
   // La ABOMINACION debe sentirse especial, no aparecer cada pocos minutos.
   const withBoss = waveN % 10 === 0;
   let bossSpawned = false;
@@ -764,7 +758,8 @@ const waveTimer = setInterval(() => {
       bossSpawned = true;
     }
   }
-  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z), boss: bossSpawned ? 1 : 0, night: night ? 1 : 0 });
+  // Keep the legacy field so older clients stay protocol-compatible.
+  broadcastAll({ t: 'wave', x: Math.round(c.x), z: Math.round(c.z), boss: bossSpawned ? 1 : 0, night: 0 });
   console.log('oleada zombie sobre', c.name, '@', Math.round(c.x), Math.round(c.z));
 }, WAVE_EVERY_MS);
 if (waveTimer.unref) waveTimer.unref();

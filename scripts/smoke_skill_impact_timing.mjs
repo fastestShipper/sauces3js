@@ -221,15 +221,17 @@ function makeCombat(mobs = []) {
   if (!combat.castSkill({ type: 'strike', dmgMult: 2.4 })) throw new Error('directed heading skill was rejected');
   if (Math.abs(attackHeadings[0] - expected) > 1e-9) throw new Error('directed skill did not face target before animation');
   player.keys.KeyW = true;
+  combat.net.mobs.get(target.id).x = 0;
+  combat.net.mobs.get(target.id).z = 5;
   player.heading = 2;
   player.root.rotation.y = 2;
   combat.update(0.016);
-  if (Math.abs(player.heading - expected) > 1e-9 || Math.abs(player.root.rotation.y - expected) > 1e-9) {
-    throw new Error('movement changed directed skill heading before commitment');
+  if (Math.abs(player.heading) > 1e-9 || Math.abs(player.root.rotation.y) > 1e-9) {
+    throw new Error('directed skill did not track its moving target before commitment');
   }
   player.keys.KeyW = false;
   combat._clearImpacts();
-  console.log('PASS: directed skill holds visual heading through its commitment window');
+  console.log('PASS: directed skill tracks its moving target through the commitment window');
 }
 
 console.log('PASS: skill impact timing smoke');

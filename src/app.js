@@ -3,42 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g40';
-import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g40';
-import { GrassSystem } from './veg/grass.js?v=20260709g40';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709g40';
-import { Player } from './player.js?v=20260709g40';
-import { MiniMap } from './minimap.js?v=20260709g40';
-import { StreetLife } from './npcs.js?v=20260709g40';
-import { sanitizeImported } from './glbutil.js?v=20260709g40';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g40';
-import { Net } from './net.js?v=20260709g40';
-import { ChatUI, showBubble } from './chat.js?v=20260709g40';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g40';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g40';
-import { equipWeapon } from './weapons.js?v=20260709g40';
-import { authRequest } from './rpg/account.js?v=20260709g40';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g40';
-import { Inventory } from './rpg/loot.js?v=20260709g40';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g40';
-import { Combat } from './rpg/combat.js?v=20260709g40';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g40';
-import { Effects } from './rpg/effects.js?v=20260709g40';
-import { attachWeaponByName } from './weapons.js?v=20260709g40';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g40';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g40';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g40';
-import { SocialPanel } from './social.js?v=20260709g40';
-import { SkillSystem } from './rpg/skills.js?v=20260709g40';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g40';
-import { createSfx } from './sfx.js?v=20260709g40';
-import { installTouchControls } from './touch.js?v=20260709g40';
-import { createIntroScene } from './introscene.js?v=20260709g40';
-import { styleCarShell } from './carstyle.js?v=20260709g40';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g40';
-import { FrameMeter, fpsBand } from './perf.js?v=20260709g40';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g41';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g41';
+import { GrassSystem } from './veg/grass.js?v=20260709g41';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709g41';
+import { Player } from './player.js?v=20260709g41';
+import { MiniMap } from './minimap.js?v=20260709g41';
+import { StreetLife } from './npcs.js?v=20260709g41';
+import { sanitizeImported } from './glbutil.js?v=20260709g41';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g41';
+import { Net } from './net.js?v=20260709g41';
+import { ChatUI, showBubble } from './chat.js?v=20260709g41';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g41';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g41';
+import { equipWeapon } from './weapons.js?v=20260709g41';
+import { authRequest } from './rpg/account.js?v=20260709g41';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g41';
+import { Inventory } from './rpg/loot.js?v=20260709g41';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g41';
+import { Combat } from './rpg/combat.js?v=20260709g41';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g41';
+import { Effects } from './rpg/effects.js?v=20260709g41';
+import { attachWeaponByName } from './weapons.js?v=20260709g41';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g41';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g41';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g41';
+import { SocialPanel } from './social.js?v=20260709g41';
+import { SkillSystem } from './rpg/skills.js?v=20260709g41';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g41';
+import { createSfx } from './sfx.js?v=20260709g41';
+import { installTouchControls } from './touch.js?v=20260709g41';
+import { createIntroScene } from './introscene.js?v=20260709g41';
+import { styleCarShell } from './carstyle.js?v=20260709g41';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g41';
+import { FrameMeter, fpsBand } from './perf.js?v=20260709g41';
 
-const APP_VERSION = '20260709g40';
+const APP_VERSION = '20260709g41';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -197,12 +197,7 @@ addEventListener('resize', () => {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, DPR_CAP));
 });
 
-// refs de luces del mundo para el ciclo dia/noche (se llenan en el boot)
-const worldLights = { sun: null, hemi: null };
-const DAYNIGHT_MS = 1500000;   // 25 min, ultimo 40% = NOCHE (misma formula del server)
 const GRUTA_SPAWN = [-62, -7];
-const FOG_DAY = new THREE.Color(0xdceefa);
-const FOG_NIGHT = new THREE.Color(0x11162b);
 
 const MOD = './assets/models/';
 const worldTex = createTextureKit();
@@ -505,7 +500,6 @@ async function boot() {
   await breathe();
 
   const sun = new THREE.DirectionalLight(0xfff1d0, 2.5);
-  worldLights.sun = sun;
   sun.position.set(80, 96, -58);
   sun.castShadow = !IS_MOBILE;
   sun.shadow.mapSize.set(IS_MOBILE ? 1024 : 2048, IS_MOBILE ? 1024 : 2048);
@@ -518,7 +512,6 @@ async function boot() {
   // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
   const hemi = new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 0.55);
   scene.add(hemi);
-  worldLights.hemi = hemi;
   scene.fog = IS_MOBILE ? new THREE.Fog(0xdceefa, 120, 520) : new THREE.Fog(0xdceefa, 230, 1050);
 
   // suelo base
@@ -1075,6 +1068,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   const coordsEl = document.getElementById('coords');
   const fpsEl = document.getElementById('fps');
   const daytimeEl = document.getElementById('daytime');
+  if (daytimeEl) {
+    daytimeEl.textContent = '☀️ Día';
+    daytimeEl.title = 'Los Sauces permanece de día';
+  }
   const net = trailerConfig.enabled && trailerConfig.offline ? createTrailerNet() : new Net(scene, player, auth.token, { assetVersion: APP_VERSION });
   window.__game.net = net;
 
@@ -1524,27 +1521,8 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       }
       poiUi.update(player.pos.x, player.pos.z);
       coordsEl.textContent = 'X ' + Math.round(player.pos.x) + ' · Z ' + Math.round(player.pos.z);
-      // reloj del ciclo: dia (60%) / noche (40%), cuenta regresiva al cambio
-      if (daytimeEl) {
-        const ph = (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS;
-        const night = ph >= 0.6;
-        const remain = Math.ceil(((night ? 1 : 0.6) - ph) * DAYNIGHT_MS / 1000);
-        const mm = Math.floor(remain / 60), ss = String(remain % 60).padStart(2, '0');
-        daytimeEl.textContent = (night ? '🌙 Noche ' : '☀️ Día ') + mm + ':' + ss;
-      }
     }
     skills.update(dt);
-    {
-      // NOCHE DE LOS MUERTOS: ciclo por reloj compartido con el server. La
-      // rampa de 6% suaviza el amanecer/anochecer; de noche el mundo se apaga
-      // y las hordas (server) crecen.
-      const ph = (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS;
-      const nightK = ph < 0.6 ? 0 : Math.min(1, Math.min(ph - 0.6, 1 - ph) / 0.06);
-      renderer.toneMappingExposure = 1.0 - nightK * 0.62;
-      if (worldLights.sun) worldLights.sun.intensity = 2.5 * (1 - nightK * 0.85);
-      if (worldLights.hemi) worldLights.hemi.intensity = 0.55 * (1 - nightK * 0.55);
-      if (scene.fog) scene.fog.color.lerpColors(FOG_DAY, FOG_NIGHT, nightK);
-    }
     minimapT -= rawDt;
     if (minimapT <= 0) {
       minimapT = IS_MOBILE ? 0.16 : 0.08;

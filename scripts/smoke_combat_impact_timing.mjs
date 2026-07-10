@@ -28,6 +28,7 @@ function makeCombat({ comboStep = 0 } = {}) {
     locked: false,
     dead: false,
     heading: 0,
+    root: { rotation: { y: 0 } },
     comboStep: 0,
     comboT: 0,
     attackT: 0,
@@ -74,7 +75,7 @@ function makeCombat({ comboStep = 0 } = {}) {
       shake() { effects.push('shake'); },
     },
   });
-  return { combat, hits, attacks, sentAttacks, effects };
+  return { combat, hits, attacks, sentAttacks, effects, mobMap, player };
 }
 
 const { combat, hits, attacks, sentAttacks } = makeCombat();
@@ -86,6 +87,14 @@ combat.update(0.016);
 if (attacks.length !== 1) throw new Error('attack animation did not start');
 if (sentAttacks.length !== 1) throw new Error('attack broadcast was not sent');
 if (hits.length !== 0) throw new Error('damage was applied before impact timing');
+combat.net.mobs.get(7).x = 0;
+combat.net.mobs.get(7).z = 1.8;
+combat.player.heading = Math.PI;
+combat.player.root.rotation.y = Math.PI;
+combat.update(0.016);
+if (Math.abs(combat.player.heading) > 1e-9 || Math.abs(combat.player.root.rotation.y) > 1e-9) {
+  throw new Error('basic attack did not keep facing its moving target before commitment');
+}
 
 await new Promise((resolve) => setTimeout(resolve, 50));
 if (hits.length !== 0) throw new Error('damage landed too early');
