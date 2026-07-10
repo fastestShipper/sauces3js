@@ -18,11 +18,21 @@ if (!/const GRUTA_SPAWN = \[-62, -7\]/.test(app)) fail('new players must spawn i
 if (!/playerSpawn = GRUTA_SPAWN/.test(app)) fail('player spawn must use GRUTA_SPAWN');
 if (!/player\.pos\.set\(GRUTA_SPAWN\[0\], 0, GRUTA_SPAWN\[1\]\)/.test(app)) fail('respawn must return to the gruta');
 
-if (!/const WAVE_EVERY_MS = Math\.max\(900000, Number\(process\.env\.WAVE_EVERY_MS\) \|\| 900000\);/.test(server)) fail('default wave interval must stay at 15 minutes minimum');
-if (!/const WAVE_SIZE = 4;/.test(server)) fail('default wave size must stay moderated but still feel like a horde');
+if (!/const WAVE_EVERY_MS = Math\.max\(1500000, Number\(process\.env\.WAVE_EVERY_MS\) \|\| 1500000\);/.test(server)) fail('default wave interval must stay at 25 minutes minimum');
+if (!/const WAVE_BASE_SIZE = 3;/.test(server)) fail('default wave size must start at 3');
+if (!/const WAVE_MAX_SIZE = 5;/.test(server)) fail('dynamic wave size must cap at 5');
+if (!/const size = Math\.min\(WAVE_MAX_SIZE, WAVE_BASE_SIZE \+ Math\.floor\(power \/ 3\)\);/.test(server)) fail('wave size must scale dynamically with player power');
+if (!/function hasActiveWave\(\)/.test(server) || !/if \(mob\._waveId != null\) return true;/.test(server) || !/if \(hasActiveWave\(\)\) return;/.test(server)) {
+  fail('a new wave must not overlap an active wave');
+}
+if ((server.match(/mob\._waveId = waveN;/g) || []).length !== 2) fail('normal and boss wave mobs must belong to the active wave');
 if (!/!inSafeZone\(c\)/.test(server)) fail('waves must ignore players inside the gruta');
 if (!/waveN % 10 === 0/.test(server)) fail('wave bosses must stay rare');
-if (!/Date\.now\(\) \+ 75000/.test(server)) fail('normal wave TTL must leave enough time to engage without accumulating');
+if (!/const WAVE_TTL_MS = 60000;/.test(server) || !/Date\.now\(\) \+ WAVE_TTL_MS/.test(server)) fail('normal wave TTL must stay at 60 seconds');
+if (!/const MOB_RESPAWN_MS = 16000;/.test(server) || !/setTimeout\(\(\) => \{[\s\S]*?\}, MOB_RESPAWN_MS\);/.test(server)) fail('normal mobs must respawn after 16 seconds');
+if (!/const zb = zoneBalance\(spawn\);/.test(server) || !/const hpMax = mobHpMax\(spawn, persona\);/.test(server) || !/zoneDmgMult: zb\.dmg/.test(server) || !/zoneSpeedMult: zb\.speed/.test(server)) {
+  fail('normal respawn pacing must preserve zone difficulty curves');
+}
 if (!/x: SAFE_X, z: SAFE_Z/.test(server)) fail('server-side new player position must start in gruta');
 if (!/boss: !!mob\.boss/.test(server)) fail('boss death metadata must use the internal boss flag');
 if (/me\.x\s*=\s*Number\.isFinite\(Number\(m\.x\)\)/.test(server) ||

@@ -264,7 +264,7 @@ const MOB_SPAWNS_PATH = path.join(__dirname, 'mob_spawns.json');
 // de 66 el orden del JSON dejaba vacias las zonas cercanas al spawn/parque
 // tras cada restart ("faltan los mobs") hasta que los respawns rotaban.
 const MOB_CAP = 90;
-const MOB_RESPAWN_MS = 7000;   // respawn vivo, pero sin saturar el parque de basura
+const MOB_RESPAWN_MS = 16000;   // frena el farmeo de nivel sin vaciar las zonas
 const MOB_DMG_MAX = 3000;
 const MOB_TICK_MS = 100;
 const MOB_HIT_RATE_MS = 300;   // rate por objetivo: permite combos, cleave y skills AoE
@@ -716,18 +716,28 @@ console.log('[world-obstacles]', JSON.stringify(obstacleStats()));
 
 // OLEADAS ZOMBIE: brotan de forma espaciada; evento fuerte, no ruido constante.
 // al azar. Sin _spawn => no respawnean: limpiarla ES el evento (botin de racha).
-const WAVE_EVERY_MS = Math.max(900000, Number(process.env.WAVE_EVERY_MS) || 900000);
-const WAVE_SIZE = 4;
+const WAVE_EVERY_MS = Math.max(1500000, Number(process.env.WAVE_EVERY_MS) || 1500000);
+const WAVE_BASE_SIZE = 3;
+const WAVE_MAX_SIZE = 5;
+const WAVE_TTL_MS = 60000;
+const WAVE_BOSS_TTL_MS = 180000;
 let waveN = 0;
+function hasActiveWave() {
+  for (const mob of mobs.values()) {
+    if (mob._waveId != null) return true;
+  }
+  return false;
+}
 const waveTimer = setInterval(() => {
+  if (hasActiveWave()) return;
   const players = [...clients.values()].filter((c) => c.ws && c.ws.readyState === 1 && !inSafeZone(c));
   if (!players.length) return;
   const c = players[Math.floor(Math.random() * players.length)];
   // la oleada ESCALA con el poder del objetivo (estimado por su hpMax):
-  // un novato recibe 4 zombies suaves; un veterano, hasta 8 y de nivel alto
+  // un novato recibe 3 zombies suaves; un veterano, hasta 5 y de nivel alto
   const power = Math.max(0, Math.round(((c.hm || 100) - 100) / 50));
   waveN++;
-  const size = Math.min(8, WAVE_SIZE + Math.min(2, Math.floor(power / 3)));
+  const size = Math.min(WAVE_MAX_SIZE, WAVE_BASE_SIZE + Math.floor(power / 3));
   const lvlCap = Math.min(5, 2 + Math.ceil(power / 2));
   // La ABOMINACION debe sentirse especial, no aparecer cada pocos minutos.
   const withBoss = waveN % 10 === 0;
@@ -743,7 +753,8 @@ const waveTimer = setInterval(() => {
     };
     const id = nextMobId++;
     const mob = makeMob(id, spawn);
-    mob._dieAtMs = Date.now() + 75000;
+    mob._waveId = waveN;
+    mob._dieAtMs = Date.now() + WAVE_TTL_MS;
     mobs.set(id, mob);
     broadcastAll({ t: 'mspawn', mob: mobView(mob) });
   }
@@ -752,7 +763,8 @@ const waveTimer = setInterval(() => {
     if (open) {
       const id = nextMobId++;
       const mob = makeMob(id, { x: open.x, z: open.z, lvl: Math.min(5, 3 + Math.ceil(power / 2)), zone: 'boss', boss: true });
-      mob._dieAtMs = Date.now() + 180000;
+      mob._waveId = waveN;
+      mob._dieAtMs = Date.now() + WAVE_BOSS_TTL_MS;
       mobs.set(id, mob);
       broadcastAll({ t: 'mspawn', mob: mobView(mob) });
       bossSpawned = true;
