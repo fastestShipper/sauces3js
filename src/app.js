@@ -3,42 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g39';
-import { buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g39';
-import { GrassSystem } from './veg/grass.js?v=20260709g39';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709g39';
-import { Player } from './player.js?v=20260709g39';
-import { MiniMap } from './minimap.js?v=20260709g39';
-import { StreetLife } from './npcs.js?v=20260709g39';
-import { sanitizeImported } from './glbutil.js?v=20260709g39';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g39';
-import { Net } from './net.js?v=20260709g39';
-import { ChatUI, showBubble } from './chat.js?v=20260709g39';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g39';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g39';
-import { equipWeapon } from './weapons.js?v=20260709g39';
-import { authRequest } from './rpg/account.js?v=20260709g39';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g39';
-import { Inventory } from './rpg/loot.js?v=20260709g39';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g39';
-import { Combat } from './rpg/combat.js?v=20260709g39';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g39';
-import { Effects } from './rpg/effects.js?v=20260709g39';
-import { attachWeaponByName } from './weapons.js?v=20260709g39';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g39';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g39';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g39';
-import { SocialPanel } from './social.js?v=20260709g39';
-import { SkillSystem } from './rpg/skills.js?v=20260709g39';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g39';
-import { createSfx } from './sfx.js?v=20260709g39';
-import { installTouchControls } from './touch.js?v=20260709g39';
-import { createIntroScene } from './introscene.js?v=20260709g39';
-import { styleCarShell } from './carstyle.js?v=20260709g39';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g39';
-import { FrameMeter, fpsBand } from './perf.js?v=20260709g39';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g40';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g40';
+import { GrassSystem } from './veg/grass.js?v=20260709g40';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260709g40';
+import { Player } from './player.js?v=20260709g40';
+import { MiniMap } from './minimap.js?v=20260709g40';
+import { StreetLife } from './npcs.js?v=20260709g40';
+import { sanitizeImported } from './glbutil.js?v=20260709g40';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g40';
+import { Net } from './net.js?v=20260709g40';
+import { ChatUI, showBubble } from './chat.js?v=20260709g40';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g40';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g40';
+import { equipWeapon } from './weapons.js?v=20260709g40';
+import { authRequest } from './rpg/account.js?v=20260709g40';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g40';
+import { Inventory } from './rpg/loot.js?v=20260709g40';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g40';
+import { Combat } from './rpg/combat.js?v=20260709g40';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g40';
+import { Effects } from './rpg/effects.js?v=20260709g40';
+import { attachWeaponByName } from './weapons.js?v=20260709g40';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g40';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g40';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g40';
+import { SocialPanel } from './social.js?v=20260709g40';
+import { SkillSystem } from './rpg/skills.js?v=20260709g40';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g40';
+import { createSfx } from './sfx.js?v=20260709g40';
+import { installTouchControls } from './touch.js?v=20260709g40';
+import { createIntroScene } from './introscene.js?v=20260709g40';
+import { styleCarShell } from './carstyle.js?v=20260709g40';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g40';
+import { FrameMeter, fpsBand } from './perf.js?v=20260709g40';
 
-const APP_VERSION = '20260709g39';
+const APP_VERSION = '20260709g40';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -550,7 +550,11 @@ async function boot() {
   await breathe();
 
   // edificios
-  const W = buildBuildings(city);
+  const requestedChunkSize = Number(perfParams.get('cityChunk'));
+  const buildingChunkSize = Number.isFinite(requestedChunkSize) && requestedChunkSize >= 96 && requestedChunkSize <= 320
+    ? requestedChunkSize : BUILDING_CHUNK_SIZE;
+  const buildingChunks = buildBuildings(city, buildingChunkSize);
+  window.__SAUCES_PERF__.buildingChunkSize = buildingChunkSize;
   const addBucket = (bucket, mat, shadows = true) => {
     const g = bucket.geometry();
     const m = new THREE.Mesh(g, mat);
@@ -565,16 +569,48 @@ async function boot() {
     roughness: 0.95,
     side: THREE.DoubleSide,
   });
-  addBucket(W.wall, worldTex._mats.wall);
+  // The two dominant facade layers are spatially chunked. Lightweight glass,
+  // door and roof layers stay global to avoid trading triangles for draw calls.
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x86c5e8, metalness: 0.1, roughness: 0.35, vertexColors: true, side: THREE.DoubleSide });
+  glassMat.envMapIntensity = 0.8;
+  const buildingMaterials = [
+    worldTex._mats.wall,
+    glassMat,
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ color: 0x4d3826, vertexColors: true, roughness: 0.65, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }),
+  ];
+  const addBuildingBatch = (layer, material) => {
+    const geometries = buildingChunks
+      .map((chunk) => chunk.geometry([layer]))
+      .filter((geometry) => geometry.getAttribute('position')?.count);
+    const vertexCount = geometries.reduce(
+      (total, geometry) => total + geometry.getAttribute('position').count, 0);
+    const batch = new THREE.BatchedMesh(geometries.length, vertexCount, 0, material);
+    batch.name = `city-buildings-batch:${layer}`;
+    batch.castShadow = !IS_MOBILE;
+    batch.receiveShadow = true;
+    batch.sortObjects = false;
+    for (const geometry of geometries) {
+      batch.addGeometry(geometry);
+      geometry.dispose();
+    }
+    batch.computeBoundingBox();
+    batch.computeBoundingSphere();
+    scene.add(batch);
+    return batch;
+  };
+  addBuildingBatch('wall', buildingMaterials[0]);
+  addBuildingBatch('trim', buildingMaterials[2]);
   {
-    // vidrio toon: celeste con un toque de cielo reflejado
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x86c5e8, metalness: 0.1, roughness: 0.35, vertexColors: true, side: THREE.DoubleSide });
-    glassMat.envMapIntensity = 0.8;
-    addBucket(W.glass, glassMat);
+    const geometry = buildBuildingGeometry(buildingChunks, ['glass', 'door', 'roof']);
+    const mesh = new THREE.Mesh(geometry, buildingMaterials);
+    mesh.name = 'city-buildings:global-detail';
+    mesh.castShadow = !IS_MOBILE;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
   }
-  addBucket(W.trim, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
-  addBucket(W.door, new THREE.MeshStandardMaterial({ color: 0x4d3826, vertexColors: true, roughness: 0.65, side: THREE.DoubleSide }));
-  addBucket(W.roof, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
+  window.__SAUCES_PERF__.buildingChunks = buildingChunks.length;
   setProgress(0.7);
   await breathe();
 

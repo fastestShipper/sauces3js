@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709g39';
-import { heroPlacement, buildLosSauces202, registerLosSauces202Collision } from './landmark.js?v=20260709g39';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260709g40';
+import { heroPlacement, buildLosSauces202, registerLosSauces202Collision } from './landmark.js?v=20260709g40';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -28,6 +28,63 @@ class Bucket {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     return g;
   }
+}
+
+export const BUILDING_CHUNK_SIZE = 320;
+export const BUILDING_LAYERS = ['wall', 'glass', 'trim', 'door', 'roof'];
+
+class BuildingChunk {
+  constructor(tx, tz) {
+    this.tx = tx;
+    this.tz = tz;
+    this.key = `${tx}:${tz}`;
+    for (const layer of BUILDING_LAYERS) this[layer] = new Bucket();
+  }
+
+  geometry(layers = BUILDING_LAYERS) {
+    return buildBuildingGeometry([this], layers);
+  }
+}
+
+export function buildBuildingGeometry(chunks, layers = BUILDING_LAYERS) {
+  const vertexCount = layers.reduce((total, layer) => total + chunks.reduce(
+    (chunkTotal, chunk) => chunkTotal + chunk[layer].pos.length / 3, 0), 0);
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  const colors = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  let vertexOffset = 0;
+
+  layers.forEach((layer) => {
+    const groupStart = vertexOffset;
+    for (const chunk of chunks) {
+      const bucket = chunk[layer];
+      const count = bucket.pos.length / 3;
+      if (!count) continue;
+      positions.set(bucket.pos, vertexOffset * 3);
+      normals.set(bucket.nrm, vertexOffset * 3);
+      colors.set(bucket.col, vertexOffset * 3);
+      uvs.set(bucket.uv, vertexOffset * 2);
+      vertexOffset += count;
+    }
+    const groupCount = vertexOffset - groupStart;
+    if (groupCount) geometry.addGroup(groupStart, groupCount, BUILDING_LAYERS.indexOf(layer));
+  });
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function ringCenter(ring) {
+  let x = 0, z = 0;
+  for (const point of ring) { x += point[0]; z += point[1]; }
+  return [x / ring.length, z / ring.length];
 }
 
 function ringArea(ring) {
@@ -83,8 +140,18 @@ const TOLDO_COLORS = [
   [0.83, 0.62, 0.16],
 ];
 
-export function buildBuildings(city) {
-  const W = { wall: new Bucket(), glass: new Bucket(), trim: new Bucket(), door: new Bucket(), roof: new Bucket() };
+export function buildBuildings(city, chunkSize = BUILDING_CHUNK_SIZE) {
+  const chunks = new Map();
+  const chunkAt = (x, z) => {
+    const tx = Math.floor(x / chunkSize), tz = Math.floor(z / chunkSize);
+    const key = `${tx}:${tz}`;
+    let chunk = chunks.get(key);
+    if (!chunk) {
+      chunk = new BuildingChunk(tx, tz);
+      chunks.set(key, chunk);
+    }
+    return chunk;
+  };
   const blds = city.data.buildings;
   // real Los Sauces 202: drop the hand-built 6-storey corner hero onto the
   // Jirón Los Sauces frontage, skipping any default OSM box it overlaps.
@@ -92,18 +159,19 @@ export function buildBuildings(city) {
   const skip = (b) => {
     if (!hero) return false;
     const p = b.p; if (!p || p.length < 3) return false;
-    let mx = 0, mz = 0; for (const q of p) { mx += q[0]; mz += q[1]; } mx /= p.length; mz /= p.length;
+    const [mx, mz] = ringCenter(p);
     return Math.hypot(mx - hero.cx, mz - hero.cz) < 8;
   };
   for (let bi = 0; bi < blds.length; bi++) {
     if (skip(blds[bi])) continue;
-    extrude(W, city, blds[bi], bi);
+    const [cx, cz] = ringCenter(blds[bi].p);
+    extrude(chunkAt(cx, cz), city, blds[bi], bi);
   }
   if (hero) {
     registerLosSauces202Collision(city, hero);
-    buildLosSauces202(W, hero.cx, hero.cz, hero.AX, hero.FZ);
+    buildLosSauces202(chunkAt(hero.cx, hero.cz), hero.cx, hero.cz, hero.AX, hero.FZ);
   }
-  return W;
+  return [...chunks.values()].sort((a, b) => a.tx - b.tx || a.tz - b.tz);
 }
 
 function extrude(W, city, b, bi) {

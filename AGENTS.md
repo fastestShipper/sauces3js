@@ -430,6 +430,15 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Production state after deploy: service active, health clean and 86 mobs. The root disk remains critical at 99% with about 2.2 GB free.
   - Backup: `/root/deploy-backups/sauces-web-20260710T054204Z-before-20260709g39-selective.tar.gz`.
 
+- **Production patch 20260709g40**: `sauces.controla.group` runs `APP_VERSION=20260709g40`.
+  - Spatial city culling: all 28,483 generated buildings retain their exact vertices and are assigned to 35 measured 320 m sectors. Off-camera sectors no longer force the complete city facade into every frame.
+  - Native batching: the two dominant wall and trim layers use Three.js r161 `BatchedMesh` with per-sector frustum culling and multidraw. Glass, doors and roofs remain in one lightweight global detail mesh, preserving their original materials while avoiding extra calls.
+  - Geometry contract: positions, normals, vertex colors, UVs, material groups, shadows and Los Sauces 202 geometry remain byte-equivalent before and after sector assignment. Gameplay collision and the authoritative server obstacle map are unchanged.
+  - Measured rendering: four representative combat cameras dropped from 3.12-3.13 million triangles to 1.14-1.47 million, a 53% to 64% reduction, while retaining the exact g39 draw-call counts of 58 to 96. The production trailer sample rendered 79 calls and 1.53 million triangles with zero WebGL errors.
+  - QA: 152 JavaScript syntax checks, 79 selected pure smokes, TypeScript `--noEmit`, byte-equivalent building attribute tests, native batch bounds and culling tests, clean 1280x720 and 390x844 browser runs, nonblank canvas pixel checks, no horizontal overflow, clean production browser console, external `WSS_OPEN`, and 19/19 production web hashes.
+  - Production state after deploy: service active, health clean and 86 mobs. The root disk remains critical at 99% with about 2.2 GB free.
+  - Backup: `/root/deploy-backups/sauces-web-20260710T061718Z-before-20260709g40-selective.tar.gz`.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.
