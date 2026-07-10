@@ -3,7 +3,7 @@
 // anticipacion + impacto + consecuencia, con pitch aleatorio para no sonar a
 // metralleta. El AudioContext nace perezoso en el primer gesto (autoplay).
 // Tecla M silencia; persiste en localStorage.
-import { matchesAction } from './keybinds.js?v=20260710g48';
+import { matchesAction } from './keybinds.js?v=20260710g49';
 
 const LS_MUTE = 'sauces_muted';
 
@@ -331,16 +331,21 @@ class Sfx {
     this._noise({ dur: 0.1, gain: 0.2, fc: 500 });
   }
 
-  kill() {
+  kill(gory = false) {
     this.zombieDeath();
+    // kill GORE (heavy/cleave/racha): destripamiento GARANTIZADO y jugoso, no 30%.
+    if (gory) {
+      this._sample('flesh', { gain: 0.6, spread: 0.15 });
+      this._sample('decap', { gain: 0.7, delay: 0.04 });
+    }
     this._tone({ type: 'triangle', f0: 520, f1: 780, dur: 0.1, gain: 0.22, delay: 0.1 });
   }
   coin() {
-    if (this._sample('m_coin', { gain: 0.45 })) return;
-    if (!this._sample('coins', { gain: 0.5 })) {
-      this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 });
-      this._tone({ type: 'square', f0: 1760, f1: 1760, dur: 0.1, gain: 0.12, delay: 0.06 });
-    }
+    // oro JUGOSO: el sample de monedas + un tintineo brillante encima
+    const s = this._sample('m_coin', { gain: 0.55 }) || this._sample('coins', { gain: 0.55 });
+    this._tone({ type: 'square', f0: 1568, f1: 1568, dur: 0.05, gain: 0.1 });
+    this._tone({ type: 'square', f0: 2093, f1: 2093, dur: 0.08, gain: 0.09, delay: 0.05 });
+    if (!s) this._tone({ type: 'square', f0: 1320, f1: 1320, dur: 0.06, gain: 0.14 });
   }
   // pasos sobre el pasto del parque (throttle lo pone el caller)
   step(running = false) {

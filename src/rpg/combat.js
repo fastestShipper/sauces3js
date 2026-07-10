@@ -3,11 +3,11 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g48';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g48';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g48';
-import { matchesAction } from '../keybinds.js?v=20260710g48';
-import { BloodCoat } from './bloodcoat.js?v=20260710g48';
+import { projectileSpeed } from './effects.js?v=20260710g49';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g49';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g49';
+import { matchesAction } from '../keybinds.js?v=20260710g49';
+import { BloodCoat } from './bloodcoat.js?v=20260710g49';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -1941,7 +1941,7 @@ export class Combat {
     this.bloodCoat.recordKill(this.streak);
     const mult = 1 + Math.min(2, (this.streak - 1) * 0.15);
     if (this.streak >= 2) this.hud.showStreak?.(this.streak, mult);
-    if (this.sfx) { this.sfx.kill(); this.sfx.streak?.(this.streak); }
+    if (this.sfx) { this.sfx.kill(heavyKill || this.streak >= 3); this.sfx.streak?.(this.streak); }
     this._applyKillFrenzy(m);
     this._killSustain(m);
     // GORE de kill (escala con la racha)

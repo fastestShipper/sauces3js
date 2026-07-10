@@ -54,33 +54,58 @@ const DEFAULT_ACC = {
 const RIG_BY_FILE = Object.fromEntries(Object.entries(RIGS).map(([id, r]) => [r.file, id]));
 
 // 4 paletas por heroe: la [0] es la identidad de clase; el resto, looks curados
+// SKINS DIVERTIDOS compartidos por todas las clases: recolores llamativos que
+// se agregan al final de cada paleta. El tint multiplica la textura base, asi
+// que "Hulk" (verde intenso) da piel verde, "Oro" da estatua dorada, etc.
+const FUN_SKINS = [
+  { name: 'Hulk', tint: 0x5fd35a },
+  { name: 'Oro', tint: 0xf3c96a },
+  { name: 'Demonio', tint: 0xff5a48 },
+  { name: 'Fantasma', tint: 0xdfe6f2 },
+  { name: 'Neón', tint: 0x59f0d0 },
+  { name: 'Real', tint: 0x8ab4ff },
+];
+
 export const PALETTES_BY_CLASS = {
   verdugo: [
     { name: 'Óxido', tint: 0xe8907a },
     { name: 'Obsidiana', tint: 0x8a8fa8 },
     { name: 'Dorado', tint: 0xf2cd88 },
     { name: 'Vino', tint: 0xc47a9a },
+    { name: 'Acero', tint: 0xc2cad6 },
+    { name: 'Carbón', tint: 0x6f7480 },
+    ...FUN_SKINS,
   ],
   piromante: [
     { name: 'Brasa', tint: 0xffb387 },
     { name: 'Ceniza', tint: 0xb9bcc8 },
     { name: 'Esmeralda', tint: 0x9adbb0 },
     { name: 'Abismo', tint: 0x9a90d8 },
+    { name: 'Amatista', tint: 0xc9a6f2 },
+    { name: 'Zafiro', tint: 0x8ab0ff },
+    ...FUN_SKINS,
   ],
   cazadora: [
     { name: 'Bosque', tint: 0xa9dba2 },
     { name: 'Arena', tint: 0xe6d3a3 },
     { name: 'Glaciar', tint: 0xa9cfe0 },
     { name: 'Noche', tint: 0x9d9ab8 },
+    { name: 'Cobre', tint: 0xe0a878 },
+    { name: 'Musgo', tint: 0x8fb57a },
+    ...FUN_SKINS,
   ],
   sombra: [
     { name: 'Penumbra', tint: 0xb09ae0 },
     { name: 'Sangre', tint: 0xd88a8a },
     { name: 'Humo', tint: 0xaab0ba },
     { name: 'Jade', tint: 0x93cdb4 },
+    { name: 'Tinta', tint: 0x7a7fa0 },
+    { name: 'Rubí', tint: 0xe08a9a },
+    ...FUN_SKINS,
   ],
   cernunnos: [
     { name: 'Divino', tint: 0 },
+    ...FUN_SKINS,
   ],
 };
 
@@ -97,7 +122,7 @@ export function sanitizeCustom(cu, charFile) {
   if (!cu || typeof cu !== 'object') return d;
   const pick = (v, fallback) => (RIG_IDS.includes(v) ? v : fallback);
   return {
-    t: Math.max(0, Math.min(3, Number(cu.t) | 0)),
+    t: Math.max(0, Math.min(15, Number(cu.t) | 0)),   // hasta 12+ paletas por clase
     hd: pick(cu.hd, d.hd),
     tr: pick(cu.tr, d.tr),
     lg: pick(cu.lg, d.lg),
