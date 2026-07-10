@@ -24,6 +24,7 @@ export const CLASSES = {
       { key: 'E', name: 'Torbellino', desc: 'Giras con el hacha: daña TODO a tu alrededor', emoji: '🌪️', cost: 38, cd: 10.8, type: 'spin', dmgMult: 1.7, radius: 4 },
       { key: 'R', name: 'Grito de Guerra', desc: 'TODO el party pega +45% por 6s', emoji: '📢', cost: 20, cd: 28, type: 'partybuff', v: 0.45, dur: 6 },
       { key: 'F', name: 'Juicio del Guerrero', desc: 'Salto devastador: gran área a tu alrededor', emoji: '⚡', cost: 68, cd: 32, type: 'leap', dmgMult: 3.2, radius: 6 },
+      { key: 'V', name: 'Furia de Guerra', desc: 'Ruges: +55% de TU daño por 7s', emoji: '💢', cost: 30, cd: 20, type: 'warcry', buffMult: 1.55, buffDur: 7, color: 0xff7a2c },
     ],
   },
   piromante: {
@@ -43,6 +44,7 @@ export const CLASSES = {
       { key: 'E', name: 'Nova Ígnea', desc: 'Anillo de fuego alrededor tuyo', emoji: '💥', cost: 38, cd: 11.4, type: 'nova', dmgMult: 1.7, radius: 4.5 },
       { key: 'R', name: 'Escudo Ígneo', desc: 'Escudo de 30 daño para TODO el party (8s)', emoji: '🛡️', cost: 30, cd: 30, type: 'partyshield', v: 30, dur: 8 },
       { key: 'F', name: 'Lluvia de Meteoros', desc: 'El cielo cae sobre el área del objetivo', emoji: '☄️', cost: 72, cd: 34, type: 'meteor', dmgMult: 2.6, radius: 7 },
+      { key: 'V', name: 'Rayo Arcano', desc: 'Descarga letal a un objetivo (330%)', emoji: '⚡', cost: 26, cd: 8.5, type: 'bolt', dmgMult: 3.3, color: 0x9a52ff },
     ],
   },
   cazadora: {
@@ -62,6 +64,7 @@ export const CLASSES = {
       { key: 'E', name: 'Tiro Perforante', desc: 'Disparo letal a un objetivo (300%)', emoji: '🎯', cost: 20, cd: 9.8, type: 'pierce', dmgMult: 3.0 },
       { key: 'R', name: 'Instinto de Manada', desc: 'TODO el party corre +30% por 6s', emoji: '🐺', cost: 24, cd: 28, type: 'partyhaste', v: 0.3, dur: 6 },
       { key: 'F', name: 'Tormenta de Acero', desc: 'Gran tormenta de flechas en área', emoji: '🌩️', cost: 68, cd: 33, type: 'storm', dmgMult: 2.2, radius: 7 },
+      { key: 'V', name: 'Andanada', desc: 'Una flecha a cada uno de los 5 más cercanos', emoji: '🎯', cost: 30, cd: 9, type: 'volley', dmgMult: 1.5, count: 5, range: 14, color: 0xffe08a },
     ],
   },
   sombra: {
@@ -80,6 +83,7 @@ export const CLASSES = {
       { key: 'E', name: 'Danza de Cuchillas', desc: 'Remolino de dagas a tu alrededor', emoji: '🌀', cost: 38, cd: 10.6, type: 'bladedance', dmgMult: 1.8, radius: 3.5 },
       { key: 'R', name: 'Velo Sombrío', desc: 'Cura 35% de vida a TODO el party', emoji: '🌑', cost: 30, cd: 30, type: 'partyheal', v: 0.35 },
       { key: 'F', name: 'Ejecución', desc: 'Remata: x2 de daño si está débil (<40%)', emoji: '💀', cost: 62, cd: 31, type: 'execute', dmgMult: 2.4, executeMult: 4.8, threshold: 0.4 },
+      { key: 'V', name: 'Explosión Umbría', desc: 'Estallido de sombra a tu alrededor', emoji: '🌑', cost: 34, cd: 11, type: 'nova', dmgMult: 1.6, radius: 4, color: 0x8a4fd6 },
     ],
   },
 };

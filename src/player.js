@@ -1,15 +1,15 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260710g46';
-import { makeNametag } from './nametag.js?v=20260710g46';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g46';
-import { composeCharacter } from './rpg/charcustom.js?v=20260710g46';
-import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g46';
-import { isActionDown } from './keybinds.js?v=20260710g46';
-import { plantClip } from './animclip.js?v=20260710g46';
+import { sanitizeImported } from './glbutil.js?v=20260710g47';
+import { makeNametag } from './nametag.js?v=20260710g47';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g47';
+import { composeCharacter } from './rpg/charcustom.js?v=20260710g47';
+import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g47';
+import { isActionDown } from './keybinds.js?v=20260710g47';
+import { plantClip } from './animclip.js?v=20260710g47';
 
-export { isRootMotionPositionTrack, plantClip } from './animclip.js?v=20260710g46';
+export { isRootMotionPositionTrack, plantClip } from './animclip.js?v=20260710g47';
 
 const BASE_SPEED = 10.75;
 const SPRINT_MULT = 1.75;

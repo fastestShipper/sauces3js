@@ -1,8 +1,8 @@
 // Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
 // (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
 // Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
-import { classById, CERNUNNOS } from './classes.js?v=20260710g46';
-import { actionLabel, keybindChangeEvent, matchesAction } from '../keybinds.js?v=20260710g46';
+import { classById, CERNUNNOS } from './classes.js?v=20260710g47';
+import { actionLabel, keybindChangeEvent, matchesAction } from '../keybinds.js?v=20260710g47';
 
 const STYLE_ID = 'rpg-skill-style';
 
@@ -243,6 +243,11 @@ export class SkillSystem {
 
     const root = document.createElement('div');
     root.className = 'rpg-skill-root';
+    // el deck se dimensiona al NUMERO de skills (antes fijo a 4): con 5 el ultimo
+    // slot se salia o clipeaba.
+    const nSlots = this.skills.length;
+    root.style.setProperty('--deck-width',
+      `calc(var(--slot-size) * ${nSlots} + var(--slot-gap) * ${nSlots - 1})`);
     const slots = this.skills.map((s, i) => `
       <div class="rpg-skill-slot" data-i="${i}" role="button" tabindex="0" aria-label="${actionLabel(slotAction(i))} ${s.name || 'Habilidad'}">
         <div class="s-key">${actionLabel(slotAction(i))}</div>
@@ -256,7 +261,7 @@ export class SkillSystem {
         <div class="rpg-skill-label"><span>${RES_LABEL[this.resType] || 'Recurso'}</span><span class="rpg-skill-rnum">0/0</span></div>
         <div class="rpg-skill-bar"><div class="rpg-skill-fill"></div></div>
       </div>
-      <div class="rpg-skill-row">${slots}</div>`;
+      <div class="rpg-skill-row" style="grid-template-columns:repeat(${this.skills.length},var(--slot-size))">${slots}</div>`;
     (rootEl || document.body).appendChild(root);
 
     this.root = root;
