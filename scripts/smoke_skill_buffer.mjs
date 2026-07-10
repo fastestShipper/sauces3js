@@ -1,7 +1,9 @@
 globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
+globalThis.localStorage = { getItem() { return null; }, setItem() {} };
 
 const { SkillSystem } = await import('../src/rpg/skills.js');
+const { Combat } = await import('../src/rpg/combat.js');
 
 const METHODS = ['canCast', 'tryCast', 'update', '_castNow', '_bufferCast'];
 
@@ -98,6 +100,63 @@ function makeFake({ res = 10, regen = 0, cd = 0, accepted = true } = {}) {
   if (fake.res !== 10 || fake.cds[0] < 0.99) throw new Error('target-ready buffered skill did not spend resource and start cooldown');
   if (!casts.some((c) => c.buffered)) throw new Error('buffer retry did not mark cast context as buffered');
   console.log('PASS: ready target skill buffers until a target appears');
+}
+
+{
+  const mob = { id: 41, x: 2, z: 0, hp: 40, hpMax: 40, lvl: 1 };
+  const animations = [];
+  const player = {
+    charFile: 'char_knight.glb',
+    pos: { x: 0, z: 0 },
+    keys: {},
+    locked: false,
+    dead: false,
+    attackT: 0.2,
+    attackSkill(type) { animations.push(type); return true; },
+  };
+  const combat = new Combat({
+    scene: null,
+    camera: null,
+    player,
+    mobField: { setTargeted() {}, meshes() { return []; }, pickFromIntersections() { return null; } },
+    net: {
+      myId: 1,
+      mobs: new Map([[mob.id, mob]]),
+      remotes: new Map(),
+      party: [],
+      attackMob() {},
+      sendAttack() {},
+      partySkill() {},
+      reportStreak() {},
+    },
+    inventory: { equippedWeapon: null },
+    progress: { hpMax: 100, xp: 0, xpNext: 10, level: 1, gainXp() { return false; } },
+    hud: { setHP() {}, setXP() {}, showTarget() {}, hideTarget() {}, toast() {} },
+  });
+  const skill = { key: 'Q', name: 'Locked Strike', type: 'strike', cost: 10, cd: 1, dmgMult: 2 };
+  const fake = {
+    skills: [skill],
+    res: 20,
+    resMax: 100,
+    regen: 0,
+    cds: [0],
+    _buffered: null,
+    _onCast(s, opts) { return combat.castSkill(s, opts); },
+    _refreshUI() {},
+  };
+  for (const m of METHODS) fake[m] = SkillSystem.prototype[m];
+  const out = fake.tryCast(0);
+  if (out !== false || !fake._buffered) throw new Error('attack cancel lock should buffer a ready skill');
+  if (fake.res !== 20 || fake.cds[0] !== 0 || animations.length !== 0) {
+    throw new Error('attack cancel lock spent resource, started cooldown, or animated prematurely');
+  }
+  player.attackT = 0;
+  fake.update(0.02);
+  if (animations.length !== 1 || fake.res !== 10 || fake.cds[0] < 0.99 || fake._buffered) {
+    throw new Error('buffered skill did not cast exactly once after the cancel lock opened');
+  }
+  combat._clearImpacts();
+  console.log('PASS: attack cancel lock buffers skill without premature cost or cooldown');
 }
 
 console.log('PASS: skill buffer smoke');

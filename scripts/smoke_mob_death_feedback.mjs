@@ -1,8 +1,27 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { MobField } from '../src/rpg/mobs.js';
+import { MobField, plantMobClips } from '../src/rpg/mobs.js';
 
 globalThis.window = { __SAUCES_MOBILE__: false };
+
+const deathRootTrack = new THREE.VectorKeyframeTrack(
+  'root.position',
+  [0, 0.5, 1],
+  [2, 0, -3, 8, 1.4, 4, 12, 0.25, 11],
+);
+const sourceDeathClip = new THREE.AnimationClip('Death_C_Skeletons', 1, [deathRootTrack]);
+const [plantedDeathClip] = plantMobClips([sourceDeathClip]);
+assert.notEqual(plantedDeathClip, sourceDeathClip, 'mob clip preparation should clone source animations');
+assert.deepEqual(
+  plantedDeathClip.tracks[0].values,
+  new Float32Array([2, 0, -3, 2, 1.4, -3, 2, 0.25, -3]),
+  'Death_C should keep authored Y motion while filtering planar root motion',
+);
+assert.deepEqual(
+  sourceDeathClip.tracks[0].values,
+  new Float32Array([2, 0, -3, 8, 1.4, 4, 12, 0.25, 11]),
+  'mob clip preparation should not mutate shared GLTF clips',
+);
 
 function action(name, duration = 0.8) {
   return {

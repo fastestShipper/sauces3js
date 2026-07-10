@@ -385,6 +385,18 @@ curl -s https://TU-DOMINIO/index.html | grep -o 'app.js?v=[0-9a-z]*'
   - Production state after deploy: service active, health clean and 86 mobs. Root disk remains critical at 99% with about 2.2 GB free.
   - Backup: `/root/deploy-backups/sauces-web-20260710T035307Z-before-20260709g35.tar.gz`.
 
+- **Production patch 20260709g36**: `sauces.controla.group` runs `APP_VERSION=20260709g36`.
+  - Action commitment: skills now respect the active attack cancel lock and buffer without consuming resource or cooldown early. Basic and skill impacts belong to an action sequence, so a dash before contact cancels uncommitted damage while a dash after release preserves the committed hit.
+  - Directed casting: targeted skills face their selected mob before animation and hold that visual heading through release/contact while movement remains authoritative and independent.
+  - Authoritative enemy tells: the additive `matk` payload includes `x/z/h`; `Net` forwards the pose and `MobField` applies it before drawing the danger cue or claw. Target switches no longer telegraph toward the previous heading.
+  - Hidden-state cleanup: mob attack tell/claw timers continue outside visual LOD and expire silently, preventing stale attack cues when a hidden mob becomes visible again.
+  - Mob root motion: all mob clips use the shared planar root-motion filter, preserving Y while planting X/Z. Blender 5.1.2 measured `Death_C_Skeletons` root delta `(0,0,-0.708052)` across frames 0-48; this no longer stacks with corpse `deathKick`.
+  - Gameplay contract: damage values, cooldown durations, movement authority, collision, loot, progression and existing protocol fields remain unchanged. The `matk` fields are additive for older clients.
+  - QA: 45 JavaScript syntax checks, 71 selected pure smokes, TypeScript `--noEmit`, isolated relay windup test (`matk` to `phit` 326 ms), Blender root-motion measurement, local and production browser runs at 1280x720 and 390x844, clean consoles, no overflow, nonblank pixel checks, external `WSS_OPEN`, 19/19 web hashes and 1/1 server hash.
+  - Production state after deploy: service active, health clean and 86 mobs. Root disk remains critical at 99% with about 2.2 GB free.
+  - Backups: `/root/deploy-backups/sauces-web-20260710T041700Z-before-20260709g36.tar.gz` and `/root/deploy-backups/sauces-server-20260710T041700Z-before-20260709g36.js`.
+  - Next performance priorities for g37: O(1) target-ring updates and cached target HUD writes, shared mob HP/ring geometry, and throttled low-end spawn-queue selection.
+
 - **Repo original (privado)**: `github.com/zpwpe/sauces3js`, ramas `main`, `feat/realismo-sauces`, `sauces420v4201`.
 - **Docs vivos**: `CHANGELOG.md`, `PATCH_NOTES.md`, `README.md`.
 - **Origen del mundo**: OSM `-12.0871209,-76.9852216` (San Borja, Los Sauces), `assets/zone.json`.

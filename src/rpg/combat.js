@@ -3,10 +3,10 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260709g35';
-import { skillReleaseDelay } from '../animmap.js?v=20260709g35';
-import { attackReleaseDelay } from '../weapons.js?v=20260709g35';
-import { matchesAction } from '../keybinds.js?v=20260709g35';
+import { projectileSpeed } from './effects.js?v=20260709g36';
+import { skillReleaseDelay } from '../animmap.js?v=20260709g36';
+import { attackReleaseDelay } from '../weapons.js?v=20260709g36';
+import { matchesAction } from '../keybinds.js?v=20260709g36';
 
 const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -170,6 +170,9 @@ export class Combat {
     this._pvpPunchT = 0;
     this.skillPriorityT = 0;  // evita que el autoataque ensucie una skill recien lanzada
     this._hitTimers = new Map(); // timer -> tipo de impacto pendiente
+    this._actionSeq = 0;
+    this._activeAction = null;
+    this._lastDashSeq = Number(this.player?.dashSeq) || 0;
     this.chainShotT = 0;      // breve alcance extra para proyectiles tras una kill
     this._dashStrikeSeq = 0;
     this._dashStrikeHitIds = new Set();
@@ -924,6 +927,8 @@ export class Combat {
     const start = { x: p.x, z: p.z };
     const ok = this.player.tryDash?.(dx, dz, { faceHeading });
     if (!ok) return false;
+    this._lastDashSeq = Number(this.player?.dashSeq) || this._lastDashSeq;
+    this._cancelUncommittedAction();
     const td = Math.hypot(dx, dz) || 1;
     this._motionTrail(start, {
       x: start.x + (dx / td) * MOTION_TRAIL_DODGE_DIST,
@@ -975,19 +980,71 @@ export class Combat {
     return ok;
   }
 
-  _queueImpact(delay, fn, kind = 'any') {
-    if (typeof fn !== 'function') return;
-    const timer = setTimeout(() => {
-      this._hitTimers.delete(timer);
-      if (this.dead) return;
-      try { fn(); } catch { /* no tumbar el loop por un impacto tardio */ }
-    }, Math.round(Math.max(0, Number(delay) || 0) * 1000));
-    this._hitTimers.set(timer, kind);
+  _applyActionHeading(heading) {
+    if (!Number.isFinite(heading)) return false;
+    this.player.heading = heading;
+    if (this.player.root?.rotation) this.player.root.rotation.y = heading;
+    return true;
   }
 
-  _clearImpacts(kind = null) {
-    for (const [timer, k] of [...this._hitTimers]) {
+  _beginAction(kind, heading = null) {
+    const action = {
+      seq: ++this._actionSeq,
+      kind,
+      heading: Number.isFinite(heading) ? heading : null,
+      committed: false,
+      invalidated: false,
+    };
+    this._activeAction = action;
+    if (action.heading != null) this._applyActionHeading(action.heading);
+    return action;
+  }
+
+  _commitAction(action) {
+    if (!action || action.invalidated) return false;
+    action.committed = true;
+    return true;
+  }
+
+  _holdActionHeading() {
+    const action = this._activeAction;
+    if (!action || action.invalidated || action.committed || action.heading == null) return false;
+    return this._applyActionHeading(action.heading);
+  }
+
+  _cancelUncommittedAction() {
+    const action = this._activeAction;
+    if (!action || action.invalidated || action.committed) return false;
+    action.invalidated = true;
+    this._clearImpacts(null, action);
+    return true;
+  }
+
+  _syncDashAction() {
+    const dashSeq = Number(this.player?.dashSeq) || 0;
+    if (dashSeq === this._lastDashSeq) return false;
+    this._lastDashSeq = dashSeq;
+    return this._cancelUncommittedAction();
+  }
+
+  _queueImpact(delay, fn, kind = 'any', opts = {}) {
+    if (typeof fn !== 'function') return;
+    const action = opts.action || null;
+    const timer = setTimeout(() => {
+      this._hitTimers.delete(timer);
+      if (this.dead || action?.invalidated) return;
+      if (opts.commit && action && !this._commitAction(action)) return;
+      try { fn(); } catch { /* no tumbar el loop por un impacto tardio */ }
+    }, Math.round(Math.max(0, Number(delay) || 0) * 1000));
+    this._hitTimers.set(timer, { kind, action });
+  }
+
+  _clearImpacts(kind = null, action = null) {
+    for (const [timer, entry] of [...this._hitTimers]) {
+      const k = typeof entry === 'string' ? entry : entry?.kind;
+      const queuedAction = typeof entry === 'object' ? entry?.action : null;
       if (kind != null && k !== kind) continue;
+      if (action != null && queuedAction !== action) continue;
       clearTimeout(timer);
       this._hitTimers.delete(timer);
     }
@@ -1001,6 +1058,8 @@ export class Combat {
       if (this.respawnT <= 0) this._respawn();
       return;
     }
+    this._syncDashAction();
+    this._holdActionHeading();
     // la gruta te CURA: regeneracion fuerte dentro de la zona segura
     const dg = Math.hypot(this.player.pos.x - this.safeCenter[0], this.player.pos.z - this.safeCenter[1]);
     if (dg < 26) {
@@ -1146,6 +1205,7 @@ export class Combat {
           if (this._punchT > 0 && (this.player.attackT || 0) > 0) this._punchT = Math.max(this._punchT, ATTACK_CHAIN_RETRY_T);
           return;
         }
+        const action = this._beginAction('basic');
         this._breakSpawnGrace();
         this.net.sendAttack?.('', { type: 'mob', id: target.id, x: target.x, z: target.z, animSpeed });
         this._punchT = 0;
@@ -1164,8 +1224,8 @@ export class Combat {
           if (!ptype) this.effects.slashArc(this.player.pos, this.player.heading, (this.classSpec && this.classSpec.auraColor) || 0xfff2d8);
           if (ptype) {
             const fireProjectile = () => this.effects.projectile(shotFrom, shotTo, ptype);
-            if (releaseDelay > 0) this._queueImpact(releaseDelay, fireProjectile, 'basic');
-            else fireProjectile();
+            if (releaseDelay > 0) this._queueImpact(releaseDelay, fireProjectile, 'basic', { action, commit: true });
+            else { this._commitAction(action); fireProjectile(); }
           }
         }
         const targetId = target.id;
@@ -1215,7 +1275,7 @@ export class Combat {
               if (cleaveHits >= 2) this.effects.goreBurst({ x: hx, y: 0.85, z: hz }, 0.45 + cleaveHits * 0.1);
             }
           }
-        }, 'basic');
+        }, 'basic', { action, commit: true });
         this.hud.showTarget((target.b ? '\ud83d\udc80 ABOMINACI\u00d3N Nv.' : 'Zombi Nv.') + target.lvl, target.hp, target.hpMax, this.targetLocked);
       }
       return;
@@ -1369,6 +1429,9 @@ export class Combat {
   // se ejecuta el efecto. Cada tipo tiene su feel propio (anim + fx + dano). ======
   castSkill(s, opts = {}) {
     if (this.dead || !s || this.player.locked) return false;
+    if ((this.player.attackT || 0) > 0 || this._isDodgeActionActive()) {
+      return opts.bufferable ? { buffer: true } : false;
+    }
     const fx = this.effects;
     const p = this.player.pos;
     const aura = (this.classSpec && this.classSpec.auraColor) || 0xffd24a;
@@ -1379,13 +1442,17 @@ export class Combat {
       return opts.bufferable ? { buffer: true } : false;
     }
     if (target && !(this.targetLocked && this.targetId === target.id)) this._setSoftTarget(target.id);
-    if (this._isDodgeActionActive()) return opts.bufferable ? { buffer: true } : false;
     if (target && ['strike', 'stab', 'execute'].includes(s.type)) this._skillLungeTo(target);
+    const targetHeading = target
+      ? Math.atan2(target.x - this.player.pos.x, target.z - this.player.pos.z)
+      : null;
+    if (targetHeading != null) this._applyActionHeading(targetHeading);
     const cx = target ? target.x : p.x;
     const cz = target ? target.z : p.z;
     const base = (mult) => Math.round(this._playerAtk() * (mult || 1.5));
     const ptype = (this.classSpec && this.classSpec.projectile) || PROJECTILE_BY_CHAR[this.player.charFile];
     const releaseDelay = this._skillReleaseDelay(s);
+    let action = null;
     const skillCue = (m = target, ax = cx, az = cz) => {
       if (m && m.id != null) return { type: 'mob', id: m.id, x: m.x, z: m.z };
       if (Number.isFinite(Number(ax)) && Number.isFinite(Number(az))) return { type: 'point', x: ax, z: az };
@@ -1426,11 +1493,11 @@ export class Combat {
       return 1;
     };
     const impact = (fn, delay = this._skillImpactDelay(s.type)) => {
-      this._queueImpact(delay, fn, 'skill');
+      this._queueImpact(delay, fn, 'skill', { action, commit: true });
     };
     const atRelease = (fn) => {
-      if (releaseDelay > 0) this._queueImpact(releaseDelay, fn, 'skill');
-      else fn();
+      if (releaseDelay > 0) this._queueImpact(releaseDelay, fn, 'skill', { action, commit: true });
+      else { this._commitAction(action); fn(); }
     };
     const hitArea = (ax, az, radius, dmg, opts = {}) => {
       impact(() => hitAreaNow(ax, az, radius, dmg, opts), opts.delay);
@@ -1455,12 +1522,14 @@ export class Combat {
       }, opts.delay);
     };
     const anim = (special, cue = skillCue()) => {
+      if (targetHeading != null) this._applyActionHeading(targetHeading);
       const ok = this.player.attackSkill
         ? this.player.attackSkill(s.type, { special })
         : (special ? (this.player.attackSpecial ? this.player.attackSpecial() : this.player.attack(true)) : this.player.attack(true));
       if (ok) {
         this._breakSpawnGrace();
         this._clearImpacts('basic');
+        action = this._beginAction('skill', targetHeading);
         this._punchT = 0;
         const heavy = HEAVY_SKILL_TYPES.has(s.type);
         this.skillPriorityT = Math.max(this.skillPriorityT || 0, heavy ? SKILL_HEAVY_PRIORITY_T : SKILL_PRIORITY_T);

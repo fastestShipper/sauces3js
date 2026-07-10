@@ -58,11 +58,21 @@ const v = {
   recoilZ: 0,
   recoilT: 0,
 };
+attack.play = function play() {
+  this.playCount++;
+  this.poseAtPlay = { x: root.position.x, z: root.position.z, h: root.rotation.y };
+  return this;
+};
 
 field.mobs.set(v.id, v);
 
-assert.equal(field.playAttack(v.id, { tell: true, ms: 220 }), true, 'telegraphed attack should play');
+const attackPose = { x: 8.25, z: -6.5, h: -Math.PI / 2 };
+assert.equal(field.playAttack(v.id, { tell: true, ms: 220, ...attackPose }), true, 'telegraphed attack should play');
 assert.equal(attack.playCount, 1, 'attack animation should play once on matk');
+assert.deepEqual(attack.poseAtPlay, attackPose, 'authoritative matk pose should apply before the attack action plays');
+assert.equal(v.tx, attackPose.x, 'matk x should replace the interpolation target');
+assert.equal(v.tz, attackPose.z, 'matk z should replace the interpolation target');
+assert.equal(v.th, attackPose.h, 'matk heading should replace the interpolation target');
 const timing = mobAttackTiming('1H_Melee_Attack_Chop', 1.0667, 220);
 assert.equal(attack.timeScale, timing.speed, 'attack speed should align the measured contact with the windup');
 assert.ok(attack.timeScale > 3.2 && attack.timeScale <= 3.4, 'chop should accelerate enough to land inside 220 ms');
@@ -74,7 +84,7 @@ assert.equal(v.attackClawPending, true, 'matk should queue the claw arc for the 
 assert.equal(v.attackClawAge, timing.clawAge, 'claw cue should share the measured contact timing');
 assert.equal(calls.length, 2, 'matk should emit danger circle and warning flash first');
 assert.equal(calls[0].type, 'dangerCircle', 'matk should mark the danger area on the floor');
-assert.ok(calls[0].pos.x > root.position.x, 'danger circle should sit in front of the mob heading');
+assert.ok(calls[0].pos.x < root.position.x, 'danger circle should use the current authoritative heading');
 assert.ok(calls[0].radius > 1.4, 'danger circle should cover bite range');
 assert.equal(calls[0].life, v.attackTellMax, 'danger circle should last through the windup');
 assert.equal(calls[0].color, 0xff3c22, 'danger circle should use attack warning color');
@@ -91,7 +101,7 @@ field.update(0.016);
 assert.equal(calls.length, 3, 'claw arc should fire near the bite phase');
 assert.equal(calls[2].type, 'clawArc', 'bite phase should emit a directional claw arc');
 assert.equal(calls[2].color, 0xff3c22, 'claw arc should use attack warning color');
-assert.ok(calls[2].pos.x > root.position.x, 'claw arc should spawn in front of the mob heading');
+assert.ok(calls[2].pos.x < root.position.x, 'claw arc should use the current authoritative heading');
 assert.equal(calls[2].heading, root.rotation.y, 'claw arc should align to mob heading');
 assert.equal(v.attackClawPending, false, 'bite phase should consume the queued claw arc');
 

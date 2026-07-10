@@ -72,9 +72,14 @@ ws.on('message', (buf) => {
     return;
   }
   if (msg.t === 'matk' && firstMob && msg.id === firstMob.id) {
+    if (!Number.isFinite(msg.x) || !Number.isFinite(msg.z) || !Number.isFinite(msg.h)) {
+      fail('matk missing authoritative x/z/h pose');
+      finish();
+      return;
+    }
     if (!attackAt) {
       attackAt = Date.now();
-      console.log('PASS: matk before impact', { id: msg.id, ms: msg.ms });
+      console.log('PASS: matk before impact', { id: msg.id, ms: msg.ms, x: msg.x, z: msg.z, h: msg.h });
     }
     return;
   }

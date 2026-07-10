@@ -586,7 +586,15 @@ function beginMobAttackWindup(mob, tid, c, now) {
   mob.hitCdMs = MOB_ATTACK_CD_MS;
   // GRUNIDO: 10% de las veces se toma 0.8s extra tras golpear (ritmo organico)
   if (Math.random() < MOB_GROWL_CHANCE) mob.hitCdMs += MOB_GROWL_MS;
-  broadcastAll({ t: 'matk', id: mob.id, target: tid, ms: MOB_ATTACK_WINDUP_MS });
+  broadcastAll({
+    t: 'matk',
+    id: mob.id,
+    target: tid,
+    ms: MOB_ATTACK_WINDUP_MS,
+    x: mob.x,
+    z: mob.z,
+    h: mob.h,
+  });
 }
 
 function commitMobAttackWindup(mob, c) {

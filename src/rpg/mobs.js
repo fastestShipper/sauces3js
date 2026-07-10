@@ -12,7 +12,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { sanitizeImported } from '../glbutil.js?v=20260709g35';
+import { plantClip } from '../animclip.js?v=20260709g36';
+import { sanitizeImported } from '../glbutil.js?v=20260709g36';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -159,6 +160,10 @@ export function mobAttackTiming(clipName, clipDuration, windupMs) {
   return { speed, tellT, clawAge, contactT };
 }
 
+export function plantMobClips(clips) {
+  return Array.isArray(clips) ? clips.map(plantClip) : [];
+}
+
 // Barra de vida flotante: fondo oscuro + relleno verde. Dos planos apilados dentro
 // de un grupo que luego se billboardea hacia la camara en update().
 function makeHpBar() {
@@ -224,7 +229,7 @@ export class MobField {
       return;   // sin GLB no hay vista de mobs, pero el resto del juego sigue
     }
     sanitizeImported(gltf.scene);
-    this.clips = gltf.animations || [];
+    this.clips = plantMobClips(gltf.animations);
     // prototipo LIMPIO por tipo: clonar la escena entera con SkeletonUtils (rebind
     // correcto de los skinned) y QUITAR los subarboles de los otros 3 tipos. Un
     // child.clone(true) ingenuo comparte/rompe el skeleton (hueso undefined) y
@@ -266,7 +271,7 @@ export class MobField {
     net.onMobsSnapshot = (list) => this._onSnapshot(list);
     net.onMobHp = (id, hp, hit) => this._onHp(id, hp, hit);
     net.onMobMove = (mob) => this._onMove(mob);
-    net.onMobAttack = (id, info) => this.playAttack(id, { tell: true, ms: info && info.ms });
+    net.onMobAttack = (id, info) => this.playAttack(id, { ...(info || {}), tell: true });
     net.onMobDead = (id, by, party, meta) => this._onDead(id, by, party, meta);
     net.onMobSpawn = (mob) => this._onSpawn(mob);
   }
@@ -353,6 +358,7 @@ export class MobField {
   playAttack(id, opts = {}) {
     const v = this.mobs.get(id);
     if (!v || v.dead) return false;
+    this._applyAttackPose(v, opts);
     const now = Date.now();
     if (opts.impact && opts.told && v.lastAttackTellAt && now - v.lastAttackTellAt < 900) return true;
     const attackClip = v.actions?.Attack?.getClip?.();
@@ -381,6 +387,30 @@ export class MobField {
       this._emitAttackClaw(v, 0xff3c22);
     }
     return true;
+  }
+
+  _applyAttackPose(v, pose = {}) {
+    if (!v || !v.root) return false;
+    const x = Number(pose.x);
+    const z = Number(pose.z);
+    const h = Number(pose.h);
+    let applied = false;
+    if (Number.isFinite(x)) {
+      v.tx = x;
+      v.root.position.x = x;
+      applied = true;
+    }
+    if (Number.isFinite(z)) {
+      v.tz = z;
+      v.root.position.z = z;
+      applied = true;
+    }
+    if (Number.isFinite(h)) {
+      v.th = h;
+      v.root.rotation.y = h;
+      applied = true;
+    }
+    return applied;
   }
 
   _emitAttackClaw(v, colorHex = 0xff3c22) {
@@ -692,6 +722,21 @@ export class MobField {
     }
   }
 
+  _tickAttackTell(v, dt, visible) {
+    const maxT = Math.max(ATTACK_TELL_FLASH, Number(v.attackTellMax) || 0);
+    const before = Math.max(0, Number(v.attackTellT) || 0);
+    const after = Math.max(0, before - dt);
+    v.attackTellT = after;
+    const tellPulse = maxT > 0 ? Math.max(0, Math.min(1, after / maxT)) : 0;
+    const tellAge = 1 - tellPulse;
+    if (v.attackClawPending && tellAge >= (v.attackClawAge || ATTACK_CLAW_ARC_AGE)) {
+      v.attackClawPending = false;
+      if (visible && before > 0) this._emitAttackClaw(v, v.attackClawColor || 0xff3c22);
+    }
+    if (after <= 0) v.attackClawPending = false;
+    return { tellPulse, tellAge };
+  }
+
   _transitionAction(v, next, fade = MOB_ACTION_BLEND) {
     if (!v || !next) return false;
     const prev = v.activeAction || (v.walking ? v.actions?.Walk : v.actions?.Idle) || null;
@@ -869,6 +914,7 @@ export class MobField {
           this._playLoop(v, 'Idle');
         }
       }
+      const { tellPulse, tellAge } = this._tickAttackTell(v, dt, visible);
       if (!visible) {
         if (v.busyT > 0) v.busyHidden = true;
         v.mixAcc = 0;
@@ -898,9 +944,6 @@ export class MobField {
         }
         const pulse = v.hitScaleT > 0 ? Math.max(0, v.hitScaleT / (v.hitScaleMax || 0.14)) : 0;
         if (v.hitScaleT > 0) v.hitScaleT = Math.max(0, v.hitScaleT - dt);
-        const tellPulse = v.attackTellT > 0 ? Math.max(0, v.attackTellT / (v.attackTellMax || ATTACK_TELL_FLASH)) : 0;
-        if (v.attackTellT > 0) v.attackTellT = Math.max(0, v.attackTellT - dt);
-        const tellAge = tellPulse > 0 ? Math.max(0, 1 - tellPulse) : 0;
         const windBack = tellPulse > 0 && tellAge < 0.58
           ? -0.12 * Math.sin(Math.min(1, tellAge / 0.58) * Math.PI)
           : 0;
@@ -910,11 +953,6 @@ export class MobField {
         const windLean = tellPulse > 0
           ? -ATTACK_TELL_LEAN * Math.sin(Math.min(1, tellAge) * Math.PI)
           : 0;
-        if (v.attackClawPending && tellAge >= (v.attackClawAge || ATTACK_CLAW_ARC_AGE)) {
-          v.attackClawPending = false;
-          this._emitAttackClaw(v, v.attackClawColor || 0xff3c22);
-        }
-        if (tellPulse <= 0 && v.attackClawPending) v.attackClawPending = false;
         let woundLimp = 0;
         if (v.wounded && v.state === 'walk') {
           v.woundPhase = (v.woundPhase || 0) + dt * 8.5;

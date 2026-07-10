@@ -1,7 +1,7 @@
 // Cosmetic weapons: attach each class's weapon to the KayKit hand slot bones
 // (handslot.r / handslot.l). Shared by player, NPCs and remote players. The
 // attack uses a REAL animator-made clip (not a hand-rolled bone rotation).
-import { sanitizeImported } from './glbutil.js?v=20260709g35';
+import { sanitizeImported } from './glbutil.js?v=20260709g36';
 
 const WEAPON_BY_CHAR = {
   'char_knight.glb': { r: 'sword_1handed', l: 'shield_round' },

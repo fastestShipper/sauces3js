@@ -58,6 +58,18 @@ function makeNet() {
   net.mobVisualIds.add('7');
   net._onMsg({ t: 'phit', id: 7, dmg: 4, hp: null, told: 1 });
   assert.equal(playerHits, 1, 'mob damage resumes once that mob visual is ready');
+
+  let attackPose = null;
+  net.onMobAttack = (id, info) => { attackPose = { id, ...info }; };
+  net._onMsg({ t: 'matk', id: 7, target: 3, ms: 220, x: 9.5, z: 10.25, h: 1.75 });
+  assert.deepEqual(attackPose, {
+    id: 7,
+    target: 3,
+    ms: 220,
+    x: 9.5,
+    z: 10.25,
+    h: 1.75,
+  }, 'matk should forward additive authoritative attack pose fields');
 }
 
 {

@@ -83,6 +83,27 @@ assert.equal(hidden.root.visible, true, 'hidden mob should become visible after 
 assert.equal(hidden.busyT, 0, 're-entering mob should discard an obsolete partial one-shot');
 assert.equal(hidden.busyHidden, false, 're-entering mob should clear hidden one-shot bookkeeping');
 
+const hiddenTellField = new MobField({ add() {}, remove() {} }, () => null, { player: { pos: { x: 0, z: 0 } } });
+const hiddenTell = makeMob(8, 96);
+hiddenTell.root.position.set(96, 0, 0);
+hiddenTell.attackTellT = 0.28;
+hiddenTell.attackTellMax = 0.28;
+hiddenTell.attackClawPending = true;
+hiddenTell.attackClawAge = 0.65;
+let hiddenClaws = 0;
+hiddenTellField.effects = { clawArc() { hiddenClaws++; } };
+hiddenTellField.mobs.set(hiddenTell.id, hiddenTell);
+hiddenTellField.update(0.2);
+assert.equal(hiddenTell.root.visible, false, 'attack tell fixture should remain outside the LOD');
+assert.ok(Math.abs(hiddenTell.attackTellT - 0.08) < 1e-6, 'hidden attack tell should advance without updating the mixer');
+assert.equal(hiddenTell.attackClawPending, false, 'hidden claw should expire when its cue time passes');
+assert.equal(hiddenClaws, 0, 'hidden rig should not emit its claw cue');
+hiddenTell.root.position.x = 30;
+hiddenTell.tx = 30;
+hiddenTellField.update(1 / 60);
+assert.equal(hiddenTell.root.visible, true, 'attack tell fixture should re-enter the visible LOD');
+assert.equal(hiddenClaws, 0, 're-entering the LOD should not emit an obsolete claw cue');
+
 function simulateActiveFar(fps, { mobile = false, lowEnd = false, distance = 68 } = {}) {
   globalThis.window.__SAUCES_MOBILE__ = mobile;
   globalThis.window.__SAUCES_LOW_END__ = lowEnd;
