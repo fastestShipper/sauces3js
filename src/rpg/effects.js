@@ -3,7 +3,7 @@
 // de modulo, materiales clonados por particula para opacidad independiente, y caps
 // duros de cantidad para no acumular nodos en la escena.
 import * as THREE from 'three';
-import { ParticleBatch } from './particles.js?v=20260710g43';
+import { ParticleBatch } from './particles.js?v=20260710g44';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)
@@ -197,6 +197,9 @@ export class Effects {
     this.arcs = [];       // { mesh, life, max } arcos de espada (slash trails)
     this.trails = [];     // { mesh, life, max } estelas de movimiento
     this.chunks = [];     // { mesh, vel, spin, life, max } pedazos de zombie volando
+    // luces dinamicas: lo que hace que un efecto ILUMINE la escena en vez de ser
+    // un calco pegado. Pool corto; en movil se apaga (fillrate).
+    this.lights = [];     // { light, life, max, peak }
     this.shakeT = 0;      // screen shake restante (s)
     this.shakeAmp = 0;    // amplitud actual del shake (unidades de mundo)
     this.shakeMaxT = 0;
@@ -464,10 +467,50 @@ export class Effects {
   }
 
   // NOVA: anillo de energia que se expande por el piso hasta `radius` y se apaga.
+  // DESTELLO DE LUZ: un PointLight corto que ilumina de verdad el entorno. Es lo
+  // que separa un efecto "real" de un decal additive. Se apaga en movil/low-end
+  // (cuesta fillrate por cada luz extra en el forward renderer).
+  flashLight(pos, colorHex, peak = 6, radius = 9, life = 0.34) {
+    if (isMobileProfile() || isLowEndProfile()) return false;
+    const p = readPos(pos);
+    if (this._vfxDetail(p) < 2) return false;
+    const cap = 6;
+    if (this.lights.length >= cap) { const old = this.lights.shift(); if (old) this._killLight(old); }
+    const light = new THREE.PointLight(new THREE.Color(colorHex != null ? colorHex : 0xff9a3c), 0, radius, 2);
+    light.position.set(p.x, (p.y || 0) + 1.0, p.z);
+    this.scene.add(light);
+    this.lights.push({ light, life, max: life, peak });
+    return true;
+  }
+
+  _killLight(e) {
+    if (!e || !e.light) return;
+    if (e.light.parent) e.light.parent.remove(e.light);
+    e.light.dispose?.();
+  }
+
+  // Nucleo brillante que crece y se apaga: el corazon de una explosion/nova.
+  _energyCore(pos, colorHex, size = 1.2, life = 0.32) {
+    const p = readPos(pos);
+    const mat = new THREE.MeshBasicMaterial({
+      map: flashTexture(), color: new THREE.Color(colorHex != null ? colorHex : 0xffd24a),
+      transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const sp = new THREE.Sprite(mat);
+    sp.position.set(p.x, (p.y || 0) + 0.9, p.z);
+    sp.scale.setScalar(size * 0.5);
+    this.scene.add(sp);
+    this._pushCapped(this.flashes, { sprite: sp, life, max: life, grow: size },
+      isLowEndProfile() ? 10 : isMobileProfile() ? 16 : 40);
+  }
+
   nova(pos, colorHex, radius = 4.5) {
     const p = readPos(pos);
     const detail = this._vfxDetail(p);
     if (detail <= 0) return false;
+    // luz + nucleo: la nova ahora ilumina y tiene corazon, no es solo un anillo
+    this.flashLight(p, colorHex, 7, Math.max(8, radius * 2), 0.36);
+    if (detail >= 2) this._energyCore({ x: p.x, y: 0.6, z: p.z }, colorHex, Math.min(3, radius * 0.6), 0.34);
     const mat = new THREE.MeshBasicMaterial({
       color: new THREE.Color(colorHex != null ? colorHex : 0xff7a1e),
       transparent: true, opacity: 0.95, side: THREE.DoubleSide,
@@ -519,6 +562,8 @@ export class Effects {
     if (detail <= 0) return false;
     this._spurt({ x: p.x, y: p.y + 0.5, z: p.z }, detail === 1 ? 4 : detail === 2 ? 7 : 12, 2.4, 0.7, 0x7be07b);
     this.hitFlash({ x: p.x, y: p.y + 0.8, z: p.z }, 0x7be07b);
+    // resplandor verde suave que baña al aliado
+    this.flashLight({ x: p.x, y: p.y + 0.6, z: p.z }, 0x8fffa8, 3.2, 6, 0.4);
     return true;
   }
 
@@ -780,7 +825,22 @@ export class Effects {
       }
       const k = e.life / e.max;
       e.sprite.material.opacity = 0.9 * k;
-      e.sprite.scale.setScalar(0.8 + (1 - k) * 0.6);
+      if (e.grow) {
+        // nucleo de energia: crece hasta su tamano y se apaga
+        e.sprite.scale.setScalar(e.grow * (0.4 + (1 - k) * 0.85));
+      } else {
+        e.sprite.scale.setScalar(0.8 + (1 - k) * 0.6);
+      }
+    }
+
+    // LUCES dinamicas: suben rapido y decaen (curva de flash real, no lineal)
+    for (let i = this.lights.length - 1; i >= 0; i--) {
+      const e = this.lights[i];
+      e.life -= d;
+      if (e.life <= 0) { this._killLight(e); this.lights.splice(i, 1); continue; }
+      const t = e.life / e.max;              // 1 -> 0
+      // pico temprano: brilla fuerte al nacer y cae con t^2
+      e.light.intensity = e.peak * t * t * (0.6 + 0.4 * Math.min(1, (1 - t) * 6));
     }
 
     // shake de camara decae solo
@@ -890,6 +950,11 @@ export class Effects {
       if (e.traveled >= e.dist) {
         this.hitFlash(e.to, e.color);
         this._spurt(e.to, e.type === 'arrow' ? 4 : 9, e.type === 'arrow' ? 2.5 : 3.4, 0.4, e.color);
+        // magia y fuego ESTALLAN con luz y nucleo; la flecha solo salpica
+        if (e.type !== 'arrow') {
+          this.flashLight(e.to, e.color, 5, 7, 0.28);
+          this._energyCore(e.to, e.color, 1.5, 0.26);
+        }
         this._killGroup(e.group);
         this.projectiles.splice(i, 1);
       }

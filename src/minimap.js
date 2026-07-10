@@ -77,15 +77,16 @@ export class MiniMap {
     const X = (x) => half + (x - px) * sc;
     const Z = (z) => half + (z - pz) * sc;
     ctx.clearRect(0, 0, S, S);
-    ctx.fillStyle = 'rgba(242,240,233,0.96)';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, S, S, 26);
-    ctx.fill();
+    // fondo tactico oscuro, recorte CIRCULAR (no papel crema)
     ctx.save();
+    ctx.beginPath();
+    ctx.arc(half, half, half - 2, 0, 7);
     ctx.clip();
+    ctx.fillStyle = '#0d1510';
+    ctx.fillRect(0, 0, S, S);
     const view = this.radius * 1.3;
-    // parques
-    ctx.fillStyle = '#a3c98f';
+    // parques: verde oscuro apagado
+    ctx.fillStyle = '#1c3020';
     for (const g of this.city.data.green) {
       if (g.p.length < 3) continue;
       ctx.beginPath();
@@ -93,9 +94,9 @@ export class MiniMap {
       for (let i = 1; i < g.p.length; i++) ctx.lineTo(X(g.p[i][0]), Z(g.p[i][1]));
       ctx.fill();
     }
-    // manzanas por buckets
+    // manzanas por buckets: slate oscuro
     const BC = 64;
-    ctx.fillStyle = '#d4cfc6';
+    ctx.fillStyle = '#232a33';
     for (let cx = Math.floor((px - view) / BC); cx <= Math.floor((px + view) / BC); cx++) {
       for (let cz = Math.floor((pz - view) / BC); cz <= Math.floor((pz + view) / BC); cz++) {
         for (const i of (this.bcells.get(cx + ',' + cz) || [])) {
@@ -115,8 +116,9 @@ export class MiniMap {
         const r = this.city.data.roads[ri];
         const w = Math.max((r.w ?? 6) * sc, 3);
         ctx.lineWidth = pass === 0 ? w + 3 : w;
-        ctx.strokeStyle = pass === 0 ? '#88847d'
-          : (r.w >= 12 ? '#ffd884' : (r.bridge ? '#cdd8ea' : '#fdfdfb'));
+        // calles luminosas sobre el fondo oscuro: avenidas ambar, resto gris claro
+        ctx.strokeStyle = pass === 0 ? '#0a0f0c'
+          : (r.w >= 12 ? '#e8b74e' : (r.bridge ? '#7f97c4' : '#5a6470'));
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
@@ -138,13 +140,17 @@ export class MiniMap {
     }
     // mobs vivos: punto rojo chico
     if (extras && extras.mobs) {
-      ctx.fillStyle = '#d23b2a';
+      ctx.save();
+      ctx.fillStyle = '#ff4433';
+      ctx.shadowColor = '#ff2a1a'; ctx.shadowBlur = 6;   // los mobs BRILLAN de rojo
       for (const m of extras.mobs.values()) {
         if (m.hp <= 0) continue;
         const mx = X(m.x), mz = Z(m.z);
         if (mx < 6 || mx > S - 6 || mz < 6 || mz > S - 6) continue;
-        ctx.beginPath(); ctx.arc(mx, mz, 4, 0, 7); ctx.fill();
+        const r = (m.b || m.g) ? 6 : 3.5;   // boss/gigante = punto mas grande
+        ctx.beginPath(); ctx.arc(mx, mz, r, 0, 7); ctx.fill();
       }
+      ctx.restore();
     }
     // otros HUMANOS (multiplayer): celeste; miembros de mi PARTY: verde
     if (remotes) {
@@ -163,29 +169,32 @@ export class MiniMap {
         ctx.beginPath(); ctx.arc(mx, mz - 1.5, 2.2, 0, 7); ctx.fill();
       }
     }
-    // flecha del jugador
+    // flecha del jugador: verde lima brillante con halo
     ctx.translate(half, half);
     ctx.rotate(Math.PI - heading);   // norte-arriba: el char (forward +Z) mira (sin h, cos h) en canvas
-    ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.beginPath(); ctx.arc(0, 0, 14, 0, 7); ctx.fill();
-    ctx.fillStyle = '#cc2218';
+    ctx.shadowColor = 'rgba(140,230,130,.9)'; ctx.shadowBlur = 10;
+    ctx.fillStyle = '#8ce682';
     ctx.beginPath();
-    ctx.moveTo(0, -12); ctx.lineTo(8, 8); ctx.lineTo(0, 3); ctx.lineTo(-8, 8);
+    ctx.moveTo(0, -13); ctx.lineTo(9, 9); ctx.lineTo(0, 3.5); ctx.lineTo(-9, 9);
     ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.restore();
-    // strip de calle
-    ctx.fillStyle = 'rgba(35,32,28,.92)';
+    ctx.restore();   // cerrar el clip circular
+    // borde interior y strip de calle (fuera del clip, sobre el marco)
+    ctx.strokeStyle = 'rgba(140,230,130,.22)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(half, half, half - 3, 0, 7); ctx.stroke();
+    // strip de calle: pastilla oscura translucida abajo
+    ctx.fillStyle = 'rgba(8,14,10,.82)';
     ctx.beginPath();
-    ctx.roundRect(16, S - 56, S - 32, 40, 12);
+    ctx.roundRect(half - S * 0.36, S - 52, S * 0.72, 34, 17);
     ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = '600 24px system-ui';
+    ctx.fillStyle = '#dff5d6';
+    ctx.font = '700 21px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(this.street, half, S - 28);
-    // N
-    ctx.fillStyle = 'rgba(35,32,28,.9)';
-    ctx.beginPath(); ctx.arc(S - 34, 34, 18, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.fillText('N', S - 34, 42);
+    ctx.fillText(this.street, half, S - 30);
+    // N arriba
+    ctx.fillStyle = 'rgba(140,230,130,.85)';
+    ctx.font = '800 20px system-ui';
+    ctx.fillText('N', half, 30);
   }
 }

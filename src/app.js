@@ -3,42 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g43';
-import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g43';
-import { GrassSystem } from './veg/grass.js?v=20260710g43';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260710g43';
-import { Player } from './player.js?v=20260710g43';
-import { MiniMap } from './minimap.js?v=20260710g43';
-import { StreetLife } from './npcs.js?v=20260710g43';
-import { sanitizeImported } from './glbutil.js?v=20260710g43';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g43';
-import { Net } from './net.js?v=20260710g43';
-import { ChatUI, showBubble } from './chat.js?v=20260710g43';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g43';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g43';
-import { equipWeapon } from './weapons.js?v=20260710g43';
-import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g43';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g43';
-import { Inventory } from './rpg/loot.js?v=20260710g43';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g43';
-import { Combat } from './rpg/combat.js?v=20260710g43';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g43';
-import { Effects } from './rpg/effects.js?v=20260710g43';
-import { attachWeaponByName } from './weapons.js?v=20260710g43';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g43';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g43';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g43';
-import { SocialPanel, showSocialInvite } from './social.js?v=20260710g43';
-import { SkillSystem } from './rpg/skills.js?v=20260710g43';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g43';
-import { createSfx } from './sfx.js?v=20260710g43';
-import { installTouchControls } from './touch.js?v=20260710g43';
-import { createIntroScene } from './introscene.js?v=20260710g43';
-import { styleCarShell } from './carstyle.js?v=20260710g43';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g43';
-import { FrameMeter, fpsBand } from './perf.js?v=20260710g43';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g44';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g44';
+import { GrassSystem } from './veg/grass.js?v=20260710g44';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260710g44';
+import { Player } from './player.js?v=20260710g44';
+import { MiniMap } from './minimap.js?v=20260710g44';
+import { StreetLife } from './npcs.js?v=20260710g44';
+import { sanitizeImported } from './glbutil.js?v=20260710g44';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g44';
+import { Net } from './net.js?v=20260710g44';
+import { ChatUI, showBubble } from './chat.js?v=20260710g44';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g44';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g44';
+import { equipWeapon } from './weapons.js?v=20260710g44';
+import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g44';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g44';
+import { Inventory } from './rpg/loot.js?v=20260710g44';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g44';
+import { Combat } from './rpg/combat.js?v=20260710g44';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g44';
+import { Effects } from './rpg/effects.js?v=20260710g44';
+import { attachWeaponByName } from './weapons.js?v=20260710g44';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g44';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g44';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g44';
+import { SocialPanel, showSocialInvite } from './social.js?v=20260710g44';
+import { SkillSystem } from './rpg/skills.js?v=20260710g44';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g44';
+import { createSfx } from './sfx.js?v=20260710g44';
+import { installTouchControls } from './touch.js?v=20260710g44';
+import { createIntroScene } from './introscene.js?v=20260710g44';
+import { styleCarShell } from './carstyle.js?v=20260710g44';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g44';
+import { FrameMeter, fpsBand } from './perf.js?v=20260710g44';
 
-const APP_VERSION = '20260710g43';
+const APP_VERSION = '20260710g44';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -385,15 +385,19 @@ function showClassPick(prefillName, opts = {}) {
     const nameI = document.getElementById('ob-name');
     if (prefillName) { nameI.value = prefillName; if (opts.lockName) nameI.readOnly = true; }
     grid.replaceChildren();
-    // error inline para el registro con Google (nombre tomado, etc.)
-    let obErr = document.getElementById('ob-err');
-    if (!obErr) {
-      obErr = document.createElement('div');
-      obErr.id = 'ob-err';
-      obErr.style.cssText = 'min-height:15px;font-size:12px;font-weight:600;color:#ff8a7a;margin:4px 0 2px;text-align:center';
-      go.parentNode.insertBefore(obErr, go);
+    // error inline SOLO en el registro con Google (nombre tomado, etc.). En el
+    // onboarding normal no se agrega, para no alterar el layout existente.
+    let obErr = null;
+    if (opts.registerName) {
+      obErr = document.getElementById('ob-err');
+      if (!obErr) {
+        obErr = document.createElement('div');
+        obErr.id = 'ob-err';
+        obErr.style.cssText = 'min-height:15px;font-size:12px;font-weight:600;color:#ff8a7a;margin:4px 0 2px;text-align:center';
+        go.parentNode.insertBefore(obErr, go);
+      }
+      obErr.textContent = '';
     }
-    obErr.textContent = '';
 
     // ===== PREVIEW 3D en vivo: el heroe girando con su look elegido =====
     let mount = document.getElementById('ob-preview');
