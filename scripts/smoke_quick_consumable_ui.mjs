@@ -149,7 +149,7 @@ async function inspectViewport(browser, base, cfg) {
     assert.deepEqual(
       snap.buttons.map(({ width, height }) => [width, height]),
       cfg.quickSizes.map(size => [size, size]),
-      `${cfg.name} quick consumables render at exactly half size`,
+      `${cfg.name} quick consumables render at the compact g42 size`,
     );
     assert.equal(intersects(snap.consumables, snap.skills, 8), false, `${cfg.name} consumables overlap skills`);
     assert.equal(intersects(snap.consumables, snap.hud, 8), false, `${cfg.name} consumables overlap HUD`);
@@ -342,9 +342,9 @@ async function inspectViewport(browser, base, cfg) {
       assert.equal(intersects(pot, snap.hud, 6), false, `${cfg.name} touch potion ${pot.label} overlaps HUD`);
     }
     assert.deepEqual(
-      snap.touchPotions.map(({ width, height }) => [width, height]),
+      snap.touchPotions.map(({ width, height }) => [Math.round(width), Math.round(height)]),
       cfg.touchSizes.map(size => [size, size]),
-      `${cfg.name} touch consumables render at exactly half size`,
+      `${cfg.name} touch consumables preserve compact accessible targets`,
     );
     for (let i = 0; i < snap.touchPotions.length; i++) {
       for (let j = i + 1; j < snap.touchPotions.length; j++) {
@@ -511,11 +511,18 @@ const base = `http://127.0.0.1:${address.port}`;
 
 try {
   const browser = await chromium.launch({ headless: true });
-  await inspectViewport(browser, base, { name: 'desktop low 714x522', width: 714, height: 522, quickSizes: [44, 37, 37], minKeyPanelHeight: 250 });
-  await inspectViewport(browser, base, { name: 'compact screenshot 967x546', width: 967, height: 546, quickSizes: [44, 37, 37], minKeyPanelHeight: 250 });
-  await inspectViewport(browser, base, { name: 'desktop 1366x768', width: 1366, height: 768, quickSizes: [55, 44, 44], minKeyPanelHeight: 250 });
-  await inspectViewport(browser, base, { name: 'mobile 390x844', width: 390, height: 844, mobile: true, touchSizes: [49, 38, 38], minKeyPanelHeight: 420 });
-  await inspectViewport(browser, base, { name: 'touch landscape 896x414', width: 896, height: 414, mobile: true, touchSizes: [41, 34, 34], minKeyPanelHeight: 140 });
+  const viewports = [
+    { id: 'desktop-low', name: 'desktop low 714x522', width: 714, height: 522, quickSizes: [38, 32, 32], minKeyPanelHeight: 250 },
+    { id: 'compact', name: 'compact screenshot 967x546', width: 967, height: 546, quickSizes: [38, 32, 32], minKeyPanelHeight: 250 },
+    { id: 'desktop', name: 'desktop 1366x768', width: 1366, height: 768, quickSizes: [44, 35, 35], minKeyPanelHeight: 250 },
+    { id: 'mobile', name: 'mobile 390x844', width: 390, height: 844, mobile: true, touchSizes: [59, 46, 46], minKeyPanelHeight: 420 },
+    { id: 'touch-landscape', name: 'touch landscape 896x414', width: 896, height: 414, mobile: true, touchSizes: [55, 45, 45], minKeyPanelHeight: 140 },
+  ];
+  const selected = process.env.SMOKE_VIEWPORT
+    ? viewports.filter(({ id }) => id === process.env.SMOKE_VIEWPORT)
+    : viewports;
+  assert.ok(selected.length, `unknown SMOKE_VIEWPORT ${process.env.SMOKE_VIEWPORT}`);
+  for (const viewport of selected) await inspectViewport(browser, base, viewport);
   await browser.close();
 } finally {
   await new Promise(resolve => server.close(resolve));

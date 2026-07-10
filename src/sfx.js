@@ -3,7 +3,7 @@
 // anticipacion + impacto + consecuencia, con pitch aleatorio para no sonar a
 // metralleta. El AudioContext nace perezoso en el primer gesto (autoplay).
 // Tecla M silencia; persiste en localStorage.
-import { matchesAction } from './keybinds.js?v=20260709g41';
+import { matchesAction } from './keybinds.js?v=20260710g42';
 
 const LS_MUTE = 'sauces_muted';
 
@@ -73,8 +73,9 @@ class Sfx {
   constructor() {
     this.ctx = null;
     this.master = null;
+    this.ambient = null;
     this.buffers = new Map();   // nombre de archivo -> AudioBuffer
-    this._loading = false;
+    this.loadingFiles = new Map();
     this.muted = localStorage.getItem(LS_MUTE) === '1';
     const boot = () => { this._ensure(); removeEventListener('mousedown', boot); removeEventListener('keydown', boot); };
     addEventListener('mousedown', boot);
@@ -92,25 +93,31 @@ class Sfx {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : 0.34;
       this.master.connect(this.ctx.destination);
-      this._loadSamples();
+      this._startAmbience();
       return true;
     } catch { return false; }
   }
 
-  // carga perezosa de TODOS los samples tras el primer gesto; los golpes
-  // sintetizados suenan desde el frame 1, los samples se suman al llegar
-  async _loadSamples() {
-    if (this._loading) return;
-    this._loading = true;
-    const files = [...new Set(Object.values(SAMPLES).flat())];
-    await Promise.all(files.map(async (f) => {
+  // Samples load per sound family. Synthesis covers the first uncached event.
+  _loadSample(file) {
+    if (!file || this.buffers.has(file)) return Promise.resolve(this.buffers.get(file));
+    if (this.loadingFiles.has(file)) return this.loadingFiles.get(file);
+    const pending = (async () => {
       try {
-        const r = await fetch('./assets/sfx/' + f);
-        if (!r.ok) return;
+        const r = await fetch('./assets/sfx/' + file);
+        if (!r.ok) return null;
         const ab = await r.arrayBuffer();
-        this.buffers.set(f, await this.ctx.decodeAudioData(ab));
-      } catch { /* sin sample: la sintesis cubre */ }
-    }));
+        const buffer = await this.ctx.decodeAudioData(ab);
+        this.buffers.set(file, buffer);
+        return buffer;
+      } catch {
+        return null;
+      } finally {
+        this.loadingFiles.delete(file);
+      }
+    })();
+    this.loadingFiles.set(file, pending);
+    return pending;
   }
 
   toggleMute() {
@@ -120,11 +127,68 @@ class Sfx {
     if (this.onMuteChange) this.onMuteChange(this.muted);
   }
 
+  _startAmbience() {
+    if (!this.ctx || !this.master || this.ambient) return false;
+    const bus = this.ctx.createGain();
+    bus.gain.value = 0.032;
+    const lowpass = this.ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 520;
+    lowpass.Q.value = 0.7;
+    lowpass.connect(bus);
+    bus.connect(this.master);
+
+    const voices = [];
+    for (const [frequency, level, detune] of [[82.41, 0.10, -4], [123.47, 0.075, 3], [164.81, 0.055, -2]]) {
+      const oscillator = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      oscillator.detune.value = detune;
+      gain.gain.value = level;
+      oscillator.connect(gain);
+      gain.connect(lowpass);
+      oscillator.start();
+      voices.push(oscillator);
+    }
+
+    const noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 6, this.ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    let smooth = 0;
+    for (let i = 0; i < noiseData.length; i++) {
+      smooth = smooth * 0.985 + (Math.random() * 2 - 1) * 0.015;
+      noiseData[i] = smooth;
+    }
+    const noise = this.ctx.createBufferSource();
+    const noiseGain = this.ctx.createGain();
+    noise.buffer = noiseBuffer;
+    noise.loop = true;
+    noiseGain.gain.value = 0.045;
+    noise.connect(noiseGain);
+    noiseGain.connect(lowpass);
+    noise.start();
+
+    const lfo = this.ctx.createOscillator();
+    const lfoGain = this.ctx.createGain();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.055;
+    lfoGain.gain.value = 0.009;
+    lfo.connect(lfoGain);
+    lfoGain.connect(bus.gain);
+    lfo.start();
+    this.ambient = { bus, lowpass, voices, noise, lfo };
+    return true;
+  }
+
   // dispara un sample del pool con pitch aleatorio (rate ±spread) y gain
   _sample(pool, { gain = 0.5, rate = 1, spread = 0.15, delay = 0 } = {}) {
     if (!this._ensure() || this.muted) return false;
     const names = SAMPLES[pool] || [];
-    const name = names[(Math.random() * names.length) | 0];
+    if (!names.length) return false;
+    const requested = names[(Math.random() * names.length) | 0];
+    if (!this.buffers.has(requested)) this._loadSample(requested);
+    const loaded = names.filter((name) => this.buffers.has(name));
+    const name = loaded[(Math.random() * loaded.length) | 0];
     const buf = this.buffers.get(name);
     if (!buf) return false;
     const t = this.ctx.currentTime + delay;

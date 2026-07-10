@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { plantClip } from '../animclip.js?v=20260709g41';
-import { sanitizeImported } from '../glbutil.js?v=20260709g41';
+import { plantClip } from '../animclip.js?v=20260710g42';
+import { sanitizeImported } from '../glbutil.js?v=20260710g42';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -121,11 +121,68 @@ function idHash(id) {
   return Math.abs(h);
 }
 
-// Tinte ZOMBIE: verde putrefacto que oscurece con el nivel (los duros se ven
-// mas podridos). Multiplica el albedo hueso del pack = carne verdosa.
+// Level only changes value now. Hue comes from the flag palette shader below.
 function levelTint(lvl) {
   const t = Math.min(1, Math.max(0, (lvl || 1) / 10));
-  return new THREE.Color().setHSL(0.29 - 0.05 * t, 0.45 + 0.15 * t, 0.72 - 0.22 * t);
+  return new THREE.Color().setScalar(0.98 - 0.22 * t);
+}
+
+const MOB_FLAG_PALETTES = [
+  [0xffcc00, 0x00247d, 0xcf142b],
+  [0xffd447, 0x003893, 0xd21635],
+  [0xf8bd18, 0x102a72, 0xc8102e],
+  [0xffd34e, 0x0b318f, 0xe01b3c],
+];
+
+export function applyMobFlagPalette(material, geometry, variant = 0) {
+  if (!material || !geometry || material.userData?.mobFlagPalette) return false;
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  const minY = Number(geometry.boundingBox?.min?.y) || 0;
+  const maxY = Number(geometry.boundingBox?.max?.y) || (minY + 1);
+  const invHeight = 1 / Math.max(0.001, maxY - minY);
+  const palette = MOB_FLAG_PALETTES[Math.abs(variant | 0) % MOB_FLAG_PALETTES.length];
+  const previousCompile = material.onBeforeCompile;
+  const previousKey = material.customProgramCacheKey?.bind(material);
+  material.userData.mobFlagPalette = true;
+  material.userData.mobFlagColors = palette.slice();
+  material.onBeforeCompile = (shader, renderer) => {
+    previousCompile?.(shader, renderer);
+    shader.uniforms.uMobFlagMinY = { value: minY };
+    shader.uniforms.uMobFlagInvHeight = { value: invHeight };
+    shader.uniforms.uMobFlagYellow = { value: new THREE.Color(palette[0]) };
+    shader.uniforms.uMobFlagBlue = { value: new THREE.Color(palette[1]) };
+    shader.uniforms.uMobFlagRed = { value: new THREE.Color(palette[2]) };
+    shader.uniforms.uMobFlagPhase = { value: (Math.abs(variant | 0) % 7) * 0.137 };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+uniform float uMobFlagMinY;
+uniform float uMobFlagInvHeight;
+varying float vMobFlagY;
+varying float vMobFlagAxis;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vMobFlagY = clamp((position.y - uMobFlagMinY) * uMobFlagInvHeight, 0.0, 1.0);
+vMobFlagAxis = position.x + position.z * 0.37;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform vec3 uMobFlagYellow;
+uniform vec3 uMobFlagBlue;
+uniform vec3 uMobFlagRed;
+uniform float uMobFlagPhase;
+varying float vMobFlagY;
+varying float vMobFlagAxis;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+vec3 mobFlagBand = mix(uMobFlagRed, uMobFlagBlue, step(0.34, vMobFlagY));
+mobFlagBand = mix(mobFlagBand, uMobFlagYellow, step(0.63, vMobFlagY));
+float mobFlagMiddle = step(0.36, vMobFlagY) * (1.0 - step(0.61, vMobFlagY));
+vec2 mobFlagCell = abs(fract(vec2(vMobFlagAxis * 2.15 + uMobFlagPhase, vMobFlagY * 13.0)) - 0.5);
+float mobFlagDiamond = 1.0 - smoothstep(0.10, 0.18, mobFlagCell.x + mobFlagCell.y);
+float mobFlagCross = 1.0 - smoothstep(0.025, 0.065, min(mobFlagCell.x, mobFlagCell.y));
+float mobFlagStar = mobFlagMiddle * max(mobFlagDiamond, mobFlagCross * 0.45);
+diffuseColor.rgb = mix(diffuseColor.rgb * mobFlagBand, vec3(0.96), mobFlagStar * 0.88);`);
+  };
+  material.customProgramCacheKey = () => `mob-flag-v1:${previousKey ? previousKey() : ''}`;
+  material.needsUpdate = true;
+  return true;
 }
 
 function mixerStepForDistance(d, mobile, lowEnd, active = false) {
@@ -800,6 +857,9 @@ export class MobField {
       if (o.material && o.material.color) {
         o.material = o.material.clone();
         o.material.color.multiply(tint);
+        if (!/glow|eye/i.test(`${o.name || ''} ${o.material.name || ''}`)) {
+          applyMobFlagPalette(o.material, o.geometry, (mob.kind | 0) + idHash(mob.id));
+        }
         mats.push(o.material);
       }
     });

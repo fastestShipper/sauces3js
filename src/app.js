@@ -3,42 +3,42 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260709g41';
-import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260709g41';
-import { GrassSystem } from './veg/grass.js?v=20260709g41';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260709g41';
-import { Player } from './player.js?v=20260709g41';
-import { MiniMap } from './minimap.js?v=20260709g41';
-import { StreetLife } from './npcs.js?v=20260709g41';
-import { sanitizeImported } from './glbutil.js?v=20260709g41';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260709g41';
-import { Net } from './net.js?v=20260709g41';
-import { ChatUI, showBubble } from './chat.js?v=20260709g41';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260709g41';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260709g41';
-import { equipWeapon } from './weapons.js?v=20260709g41';
-import { authRequest } from './rpg/account.js?v=20260709g41';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260709g41';
-import { Inventory } from './rpg/loot.js?v=20260709g41';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260709g41';
-import { Combat } from './rpg/combat.js?v=20260709g41';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260709g41';
-import { Effects } from './rpg/effects.js?v=20260709g41';
-import { attachWeaponByName } from './weapons.js?v=20260709g41';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260709g41';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260709g41';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260709g41';
-import { SocialPanel, showSocialInvite } from './social.js?v=20260709g41';
-import { SkillSystem } from './rpg/skills.js?v=20260709g41';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260709g41';
-import { createSfx } from './sfx.js?v=20260709g41';
-import { installTouchControls } from './touch.js?v=20260709g41';
-import { createIntroScene } from './introscene.js?v=20260709g41';
-import { styleCarShell } from './carstyle.js?v=20260709g41';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260709g41';
-import { FrameMeter, fpsBand } from './perf.js?v=20260709g41';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g42';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g42';
+import { GrassSystem } from './veg/grass.js?v=20260710g42';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260710g42';
+import { Player } from './player.js?v=20260710g42';
+import { MiniMap } from './minimap.js?v=20260710g42';
+import { StreetLife } from './npcs.js?v=20260710g42';
+import { sanitizeImported } from './glbutil.js?v=20260710g42';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g42';
+import { Net } from './net.js?v=20260710g42';
+import { ChatUI, showBubble } from './chat.js?v=20260710g42';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g42';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g42';
+import { equipWeapon } from './weapons.js?v=20260710g42';
+import { authRequest } from './rpg/account.js?v=20260710g42';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g42';
+import { Inventory } from './rpg/loot.js?v=20260710g42';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g42';
+import { Combat } from './rpg/combat.js?v=20260710g42';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g42';
+import { Effects } from './rpg/effects.js?v=20260710g42';
+import { attachWeaponByName } from './weapons.js?v=20260710g42';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g42';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g42';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g42';
+import { SocialPanel, showSocialInvite } from './social.js?v=20260710g42';
+import { SkillSystem } from './rpg/skills.js?v=20260710g42';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g42';
+import { createSfx } from './sfx.js?v=20260710g42';
+import { installTouchControls } from './touch.js?v=20260710g42';
+import { createIntroScene } from './introscene.js?v=20260710g42';
+import { styleCarShell } from './carstyle.js?v=20260710g42';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g42';
+import { FrameMeter, fpsBand } from './perf.js?v=20260710g42';
 
-const APP_VERSION = '20260709g41';
+const APP_VERSION = '20260710g42';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -1490,6 +1490,24 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     desired: new THREE.Vector3(),
     normalPosition: new THREE.Vector3(),
     normalQuaternion: new THREE.Quaternion(),
+    hiddenWorldUi: new Map(),
+  };
+  const hideCinematicWorldUi = () => {
+    const hide = (object) => {
+      if (!object || cinematic.hiddenWorldUi.has(object)) return;
+      cinematic.hiddenWorldUi.set(object, object.visible);
+      object.visible = false;
+    };
+    const hideLabels = (root) => root?.traverse?.((object) => {
+      if (object.isSprite && object.renderOrder >= 998) hide(object);
+    });
+    hideLabels(player.root);
+    for (const remote of net.remotes.values()) hideLabels(remote.root);
+    hide(mobField.hpBars?.mesh);
+  };
+  const restoreCinematicWorldUi = () => {
+    for (const [object, visible] of cinematic.hiddenWorldUi) object.visible = visible;
+    cinematic.hiddenWorldUi.clear();
   };
   const setCinematicMode = (enabled) => {
     const next = !!enabled;
@@ -1502,8 +1520,10 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
       cinematic.position.copy(camera.position);
       cinematic.normalPosition.copy(camera.position);
       cinematic.normalQuaternion.copy(camera.quaternion);
+      hideCinematicWorldUi();
       return;
     }
+    restoreCinematicWorldUi();
     camera.position.copy(cinematic.normalPosition);
     camera.quaternion.copy(cinematic.normalQuaternion);
     camera.updateMatrixWorld(true);
@@ -1515,6 +1535,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
   };
   const updateCinematicCamera = (dt) => {
     if (!cinematic.active) return;
+    hideCinematicWorldUi();
     cinematic.normalPosition.copy(camera.position);
     cinematic.normalQuaternion.copy(camera.quaternion);
     const step = Math.max(0, Math.min(Number(dt) || 0, 0.1));
@@ -1538,7 +1559,7 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     camera.lookAt(player.pos.x, player.pos.y + 1.35, player.pos.z);
   };
   addEventListener('keydown', (event) => {
-    if ((event.code !== 'F7' && event.key !== 'F7') || event.repeat || player.locked || isEditableTextTarget(event.target)) return;
+    if ((event.code !== 'F9' && event.key !== 'F9') || event.repeat || player.locked || isEditableTextTarget(event.target)) return;
     event.preventDefault();
     setCinematicMode(!cinematic.active);
   });

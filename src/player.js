@@ -1,15 +1,15 @@
 // Player: animated Quaternius char + third-person camera + collision.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { sanitizeImported } from './glbutil.js?v=20260709g41';
-import { makeNametag } from './nametag.js?v=20260709g41';
-import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260709g41';
-import { composeCharacter } from './rpg/charcustom.js?v=20260709g41';
-import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260709g41';
-import { isActionDown } from './keybinds.js?v=20260709g41';
-import { plantClip } from './animclip.js?v=20260709g41';
+import { sanitizeImported } from './glbutil.js?v=20260710g42';
+import { makeNametag } from './nametag.js?v=20260710g42';
+import { equipWeapon, comboClips, specialClipName, ATTACK_SPEED, attackFollowupClipName, attackReleaseDelay } from './weapons.js?v=20260710g42';
+import { composeCharacter } from './rpg/charcustom.js?v=20260710g42';
+import { combatActionWindows, SKILL_TYPES, skillAnimSpeed, skillClipCandidates, skillFollowupClipCandidates, skillReleaseDelay, skillUsesHeavyWindow } from './animmap.js?v=20260710g42';
+import { isActionDown } from './keybinds.js?v=20260710g42';
+import { plantClip } from './animclip.js?v=20260710g42';
 
-export { isRootMotionPositionTrack, plantClip } from './animclip.js?v=20260709g41';
+export { isRootMotionPositionTrack, plantClip } from './animclip.js?v=20260710g42';
 
 const BASE_SPEED = 10.75;
 const SPRINT_MULT = 1.75;
@@ -905,7 +905,7 @@ export class Player {
     this._lastX = this.pos.x;
     this._lastZ = this.pos.z;
     // la ventana de combo corre SIEMPRE (encadena entre golpes, no solo durante)
-    this.advanceActionTimers(dt);
+    Player.prototype.advanceActionTimers.call(this, dt);
     // prioridad de animacion: muerte > ataque > tambaleo > salto > locomocion
     if (this.dead) {
       // mantener la pose de Death; no pisar con nada

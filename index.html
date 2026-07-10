@@ -470,9 +470,9 @@
     #hud .title { font-size: 14px; padding: 5px 11px; }
     /* movil: el cluster se APILA al centro (vida abajo, skills encima) para no
        chocar con el joystick (izq) ni los botones ATK/SALTO (der) */
-    .rpg-hud-root .rpg-hud-bottom { left: max(8px, env(safe-area-inset-left));
-      width: min(310px, calc(100vw - 112px)); transform: none; bottom: 8px;
-      padding: 7px 10px 7px 52px; }
+    .rpg-hud-root .rpg-hud-bottom { left: var(--rpg-hud-left);
+      width: min(var(--rpg-hud-bottom-width), calc(100vw - 112px)); transform: none;
+      bottom: max(8px, env(safe-area-inset-bottom)); padding: 7px 10px 7px 48px; }
     .rpg-hud-root .rpg-hud-lvl-badge { width: 34px; height: 34px; font-size: 15px; }
     .rpg-hud-root .rpg-hud-bar { height: 11px; }
     /* body-prefijo: el <style> inyectado de skills.js va DESPUES en la cascada
@@ -589,6 +589,6 @@
   }
 }
 </script>
-<script type="module" src="./src/app.js?v=20260709g41"></script>
+<script type="module" src="./src/app.js?v=20260710g42"></script>
 </body>
 </html>

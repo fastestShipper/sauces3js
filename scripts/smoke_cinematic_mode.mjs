@@ -16,10 +16,12 @@ if (!/cursor:none!important/.test(app)) fail('cinematic mode must hide the curso
 if (!/duration: 9[\s\S]*duration: 10\.5[\s\S]*duration: 8\.5/.test(block)) {
   fail('cinematic shots must rotate on deterministic 8 to 12 second durations');
 }
-if (!/event\.code !== 'F7'[\s\S]*event\.repeat[\s\S]*player\.locked[\s\S]*isEditableTextTarget\(event\.target\)/.test(block)) {
-  fail('F7 must ignore repeats, chat and editable controls');
+if (!/event\.code !== 'F9'[\s\S]*event\.repeat[\s\S]*player\.locked[\s\S]*isEditableTextTarget\(event\.target\)/.test(block)) {
+  fail('F9 must ignore repeats, chat and editable controls');
 }
+if (/event\.code !== 'F7'|event\.key !== 'F7'/.test(block)) fail('F7 must not toggle cinematic mode');
 if (!/classList\.toggle\(CINEMATIC_CLASS, next\)/.test(block)) fail('cinematic UI class is not reversible');
+if (!/hideCinematicWorldUi\(\)[\s\S]*restoreCinematicWorldUi\(\)/.test(block)) fail('cinematic world labels must hide and restore');
 if (!/restoreGameplayCamera\(\);\s*player\.update\(dt, camera\)/.test(app)) {
   fail('gameplay camera must update independently under cinematic mode');
 }
@@ -31,4 +33,4 @@ if (/player\.pos\.(set|copy)|releaseMouseCapture|requestMouseCapture|autoAttack\
   fail('cinematic mode must not mutate gameplay, pointer lock or auto attack');
 }
 
-console.log('PASS: hidden F7 cinematic mode is reversible and gameplay-neutral');
+console.log('PASS: hidden F9 cinematic mode is reversible and gameplay-neutral');

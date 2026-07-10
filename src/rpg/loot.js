@@ -1,8 +1,8 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260709g41';
-import { actionLabel, keybindChangeEvent } from '../keybinds.js?v=20260709g41';
+import { TIERS } from './fx.js?v=20260710g42';
+import { actionLabel, keybindChangeEvent } from '../keybinds.js?v=20260710g42';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -187,7 +187,7 @@ function injectStyleOnce() {
   font-family:inherit;font-weight:700;font-size:11px;color:#241a04;
   background:linear-gradient(180deg,#ffe08a,#ffbe4d)}
 .rpg-shop-row button:disabled{opacity:.4;cursor:not-allowed}
-.rpg-cons{position:fixed;left:calc(var(--rpg-hud-left,12px) + var(--rpg-hud-bottom-width,270px) + 10px);right:auto;
+.rpg-cons{position:fixed;left:calc(var(--rpg-hud-left,12px) + var(--rpg-hud-bottom-width,270px) + 18px);right:auto;
   top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));transform:none;scale:.5;transform-origin:0 100%;z-index:46;display:flex;flex-direction:row;
   align-items:center;gap:8px;
   font-family:'Fredoka',system-ui,'Segoe UI',sans-serif;pointer-events:auto;contain:layout style}
@@ -259,7 +259,7 @@ body .tc-pot{aspect-ratio:1;contain:layout style;touch-action:manipulation;-webk
   45%{transform:scale(.96);filter:saturate(.72) brightness(.9)}
 }
 @media (max-width:1120px) and (min-width:681px){
-  .rpg-cons{left:calc(var(--rpg-hud-left,12px) + var(--rpg-hud-bottom-width,260px) + 10px);right:auto;top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));
+  .rpg-cons{left:calc(var(--rpg-hud-left,12px) + var(--rpg-hud-bottom-width,260px) + 18px);right:auto;top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));
     transform:none;gap:7px;flex-direction:row}
 }
 @media (max-width:680px){
@@ -292,7 +292,7 @@ body .tc-pot{aspect-ratio:1;contain:layout style;touch-action:manipulation;-webk
   .rpg-cons-btn:first-child .c-icon{font-size:26px}
 }
 @media (max-height:660px) and (min-width:681px) and (hover:hover){
-  .rpg-cons{left:calc(var(--rpg-hud-left,10px) + var(--rpg-hud-bottom-width,236px) + 10px);right:auto;
+  .rpg-cons{left:calc(var(--rpg-hud-left,10px) + var(--rpg-hud-bottom-width,236px) + 18px);right:auto;
     top:auto;bottom:max(8px,env(safe-area-inset-bottom,0px));transform:none;flex-direction:row;gap:6px}
   .rpg-cons-btn{width:64px;height:64px;border-radius:15px;font-size:24px}
   .rpg-cons-btn:first-child{width:76px;height:76px;border-radius:17px;font-size:27px}

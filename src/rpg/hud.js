@@ -44,6 +44,7 @@ function injectStyle() {
 .rpg-hud-panel > * { position: relative; z-index: 1; }
 .rpg-hud-bottom { left: var(--rpg-hud-left); right: auto;
   bottom: max(12px, env(safe-area-inset-bottom)); transform: none;
+  box-sizing: border-box;
   width: var(--rpg-hud-bottom-width); display: flex; flex-direction: column; gap: 5px;
   min-height: 80px; max-width: calc(100vw - 24px); padding: 9px 12px 9px 56px; }
 .rpg-hud-bottom::before { box-shadow: 0 0 22px rgba(231,189,97,.12) inset; }
@@ -289,6 +290,7 @@ body.ui-panel-open .rpg-hud-streak { display: none !important; }
   .rpg-hud-bar { height: 13px; }
 }
 @media (max-width: 720px) {
+  :root { --rpg-hud-left: max(8px, env(safe-area-inset-left)); --rpg-hud-bottom-width: 260px; }
   .rpg-hud-bottom { left: max(8px, env(safe-area-inset-left)); right: auto;
     bottom: max(8px, env(safe-area-inset-bottom)); transform: none;
     width: min(260px, calc(100vw - 112px)); min-width: 214px; min-height: 80px;
@@ -316,12 +318,14 @@ body.ui-panel-open .rpg-hud-streak { display: none !important; }
   .rpg-hud-death .d-count { font-size: 26px; }
 }
 @media (max-width: 390px) {
+  :root { --rpg-hud-bottom-width: 244px; }
   .rpg-hud-bottom { width: min(244px, calc(100vw - 112px)); min-width: 0; padding-left: 54px; }
   .rpg-hud-label { font-size: 10px; letter-spacing: .6px; }
   .rpg-hud-bar { height: 13px; }
   .rpg-hud-quest { width: 156px; }
 }
 @media (max-width: 340px) {
+  :root { --rpg-hud-bottom-width: calc(100vw - 112px); }
   .rpg-hud-bottom { width: calc(100vw - 112px); min-height: 78px; padding: 8px 9px 8px 48px; }
   .rpg-hud-lvl-badge { left: 7px; width: 32px; height: 32px; font-size: 14px; }
   .rpg-hud-label { gap: 5px; font-size: 9.5px; letter-spacing: .4px; }
