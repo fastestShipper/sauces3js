@@ -77,23 +77,27 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 130));
 
   const ids = hits.map((h) => h.id).sort((a, b) => a - b);
-  const expected = [31, 32, 33, 34];
+  // GOW: un tajo alcanza el objetivo + A LO SUMO UN enemigo adyacente, no barre la
+  // horda. Peleas a los enemigos de a uno; no borras un pack de un swing.
+  const expected = [31, 32];
   if (JSON.stringify(ids) !== JSON.stringify(expected)) {
-    throw new Error(`cleave pack hit wrong ids: ${ids.join(',')}`);
+    throw new Error(`cleave should hit target + one adjacent, got: ${ids.join(',')}`);
   }
   const extras = hits.filter((h) => h.kind === 'cleave');
-  if (extras.length !== 3) throw new Error(`cleave should hit three extras, got ${extras.length}`);
-  if (hits.some((h) => h.id === behind.id || h.id === far.id)) {
-    throw new Error('cleave hit a mob behind or outside range');
+  if (extras.length !== 1) throw new Error(`cleave should hit exactly one extra, got ${extras.length}`);
+  // el extra pega a la mitad del golpe principal
+  const mainHit = hits.find((h) => h.id === main.id);
+  if (!mainHit) throw new Error('main target was not hit');
+  if (!(extras[0].dmg > 0 && extras[0].dmg <= mainHit.dmg * 0.6)) {
+    throw new Error(`cleave extra should be ~50% of main dmg: extra ${extras[0].dmg} vs main ${mainHit.dmg}`);
   }
-  if (!effects.includes('shake') || !effects.includes('gore')) {
-    throw new Error('multi-cleave did not trigger heavy pack feedback');
+  if (hits.some((h) => h.id === right.id || h.id === deep.id || h.id === behind.id || h.id === far.id)) {
+    throw new Error('cleave exceeded the one-target cap or hit a mob behind/out of range');
   }
-  if (skillEvents.length !== 4) {
-    throw new Error(`cleave pack should grant one hit pulse per connected body, got ${skillEvents.length}`);
+  if (skillEvents.length !== 2) {
+    throw new Error(`cleave should grant one hit pulse per connected body (main + 1), got ${skillEvents.length}`);
   }
-  if (combat.hitStopT < 0.09) throw new Error(`multi-cleave hit-stop too weak: ${combat.hitStopT}`);
-  console.log('PASS: melee cleave pack impact has heavy feedback');
+  console.log('PASS: melee cleave is capped at one adjacent enemy at half damage (GOW)');
 } finally {
   Math.random = oldRandom;
 }

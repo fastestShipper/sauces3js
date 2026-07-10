@@ -112,11 +112,15 @@ if (hits.length !== 1 || hits[0].id !== 7 || !basicKindOk) {
   if (wasRemate && combat.hitStopT <= 0) throw new Error('el remate deberia congelar');
   if (!wasRemate && combat.hitStopT > 0) throw new Error('un golpe normal NO deberia congelar');
 }
-if (combat.attackCd > 0.161) throw new Error(`basic combo momentum did not open next swing soon enough: ${combat.attackCd}`);
+// GOW: la cadencia queda DELIBERADA (~0.44s). Antes el combo abria el siguiente
+// golpe en ~0.16s y aceleraba con haste: se sentia autoclicker. Ahora encadena la
+// ventana de combo pero NO acelera.
+if (combat.attackCd < 0.40 || combat.attackCd > 0.50) throw new Error(`basic combo cadence should be deliberate ~0.44s (GOW), got ${combat.attackCd}`);
 if (combat.player.attackT > 0.091) throw new Error(`basic combo momentum left attack lock too high: ${combat.player.attackT}`);
 if (combat.player.comboT < 0.58) throw new Error(`basic combo momentum did not carry combo window: ${combat.player.comboT}`);
-if (combat.player.speedBuffT <= 0 || combat.player.speedBuffMult < 1.08) {
-  throw new Error(`basic combo momentum did not add haste: ${combat.player.speedBuffT}, ${combat.player.speedBuffMult}`);
+if (combat.player.speedBuffT <= 0) throw new Error('basic combo should keep the momentum window open (trail/identity)');
+if (combat.player.speedBuffMult > 1.02) {
+  throw new Error(`basic combo must NOT accelerate attacks (GOW deliberate cadence), got mult ${combat.player.speedBuffMult}`);
 }
 
 console.log('PASS: combat applies basic damage on impact timing');
@@ -133,9 +137,9 @@ console.log('PASS: combat applies basic damage on impact timing');
     if (finisher.hits.length !== 1) throw new Error('finisher impact did not apply delayed hit');
     if (finisher.hits[0].kind !== 'heavy') throw new Error(`finisher basic impact did not send heavy metadata: ${finisher.hits[0].kind}`);
     if (finisher.combat.hitStopT < 0.069) throw new Error(`finisher hit-stop too weak: ${finisher.combat.hitStopT}`);
-    if (finisher.combat.attackCd > 0.131) throw new Error(`finisher combo momentum cooldown too high: ${finisher.combat.attackCd}`);
+    if (finisher.combat.attackCd < 0.40 || finisher.combat.attackCd > 0.50) throw new Error(`finisher cadence should be deliberate ~0.42s (GOW): ${finisher.combat.attackCd}`);
     if (finisher.combat.player.attackT > 0.076) throw new Error(`finisher combo momentum lock too high: ${finisher.combat.player.attackT}`);
-    if (finisher.combat.player.speedBuffMult < 1.115) throw new Error(`finisher combo momentum haste too weak: ${finisher.combat.player.speedBuffMult}`);
+    if (finisher.combat.player.speedBuffMult > 1.06) throw new Error(`finisher must not strongly accelerate attacks (GOW): ${finisher.combat.player.speedBuffMult}`);
     if (!finisher.effects.includes('shake') || !finisher.effects.includes('gore')) {
       throw new Error('finisher impact did not trigger heavy feedback');
     }

@@ -3,13 +3,13 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g50';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g50';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g50';
-import { matchesAction } from '../keybinds.js?v=20260710g50';
-import { BloodCoat } from './bloodcoat.js?v=20260710g50';
+import { projectileSpeed } from './effects.js?v=20260710g51';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g51';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g51';
+import { matchesAction } from '../keybinds.js?v=20260710g51';
+import { BloodCoat } from './bloodcoat.js?v=20260710g51';
 
-const ATTACK_CD = 0.34;      // cadencia ARPG: golpes rapidos encadenados
+const ATTACK_CD = 0.46;      // cadencia deliberada tipo GOW: cada tajo PESA y se compromete
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
 const RANGE_LUNGE = 4.85;    // iman corto de melee para que no se pierda el ritmo
 const MELEE_SETTLE_DIST = 2.35;      // ajuste fino para que el swing lea contacto real
@@ -40,14 +40,16 @@ const XP_STREAK_MULT_SCALE = 0.18;
 const XP_STREAK_MULT_CAP = 1.35;
 const KILL_FRENZY_T = 1.35;  // cada kill acelera el siguiente engagement
 const KILL_FRENZY_MAX_T = 2.25;
-const KILL_FRENZY_SPEED = 1.2;
-const KILL_FRENZY_MAX_SPEED = 1.55;
+// GOW: matar NO acelera. La racha da curacion/identidad, pero la cadencia queda
+// deliberada. Sin este techo el combate se sentia autoclicker (mas rapido al matar).
+const KILL_FRENZY_SPEED = 1.0;
+const KILL_FRENZY_MAX_SPEED = 1.06;
 const KILL_HEAL_BASE_PCT = 0.07;
 const KILL_HEAL_STREAK_PCT = 0.012;
 const KILL_HEAL_MAX_PCT = 0.16;
 const KILL_HEAL_LOW_HP_PCT = 0.035;
 const KILL_HEAL_BOSS_PCT = 0.24;
-const KILL_CHAIN_ATTACK_CD = 0.04;
+const KILL_CHAIN_ATTACK_CD = 0.40;
 const KILL_CHAIN_DASH_CD = 0.08;
 const KILL_CHAIN_TARGET_RANGE = 14;
 const KILL_CHAIN_RANGED_RANGE = 14;
@@ -82,29 +84,29 @@ const SPIN_PULSE_DELAYS = [0.08, 0.15, 0.23];
 const SPIN_PULSE_DAMAGE_MULT = 0.38;
 const BLEED_TICK_DELAYS = [0.28, 0.52, 0.76];
 const BLEED_DAMAGE_MULT = 0.12;
-const SKILL_FOLLOW_ATTACK_CD = 0.045;
+const SKILL_FOLLOW_ATTACK_CD = 0.40;
 const SKILL_FOLLOW_ATTACK_LOCK_T = 0.055;
 const SKILL_FOLLOW_HASTE_T = 0.48;
-const SKILL_FOLLOW_HASTE = 1.12;
+const SKILL_FOLLOW_HASTE = 1.0;
 const SKILL_FOLLOW_COMBO_T = 0.62;
 const COMBO_MOMENTUM_T = 0.36;
-const COMBO_MOMENTUM_HASTE = 1.08;
+const COMBO_MOMENTUM_HASTE = 1.0;   // el combo encadena animaciones, NO acelera (GOW)
 const COMBO_MOMENTUM_COMBO_T = 0.58;
-const COMBO_MOMENTUM_ATTACK_CD = 0.16;
-const COMBO_FINISHER_ATTACK_CD = 0.13;
-const COMBO_PACK_ATTACK_CD = 0.115;
+const COMBO_MOMENTUM_ATTACK_CD = 0.44;
+const COMBO_FINISHER_ATTACK_CD = 0.42;
+const COMBO_PACK_ATTACK_CD = 0.42;
 const COMBO_MOMENTUM_ATTACK_LOCK_T = 0.09;
 const COMBO_FINISHER_ATTACK_LOCK_T = 0.075;
 const COMBO_MOMENTUM_TRAIL_DIST = 0.95;
-const ATTACK_ANIM_SPEED_CAP = 1.5;
+const ATTACK_ANIM_SPEED_CAP = 1.06;  // no fast-forward del swing: se ve un mandoble real, no twitch
 const DASH_STRIKE_RADIUS = 2.25;
 const DASH_STRIKE_MAX = 3;
 const DASH_STRIKE_DAMAGE_MULT = 0.55;
 const PERFECT_DODGE_DAMAGE_MULT = 0.72;
 const PERFECT_DODGE_DASH_CD = 0.10;
 const PERFECT_DODGE_HASTE_T = 0.65;
-const PERFECT_DODGE_HASTE = 1.22;
-const PERFECT_DODGE_COUNTER_ANIM_SPEED = 1.42;
+const PERFECT_DODGE_HASTE = 1.1;    // el counter de dodge perfecto premia un poco, sin romper el peso
+const PERFECT_DODGE_COUNTER_ANIM_SPEED = 1.12;
 const PERFECT_DODGE_TRAIL_DIST = 2.15;
 const COMBAT_DODGE_RANGE = 7.0;
 const MOTION_TRAIL_MIN_DIST = 0.32;
@@ -504,7 +506,9 @@ export class Combat {
     const px = this.player.pos.x, pz = this.player.pos.z, hd = this.player.heading;
     let extra = 0;
     for (const m of this.net.mobs.values()) {
-      if (extra >= 3 || !m || m.id === mainId || (m.hp ?? 0) <= 0) continue;
+      // GOW: un tajo alcanza a lo sumo UN enemigo extra al lado, no barre la horda.
+      // Con esto peleas a los enemigos de a uno, no borras 200 de un swing.
+      if (extra >= 1 || !m || m.id === mainId || (m.hp ?? 0) <= 0) continue;
       const dx = m.x - px, dz = m.z - pz;
       if (Math.hypot(dx, dz) > CLEAVE_RANGE) continue;
       let diff = Math.atan2(dx, dz) - hd;
@@ -512,7 +516,7 @@ export class Combat {
       while (diff < -Math.PI) diff += Math.PI * 2;
       if (Math.abs(diff) > CLEAVE_ARC) continue;
       extra++;
-      const sdmg = Math.round(dmg * 0.7);
+      const sdmg = Math.round(dmg * 0.5);
       this.net.attackMob(m.id, sdmg, 'cleave');
       if (this.skills) this.skills.onHit?.();
       if (this.effects) {
@@ -913,7 +917,9 @@ export class Combat {
   }
 
   _attackCooldown() {
-    return Math.max(0.19, ATTACK_CD / this._combatHaste());
+    // piso alto a proposito: aunque algo intente acelerar, la cadencia nunca baja
+    // de ~0.4s. Es lo que mantiene el combate deliberado y no autoclicker.
+    return Math.max(0.40, ATTACK_CD / this._combatHaste());
   }
 
   _attackAnimSpeed() {

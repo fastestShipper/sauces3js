@@ -3,7 +3,7 @@
 // de modulo, materiales clonados por particula para opacidad independiente, y caps
 // duros de cantidad para no acumular nodos en la escena.
 import * as THREE from 'three';
-import { ParticleBatch } from './particles.js?v=20260710g50';
+import { ParticleBatch } from './particles.js?v=20260710g51';
 
 const GRAVITY = 14;              // u/s^2 que jala las particulas de sangre hacia abajo
 const HIT_LIFE = 0.5;            // vida de un chorro de impacto (s)

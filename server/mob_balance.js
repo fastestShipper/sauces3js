@@ -49,7 +49,7 @@ const MOB_ARCHETYPES = Object.freeze({
 const ARCHETYPE_GAIT = Object.freeze({ caminante: 0, rastrera: 1, saqueador: 2, cultista: 0 });
 
 const ZONE_BALANCE = Object.freeze({
-  starter: Object.freeze({ hp: 0.40, dmg: 0.48, speed: 0.90 }),
+  starter: Object.freeze({ hp: 0.58, dmg: 0.52, speed: 0.90 }),
   gruta: Object.freeze({ hp: 0.68, dmg: 0.64, speed: 0.94 }),
   normal: Object.freeze({ hp: 1.0, dmg: 1.0, speed: 1.0 }),
   mid: Object.freeze({ hp: 1.14, dmg: 1.10, speed: 1.02 }),
@@ -102,16 +102,19 @@ function mobHpMax(spawn, archetype = mobArchetype(Number(spawn && spawn.id) || 0
   const level = Math.max(1, Math.min(5, Math.floor(Number(spawn && spawn.lvl) || 1)));
   const profile = archetypeProfile(archetype);
   const zone = zoneBalance(spawn);
-  const fodderScale = spawn && spawn.fodder ? 0.45 : 1;
+  const fodderScale = spawn && spawn.fodder ? 0.55 : 1;
   const bossScale = spawn && spawn.boss ? 4 : 1;
-  return Math.round((30 + level * 16) * bossScale * profile.hp * fodderScale * zone.hp);
+  // GOW: un enemigo basico AGUANTA. ~4-6 tajos comprometidos a lvl 1, no 1-2.
+  // Con esto matar se GANA y no clareas 200 mobs en 10s.
+  return Math.round((72 + level * 22) * bossScale * profile.hp * fodderScale * zone.hp);
 }
 
 function mobDamage(mob) {
   const level = Math.max(1, Math.min(5, Math.floor(Number(mob && mob.lvl) || 1)));
   const profile = archetypeProfile(mob && mob.archetype);
   const zoneMult = Number(mob && mob.zoneDmgMult) || 1;
-  return Math.round((4 + level * 2) * profile.dmg * zoneMult);
+  // leve subida: estas mas tiempo expuesto (enemigos duran mas), un grupo debe pesar.
+  return Math.round((5 + level * 2) * profile.dmg * zoneMult);
 }
 
 module.exports = {

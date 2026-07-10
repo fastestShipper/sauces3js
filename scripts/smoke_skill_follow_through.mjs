@@ -85,11 +85,14 @@ function makeCombat(mobs = [], playerPatch = {}) {
   if (combat.targetId !== 82 || combat.targetLocked) {
     throw new Error(`spin follow-through did not soft-target weakest hit mob: target=${combat.targetId} locked=${combat.targetLocked}`);
   }
-  if (combat.attackCd > 0.05) throw new Error(`spin follow-through did not open next attack cooldown: ${combat.attackCd}`);
+  // GOW: el follow-through de un skill encadena la ventana de combo pero a cadencia
+  // deliberada (~0.40s), no abre el siguiente golpe casi instantaneo ni acelera.
+  if (combat.attackCd < 0.35 || combat.attackCd > 0.45) throw new Error(`spin follow-through cadence should be deliberate ~0.40s: ${combat.attackCd}`);
   if (player.attackT > 0.056) throw new Error(`spin follow-through did not open hard attack lock: ${player.attackT}`);
   if (player.comboT < 0.6) throw new Error(`spin follow-through did not carry combo window: ${player.comboT}`);
-  if (player.speedBuffT <= 0 || player.speedBuffMult < 1.12) {
-    throw new Error(`spin follow-through did not add brief haste: ${player.speedBuffT}, ${player.speedBuffMult}`);
+  if (player.speedBuffT <= 0) throw new Error('spin follow-through should keep the momentum window open');
+  if (player.speedBuffMult > 1.06) {
+    throw new Error(`spin follow-through must not accelerate attacks (GOW): ${player.speedBuffMult}`);
   }
   console.log('PASS: melee area skill primes follow-through on weakest hit mob');
 }

@@ -94,15 +94,17 @@ function makeCombat(opts = {}) {
   const { combat, mob, closeMob, skillKills, rewards, effects, lunges, hits } = makeCombat();
   combat.autoAttack = true;
   combat.targetId = mob.id;
-  combat.attackCd = 0.31;
+  combat.attackCd = 0.6;
   combat.hp = 42;
   combat._onMobDead(mob.id, 9, []);
   if (combat.streak !== 1) throw new Error('kill did not increment streak');
   if (combat.hp !== 49) throw new Error(`kill sustain expected hp 49, got ${combat.hp}`);
-  if (combat.attackCd > 0.041) throw new Error(`kill frenzy did not reset attack cd: ${combat.attackCd}`);
+  // GOW: matar NO reinicia la cadencia a ~0 (eso era el chain-delete autoclicker).
+  // La cadena de kill sigue a ritmo deliberado (~0.40s).
+  if (combat.attackCd < 0.35 || combat.attackCd > 0.45) throw new Error(`kill chain cadence should stay deliberate ~0.40s: ${combat.attackCd}`);
   if (combat.player.dashCd > 0.081) throw new Error(`kill frenzy did not refresh dash cd: ${combat.player.dashCd}`);
   if (combat.player.speedBuffT < 1.3) throw new Error('kill frenzy did not add speed time');
-  if (combat.player.speedBuffMult < 1.17) throw new Error('kill frenzy did not add speed multiplier');
+  if (combat.player.speedBuffMult > 1.06) throw new Error(`kill frenzy must not accelerate attacks (GOW): ${combat.player.speedBuffMult}`);
   if (combat.player.attackT > 0.051) throw new Error(`kill chain did not release hard attack lock: ${combat.player.attackT}`);
   if (combat.player.comboT < 0.81) throw new Error(`kill chain did not carry combo window: ${combat.player.comboT}`);
   if (combat.targetId !== closeMob.id) throw new Error(`kill chain did not prefer wounded nearby target: ${combat.targetId}`);
@@ -112,8 +114,10 @@ function makeCombat(opts = {}) {
   const chainTrail = effects.find((e) => e && e.type === 'trail' && e.opts?.opacity >= 0.3 && e.opts?.width >= 0.4);
   if (!chainTrail || chainTrail.to.x <= chainTrail.from.x) throw new Error('kill chain lunge did not leave a forward trail');
   if (!effects.some((e) => e && e.type === 'flash')) throw new Error('kill chain lunge did not flash on landing');
-  if (combat._attackCooldown() >= 0.34) throw new Error('kill frenzy did not speed up attack cooldown');
-  if (combat._attackAnimSpeed() < 1.17) throw new Error('kill frenzy did not speed up attack animation');
+  // GOW: la racha da identidad (curacion, trail, target-chain) pero NO acelera.
+  // La cadencia y la animacion quedan deliberadas, no autoclicker.
+  if (combat._attackCooldown() < 0.40) throw new Error(`kill frenzy must keep deliberate cadence (GOW): ${combat._attackCooldown()}`);
+  if (combat._attackAnimSpeed() > 1.1) throw new Error(`kill frenzy must not fast-forward the swing (GOW): ${combat._attackAnimSpeed()}`);
   if (skillKills.length !== 1 || skillKills[0].streak !== 1 || skillKills[0].boss !== false) {
     throw new Error('kill frenzy did not notify skills');
   }
