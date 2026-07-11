@@ -1,4 +1,4 @@
-import { ATTACK_SPEED } from './weapons.js?v=20260710g54';
+import { ATTACK_SPEED } from './weapons.js?v=20260710g55';
 
 const ACTION_CANCEL_FRACTION = 0.48;
 const ACTION_VISUAL_FRACTION = 0.86;
