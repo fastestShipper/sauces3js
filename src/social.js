@@ -1,7 +1,7 @@
 // Panel social (tecla O): Amigos / Cerca / Party. UI pura de DOM con la misma
 // familia visual del HUD. Los botones hablan con Net (freq/facc/pinvite/pleave);
 // el estado llega por callbacks (onFriends/onParty) y net.remotes.
-import { actionLabel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g56';
+import { actionLabel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g57';
 
 const STYLE_ID = 'social-style';
 const PANEL_EVENT = 'sauces:panel-open';
