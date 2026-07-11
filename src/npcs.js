@@ -2,10 +2,10 @@
 // driving the avenues. Distance-culled mixers keep it cheap.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mulberry32, ROAD_Y } from './citygen.js?v=20260710g55';
-import { sanitizeImported } from './glbutil.js?v=20260710g55';
-import { equipWeapon } from './weapons.js?v=20260710g55';
-import { CAR_PAINTS, styleCarShell, addHeadlights } from './carstyle.js?v=20260710g55';
+import { mulberry32, ROAD_Y } from './citygen.js?v=20260710g56';
+import { sanitizeImported } from './glbutil.js?v=20260710g56';
+import { equipWeapon } from './weapons.js?v=20260710g56';
+import { CAR_PAINTS, styleCarShell, addHeadlights } from './carstyle.js?v=20260710g56';
 
 const ADV_SCALE = 1.9 / 2.54;   // personajes KayKit (rig Medium ~2.54u) a ~1.9m
 const ADV_FILES = ['char_knight.glb', 'char_barbarian.glb', 'char_mage.glb', 'char_ranger.glb', 'char_rogue.glb', 'char_rogue_hooded.glb'];
@@ -155,7 +155,10 @@ export class StreetLife {
       const isPark = (x, z) => this.city.inAnyGreen(x, z);
       // SOLO el Parque Los Sauces (plaza en -62,-15), no cada parche verde del mapa.
       const PARK_CX = -62, PARK_CZ = -15, PARK_RADIUS = 95;
-      const PARK_CAR_CAP = 48;                        // fijo: decoracion, no escala con densidad
+      // El extremo OESTE del parque va CHOKEADO: fila sin huecos a AMBOS lados, asi
+      // esa cuadra lee cerrada por autos (no es doble via libre) como en la real.
+      const CHOKE_X = -130, CHOKE_Z = -46, CHOKE_R = 22;
+      const PARK_CAR_CAP = 60;                        // fijo: decoracion, no escala con densidad
       let parked = 0;
       for (const s of this.city.segs) {
         if (parked >= PARK_CAR_CAP) break;
@@ -173,11 +176,11 @@ export class StreetLife {
         else if (isPark(mx - nx * (hw + 2.5), mz - nz * (hw + 2.5))) side = -1;
         if (!side) continue;                          // este tramo no bordea el parque
         const ang = Math.atan2(dx, dz);               // alinea el auto con la calle
-        for (let t = 4.5; t < L - 4.5 && parked < PARK_CAR_CAP; t += 5.6) {
-          if (prng() < 0.16) continue;                // huecos: no una pared perfecta
-          const cx = ax + dx * t + nx * (hw - 1.0) * side;
-          const cz = az + dz * t + nz * (hw - 1.0) * side;
-          if (this.city.inRealBuilding(cx, cz, 0.3) || isPark(cx, cz)) continue;
+        const choke = Math.hypot(mx - CHOKE_X, mz - CHOKE_Z) < CHOKE_R;
+        const step = choke ? 4.9 : 5.6;               // choke: mas juntos
+        const sides = choke ? [side, -side] : [side]; // choke: ambos lados = cerrada
+        const makeParkedCar = (cx, cz) => {
+          if (parked >= PARK_CAR_CAP || this.city.inRealBuilding(cx, cz, 0.3) || isPark(cx, cz)) return;
           const proto = carProtos[Math.floor(prng() * carProtos.length)];
           const car = proto.scene.clone(true);
           const paint = proto._file === 'k_taxi.glb' ? null : CAR_PAINTS[Math.floor(prng() * CAR_PAINTS.length)];
@@ -195,6 +198,10 @@ export class StreetLife {
           this.scene.add(wrap);
           this.city.carColliders.push({ x: cx, z: cz, ang, hw: 1.9, hd: 1.05, roofY: CAR_H - 0.15 });
           parked++;
+        };
+        for (let t = 4.5; t < L - 4.5 && parked < PARK_CAR_CAP; t += step) {
+          if (!choke && prng() < 0.16) continue;      // huecos solo fuera del choke
+          for (const sd of sides) makeParkedCar(ax + dx * t + nx * (hw - 1.0) * sd, az + dz * t + nz * (hw - 1.0) * sd);
         }
       }
     }

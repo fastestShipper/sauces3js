@@ -3,8 +3,8 @@
 // park lawns. Direct port of the Godot SurfaceTool pipeline to merged
 // BufferGeometries (one draw call per material bucket).
 import * as THREE from 'three';
-import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260710g55';
-import { heroPlacement, buildLosSauces202, registerLosSauces202Collision } from './landmark.js?v=20260710g55';
+import { ROAD_Y, WALK_Y, WALL_COLORS, TRIM_COLORS, hashF, mulberry32 } from './citygen.js?v=20260710g56';
+import { heroPlacement, buildLosSauces202, registerLosSauces202Collision } from './landmark.js?v=20260710g56';
 
 class Bucket {
   constructor() { this.pos = []; this.nrm = []; this.col = []; this.uv = []; }
@@ -832,9 +832,12 @@ function buildBooth(feat, kx, kz) {
 
 // juegos para ninos: parche de arena + tobogan + columpio + balancin.
 function buildPlayground(feat, plaza, px, pz) {
-  const SAND = [0.88, 0.70, 0.44], RED = [0.82, 0.22, 0.20];
-  const BLUE = [0.20, 0.42, 0.78], YEL = [0.92, 0.78, 0.18], POST = [0.40, 0.42, 0.46];
-  const GREEN = [0.25, 0.48, 0.24], RUBBER = [0.72, 0.46, 0.28], DARK_RUBBER = [0.28, 0.27, 0.25];
+  // Piso de caucho moderno (teal exterior + naranja interior) y equipo en toon
+  // suave y cohesivo, no primarios duros: antes el area leia como parches marrones
+  // con cajas chillonas amontonadas.
+  const SAND = [0.34, 0.62, 0.66], RED = [0.88, 0.42, 0.38];
+  const BLUE = [0.36, 0.58, 0.82], YEL = [0.97, 0.83, 0.36], POST = [0.60, 0.63, 0.68];
+  const GREEN = [0.44, 0.72, 0.48], RUBBER = [0.92, 0.58, 0.34], DARK_RUBBER = [0.30, 0.36, 0.44];
   // piso de caucho/arena compacto, mas realista que una losa gris
   roofCyl(plaza, px, 0.03, pz, 7.2, 0.025, SAND);
   roofCyl(plaza, px, 0.056, pz, 5.0, 0.012, RUBBER);
