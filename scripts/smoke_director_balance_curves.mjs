@@ -15,8 +15,11 @@ for (let level = 1; level <= 5; level++) {
   assert.ok(Math.abs(normal - NORMAL_COMMITTED_HITS) <= 0.08, `level ${level} normal walker drifted to ${normal.toFixed(2)} hits`);
 }
 
-assert.ok(hits({ id: 1, lvl: 1, zone: 'starter', fodder: true }) >= 0.7, 'starter fodder falls below one deliberate hit');
-assert.ok(hits({ id: 1, lvl: 1, zone: 'starter', fodder: true }) <= 1.0, 'starter fodder exceeds the protected tutorial budget');
+// Starter is a gentle RAMP, not a one-shot: a dark game should never let you
+// delete the tutorial enemy in a single tap. Still clearly softer than the 5-hit
+// normal walker.
+assert.ok(hits({ id: 1, lvl: 1, zone: 'starter', fodder: true }) >= 2.0, 'starter should be a real fight, not a one-shot');
+assert.ok(hits({ id: 1, lvl: 1, zone: 'starter', fodder: true }) <= 3.4, 'starter should stay gentler than a full normal walker');
 assert.ok(hits({ id: 2, x: 220, z: 220, lvl: 3, zone: 'calle' }, 'rastrera') >= 3.4, 'rastrera is too fragile');
 assert.ok(hits({ id: 3, x: 220, z: 220, lvl: 3, zone: 'calle' }, 'saqueador') >= 7.4, 'saqueador is not durable enough');
 const bossHits = hits({ id: 4, lvl: 5, zone: 'boss', boss: true }, 'saqueador');
