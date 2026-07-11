@@ -793,4 +793,4 @@ export class QuestLog {
     return { text: this.text, cur: this.cur, goal: this.goal, done: this.cur >= this.goal };
   }
 }
-import { xpRequiredForLevel } from './balance.js?v=20260710g53';
+import { xpRequiredForLevel } from './balance.js?v=20260710g54';

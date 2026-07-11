@@ -6,7 +6,7 @@ const NORMAL_COMMITTED_HITS = 5;
 const EXPECTED_WEAPON_ATK = Object.freeze([0, 0, 8, 14, 20, 26]);
 
 const ZONE_HIT_MULTIPLIER = Object.freeze({
-  starter: 0.20,
+  starter: 0.60,
   gruta: 0.65,
   normal: 1.0,
   mid: 1.05,
