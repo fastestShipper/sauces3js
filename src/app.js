@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g53';
 import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g53';
+import { buildOjedaStorefront } from './ojeda.js?v=20260710g53';
 import { GrassSystem } from './veg/grass.js?v=20260710g53';
 import { buildFlowerTuft } from './veg/flowers.js?v=20260710g53';
 import { Player } from './player.js?v=20260710g53';
@@ -711,6 +712,8 @@ async function boot() {
     scene.add(mesh);
   }
   window.__SAUCES_PERF__.buildingChunks = buildingChunks.length;
+  // dress the real Ojeda minimarket footprint as an actual storefront
+  buildOjedaStorefront(scene);
   setProgress(0.7);
   await breathe();
 
