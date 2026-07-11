@@ -3,11 +3,12 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g52';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g52';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g52';
-import { matchesAction } from '../keybinds.js?v=20260710g52';
-import { BloodCoat } from './bloodcoat.js?v=20260710g52';
+import { projectileSpeed } from './effects.js?v=20260710g53';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g53';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g53';
+import { matchesAction } from '../keybinds.js?v=20260710g53';
+import { BloodCoat } from './bloodcoat.js?v=20260710g53';
+import { killXpReward } from './balance.js?v=20260710g53';
 
 const ATTACK_CD = 0.46;      // cadencia deliberada tipo GOW: cada tajo PESA y se compromete
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -36,8 +37,6 @@ const HITSTOP_CD = 1.6;        // cooldown entre freezes (s): "solo una vez"
 const HITSTOP_COMBO_MIN = 3;   // hits de combo necesarios para que valga el remate
 const FINISHER_SHAKE = 0.020;
 const STREAK_WINDOW = 7;     // s para encadenar kills en racha
-const XP_STREAK_MULT_SCALE = 0.18;
-const XP_STREAK_MULT_CAP = 1.35;
 const KILL_FRENZY_T = 1.35;  // cada kill acelera el siguiente engagement
 const KILL_FRENZY_MAX_T = 2.25;
 // GOW: matar NO acelera. La racha da curacion/identidad, pero la cadencia queda
@@ -931,12 +930,7 @@ export class Combat {
   }
 
   _killXp(lvl, mult = 1, boss = false) {
-    const mobLevel = Math.max(1, Math.floor(Number(lvl) || 1));
-    const base = 1.7 + mobLevel * 1.15;
-    const bossMult = boss ? 2.4 : 1;
-    const rewardMult = Math.max(1, Number(mult) || 1);
-    const xpMult = Math.min(XP_STREAK_MULT_CAP, 1 + (rewardMult - 1) * XP_STREAK_MULT_SCALE);
-    return Math.max(2, Math.round(base * xpMult * bossMult));
+    return killXpReward(lvl, mult, boss);
   }
 
   _bufferPvpAttack(seconds = ATTACK_INPUT_BUFFER_T) {

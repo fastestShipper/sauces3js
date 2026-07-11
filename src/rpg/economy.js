@@ -2,14 +2,15 @@
 // Los consumibles y gear son raros para que el inventario no se llene de basura.
 // (sin three.js) + un HUD DOM chico para el oro. El color de cada item sale de
 // TIERS[tier].glow (hex numerico) que vive en el modulo fx.
-import { TIERS } from './fx.js?v=20260710g52';
+import { TIERS } from './fx.js?v=20260710g53';
+import { DROP_RATES } from './balance.js?v=20260710g53';
 
 const TIER_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
-const DROP_GOLD_CHANCE = 0.78;
-const DROP_MATERIAL_CHANCE = 0.08;
-const DROP_POTION_CHANCE = 0.035;
-const DROP_GEAR_CHANCE = 0.022;
-const GEAR_WEAPON_CHANCE = 0.72;
+const DROP_GOLD_CHANCE = DROP_RATES.gold;
+const DROP_MATERIAL_CHANCE = DROP_RATES.material;
+const DROP_POTION_CHANCE = DROP_RATES.potion;
+const DROP_GEAR_CHANCE = DROP_RATES.gear;
+const GEAR_WEAPON_CHANCE = DROP_RATES.weaponWithinGear;
 
 // Catalogo de materiales: nombre con sabor + un tier "tipico" para teñir el icono.
 // El tier real del drop puede subir con el nivel del mob (ver pickTier).

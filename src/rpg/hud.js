@@ -737,8 +737,7 @@ export class HUD {
 }
 
 export function xpNextForLevel(level) {
-  const lvl = Math.max(1, Math.floor(Number(level) || 1));
-  return Math.round(70 * Math.pow(lvl, 1.32));
+  return xpRequiredForLevel(level);
 }
 
 export function hpMaxForLevel(level) {
@@ -794,3 +793,4 @@ export class QuestLog {
     return { text: this.text, cur: this.cur, goal: this.goal, done: this.cur >= this.goal };
   }
 }
+import { xpRequiredForLevel } from './balance.js?v=20260710g53';

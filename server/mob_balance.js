@@ -1,5 +1,7 @@
 'use strict';
 
+const { normalMobHp, ZONE_HIT_MULTIPLIER } = require('./balance_targets');
+
 const SAFE_X = -62;
 const SAFE_Z = -7;
 const SAFE_R = 30;
@@ -49,13 +51,13 @@ const MOB_ARCHETYPES = Object.freeze({
 const ARCHETYPE_GAIT = Object.freeze({ caminante: 0, rastrera: 1, saqueador: 2, cultista: 0 });
 
 const ZONE_BALANCE = Object.freeze({
-  starter: Object.freeze({ hp: 0.58, dmg: 0.52, speed: 0.90 }),
-  gruta: Object.freeze({ hp: 0.68, dmg: 0.64, speed: 0.94 }),
-  normal: Object.freeze({ hp: 1.0, dmg: 1.0, speed: 1.0 }),
-  mid: Object.freeze({ hp: 1.14, dmg: 1.10, speed: 1.02 }),
-  hard: Object.freeze({ hp: 1.38, dmg: 1.28, speed: 1.06 }),
-  wave: Object.freeze({ hp: 1.16, dmg: 1.16, speed: 1.06 }),
-  boss: Object.freeze({ hp: 1.42, dmg: 1.30, speed: 1.04 }),
+  starter: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.starter, dmg: 0.42, speed: 0.90 }),
+  gruta: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.gruta, dmg: 0.64, speed: 0.94 }),
+  normal: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.normal, dmg: 1.0, speed: 1.0 }),
+  mid: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.mid, dmg: 1.10, speed: 1.02 }),
+  hard: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.hard, dmg: 1.28, speed: 1.06 }),
+  wave: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.wave, dmg: 1.16, speed: 1.06 }),
+  boss: Object.freeze({ hp: ZONE_HIT_MULTIPLIER.boss, dmg: 1.30, speed: 1.04 }),
 });
 
 const HARD_ZONES = new Set(['spot3', 'spot4', 'spot6', 'boss_guardian', 'boss']);
@@ -102,11 +104,10 @@ function mobHpMax(spawn, archetype = mobArchetype(Number(spawn && spawn.id) || 0
   const level = Math.max(1, Math.min(5, Math.floor(Number(spawn && spawn.lvl) || 1)));
   const profile = archetypeProfile(archetype);
   const zone = zoneBalance(spawn);
-  const fodderScale = spawn && spawn.fodder ? 0.55 : 1;
-  const bossScale = spawn && spawn.boss ? 4 : 1;
-  // GOW: un enemigo basico AGUANTA. ~4-6 tajos comprometidos a lvl 1, no 1-2.
-  // Con esto matar se GANA y no clareas 200 mobs en 10s.
-  return Math.round((72 + level * 22) * bossScale * profile.hp * fodderScale * zone.hp);
+  const fodderScale = spawn && spawn.fodder ? 0.85 : 1;
+  // A normal walker is five committed hits against expected same-level gear.
+  // Archetype and zone multipliers create readable exceptions around that anchor.
+  return Math.round(normalMobHp(level) * profile.hp * fodderScale * zone.hp);
 }
 
 function mobDamage(mob) {
