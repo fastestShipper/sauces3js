@@ -3,11 +3,11 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g51';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g51';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g51';
-import { matchesAction } from '../keybinds.js?v=20260710g51';
-import { BloodCoat } from './bloodcoat.js?v=20260710g51';
+import { projectileSpeed } from './effects.js?v=20260710g52';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g52';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g52';
+import { matchesAction } from '../keybinds.js?v=20260710g52';
+import { BloodCoat } from './bloodcoat.js?v=20260710g52';
 
 const ATTACK_CD = 0.46;      // cadencia deliberada tipo GOW: cada tajo PESA y se compromete
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -744,6 +744,10 @@ export class Combat {
     // y los skills ya tienen su propio cooldown, asi que no se siente spam).
     this._bigHitStop();
     if (this.sfx) this.sfx.hit?.(heavy || hits >= 3);
+    if (origin && this.effects?.skillImpact) {
+      const aura = this.classSpec?.auraColor || 0x8fd8ea;
+      this.effects.skillImpact({ x: origin.x, y: 0.85, z: origin.z }, aura, heavy || hits >= 3);
+    }
     this._localShake(origin, heavy || hits >= 3 ? 0.058 : 0.034, heavy || hits >= 3 ? 0.095 : 0.07);
   }
 

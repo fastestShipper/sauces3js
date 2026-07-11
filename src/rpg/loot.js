@@ -1,8 +1,8 @@
 // Loot RPG: tira drops de armas al matar enemigos + inventario con panel DOM.
 // Sin three.js: todo es lógica de drop + UI vanilla. El color de cada item sale
 // de TIERS[tier].glow (hex numérico) que vive en el módulo fx.
-import { TIERS } from './fx.js?v=20260710g51';
-import { actionLabel, keybindChangeEvent } from '../keybinds.js?v=20260710g51';
+import { TIERS } from './fx.js?v=20260710g52';
+import { actionLabel, keybindChangeEvent } from '../keybinds.js?v=20260710g52';
 
 // Armas KayKit válidas. Cada una mapea a la clase que la usa por defecto
 // (classReq), o null si cualquiera puede equiparla.
@@ -306,6 +306,48 @@ body .tc-pot{aspect-ratio:1;contain:layout style;touch-action:manipulation;-webk
 @media (prefers-reduced-motion:reduce){
   .rpg-cons.is-use-feedback,.rpg-cons-btn.is-use-feedback,body .tc-pot.is-use-feedback,
   .rpg-cons-btn.is-empty-feedback,body .tc-pot.is-empty-feedback{animation-duration:1ms;animation-iteration-count:1}
+}
+/* Bodega uses cold metal and ink. Tier colors remain limited to item identity. */
+.rpg-inv{width:min(720px,calc(100vw - 36px));right:18px;bottom:18px;padding:0;overflow:hidden;
+  background:linear-gradient(155deg,rgba(13,22,31,.98),rgba(5,10,16,.98));
+  border:1px solid rgba(132,176,205,.3);border-radius:10px;color:#dce8ef;
+  box-shadow:0 30px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(202,231,246,.08)}
+.rpg-inv-top{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;
+  background:linear-gradient(180deg,rgba(39,59,72,.55),rgba(14,26,35,.55));
+  border-bottom:1px solid rgba(133,177,202,.2)}
+.rpg-inv-h{margin:0;color:#d9edf7;font-size:14px;letter-spacing:1.5px}
+.rpg-inv-context{font-size:10px;color:#7f9cad;text-transform:uppercase;letter-spacing:1.1px;margin-top:3px}
+.rpg-inv-balance{display:flex;align-items:baseline;gap:6px;color:#9fc6d9;font-size:11px;text-transform:uppercase;letter-spacing:.8px}
+.rpg-inv-balance strong{font-size:19px;color:#e4f5fc;font-variant-numeric:tabular-nums}
+.rpg-inv-body{display:grid;grid-template-columns:minmax(260px,1fr) minmax(270px,.9fr);min-height:342px}
+.rpg-inv-pack{padding:14px 16px;border-right:1px solid rgba(133,177,202,.16)}
+.rpg-inv-grid{grid-template-columns:repeat(5,minmax(42px,1fr));gap:8px}
+.rpg-slot{border-radius:5px;background:linear-gradient(145deg,rgba(78,105,120,.13),rgba(4,10,15,.35));
+  border-color:rgba(151,189,207,.15)}
+.rpg-slot.selected{border-color:#9dd7ee;box-shadow:0 0 0 1px #9dd7ee,0 0 18px rgba(80,168,205,.18)}
+.rpg-slot.equipped{box-shadow:0 0 0 2px rgba(133,211,220,.85),0 0 18px -2px var(--tc,#8bcbd5)}
+.rpg-slot.equipped::after{content:'E';background:#8bd3dc;color:#071218;border-radius:3px}
+.rpg-inv-sub{color:#7992a1}.rpg-inv-sellall{color:#adc6d3;background:rgba(91,132,151,.1);
+  border-color:rgba(132,176,197,.22);border-radius:5px;text-align:left;padding:8px 10px}
+.rpg-inv-detail{margin-top:12px;border-radius:6px;background:rgba(101,143,164,.08);border-color:rgba(137,184,205,.18)}
+.rpg-inv-detail .d-meta{color:#9eb4c1}.rpg-inv-detail button{border-radius:4px;text-transform:uppercase;letter-spacing:.7px}
+.rpg-inv-detail .d-use{background:#a8dce8;color:#071218;text-shadow:none;box-shadow:none}
+.rpg-inv-detail .d-sell{background:transparent;color:#b9ced8;border-color:rgba(154,193,210,.28)}
+.rpg-shop{display:none;margin:0;padding:14px 16px;border:0}.rpg-shop.is-open{display:block}
+.rpg-shop-h{color:#d8edf5;font-size:14px;letter-spacing:1.5px;margin-bottom:2px}
+.rpg-shop-note{color:#7896a7;font-size:10px;line-height:1.45;margin-bottom:12px}
+.rpg-shop-row{display:grid;grid-template-columns:36px 1fr auto;gap:10px;padding:10px;border-radius:5px;
+  background:rgba(89,126,145,.08);border-color:rgba(140,179,198,.16);margin-bottom:8px}
+.rpg-shop-row .p-icon{width:34px;height:34px;display:grid;place-items:center;border:1px solid rgba(144,190,209,.22);
+  border-radius:4px;background:rgba(7,15,22,.5);font-size:18px}
+.rpg-shop-row .n{font-size:12px;color:#dce8ee}.rpg-shop-row .n i{color:#819aa8;margin-top:3px}
+.rpg-shop-row button{min-width:76px;border:1px solid rgba(145,202,220,.4);border-radius:4px;color:#dff5fb;
+  background:linear-gradient(180deg,#244a5a,#17333f);text-transform:uppercase;letter-spacing:.65px}
+.rpg-shop-row button:disabled{color:#637985;background:#111c23;border-color:#263944;opacity:1}
+.rpg-shop-row button:not(:disabled):hover{filter:brightness(1.18)}
+.rpg-inv.is-shop .rpg-inv-h{color:#bfe8f4}.rpg-inv.is-shop .rpg-inv-context{color:#7198ab}
+@media (max-width:680px){.rpg-inv{width:auto}.rpg-inv-body{display:block}.rpg-inv-pack{border-right:0;
+  border-bottom:1px solid rgba(133,177,202,.16)}.rpg-inv-grid{grid-template-columns:repeat(5,1fr)}}
 }`;
   document.head.appendChild(el);
 }
@@ -412,6 +454,17 @@ export class Inventory {
     const h = document.createElement('div');
     h.className = 'rpg-inv-h';
     h.textContent = 'Inventario';
+    const context = document.createElement('div');
+    context.className = 'rpg-inv-context';
+    context.textContent = 'Equipo y suministros';
+    const title = document.createElement('div');
+    title.append(h, context);
+    const balance = document.createElement('div');
+    balance.className = 'rpg-inv-balance';
+    balance.innerHTML = '<span>Saldo</span><strong>0</strong><span>g</span>';
+    const top = document.createElement('div');
+    top.className = 'rpg-inv-top';
+    top.append(title, balance);
     const grid = document.createElement('div');
     grid.className = 'rpg-inv-grid';
     const sellAll = document.createElement('button');
@@ -425,12 +478,13 @@ export class Inventory {
     detail.className = 'rpg-inv-detail';
     const shop = document.createElement('div');
     shop.className = 'rpg-shop';
-    panel.appendChild(h);
-    panel.appendChild(sellAll);
-    panel.appendChild(sub);
-    panel.appendChild(grid);
-    panel.appendChild(detail);
-    panel.appendChild(shop);
+    const pack = document.createElement('div');
+    pack.className = 'rpg-inv-pack';
+    pack.append(sellAll, sub, grid, detail);
+    const body = document.createElement('div');
+    body.className = 'rpg-inv-body';
+    body.append(pack, shop);
+    panel.append(top, body);
     rootEl.appendChild(panel);
     const quick = document.createElement('div');
     quick.className = 'rpg-cons';
@@ -440,6 +494,9 @@ export class Inventory {
     this._panel = panel;
     this._grid = grid;
     this._shop = shop;
+    this._heading = h;
+    this._context = context;
+    this._balance = balance.querySelector('strong');
     this._detail = detail;
     this._quick = quick;
     this.selectedId = null;
@@ -573,17 +630,29 @@ export class Inventory {
   // [{id, name, desc, price}] que el app define; comprar via onBuy.
   setShop(products) {
     if (!this._shop) return;
-    this._shop.classList.toggle('is-open', !!(products && products.length));
-    if (!products || !products.length) { this._shop.textContent = ''; return; }
+    const open = !!(products && products.length);
+    this._shop.classList.toggle('is-open', open);
+    this._panel?.classList.toggle('is-shop', open);
+    if (this._heading) this._heading.textContent = open ? 'Bodega Ojeda' : 'Inventario';
+    if (this._context) this._context.textContent = open ? 'Compra, vende y equipa' : 'Equipo y suministros';
+    if (this._balance) this._balance.textContent = String(this.getGold ? this.getGold() : 0);
+    if (!open) { this._shop.textContent = ''; return; }
     this._shop.textContent = '';
     const h = document.createElement('div');
     h.className = 'rpg-shop-h';
-    h.textContent = '\ud83c\udfea BODEGA OJEDA';
+    h.textContent = 'CATÁLOGO DISPONIBLE';
     this._shop.appendChild(h);
+    const note = document.createElement('div');
+    note.className = 'rpg-shop-note';
+    note.textContent = 'Existencias locales. Las armas se ajustan a tu clase y nivel.';
+    this._shop.appendChild(note);
     const gold = this.getGold ? this.getGold() : 0;
     for (const prod of products) {
       const row = document.createElement('div');
       row.className = 'rpg-shop-row';
+      const icon = document.createElement('div');
+      icon.className = 'p-icon';
+      icon.textContent = prod.icon || (prod.id === 'weapon' ? '⚔️' : '🧪');
       const n = document.createElement('div');
       n.className = 'n';
       n.textContent = prod.name;
@@ -591,9 +660,11 @@ export class Inventory {
       d.textContent = prod.desc || '';
       n.appendChild(d);
       const btn = document.createElement('button');
-      btn.textContent = prod.price + 'g';
+      btn.textContent = gold < prod.price ? 'FALTAN ' + (prod.price - gold) + 'g' : 'COMPRAR ' + prod.price + 'g';
       btn.disabled = gold < prod.price;
+      btn.setAttribute('aria-label', 'Comprar ' + prod.name + ' por ' + prod.price + ' de oro');
       btn.addEventListener('click', () => { if (this.onBuy) this.onBuy(prod); });
+      row.appendChild(icon);
       row.appendChild(n);
       row.appendChild(btn);
       this._shop.appendChild(row);
