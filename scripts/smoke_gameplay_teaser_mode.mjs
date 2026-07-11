@@ -65,7 +65,7 @@ assert.match(trailer, /Number\(window\.__trailerCaptureTime\)/, 'external forced
 assert.match(trailer, /applyTimeline\(next\)/, 'forced capture seeks the deterministic timeline');
 assert.match(app, /window\.__game\.trailer = trailer/, 'app exposes the trailer API through window.__game');
 
-assert.match(app, /const APP_VERSION = '20260710g55';/, 'app version stamp is unchanged');
-assert.match(trailer, /\?v=20260710g55/g, 'existing import stamps remain unchanged');
+assert.match(app, /const APP_VERSION = '20260710g56';/, 'app version stamp is unchanged');
+assert.match(trailer, /\?v=20260710g56/g, 'existing import stamps remain unchanged');
 
 console.log('PASS: deterministic 42s gameplay teaser mode contract');
