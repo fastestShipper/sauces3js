@@ -2,8 +2,8 @@
 // Los consumibles y gear son raros para que el inventario no se llene de basura.
 // (sin three.js) + un HUD DOM chico para el oro. El color de cada item sale de
 // TIERS[tier].glow (hex numerico) que vive en el modulo fx.
-import { TIERS } from './fx.js?v=20260710g54';
-import { DROP_RATES } from './balance.js?v=20260710g54';
+import { TIERS } from './fx.js?v=20260710g55';
+import { DROP_RATES } from './balance.js?v=20260710g55';
 
 const TIER_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const DROP_GOLD_CHANCE = DROP_RATES.gold;
