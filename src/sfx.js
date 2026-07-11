@@ -3,7 +3,7 @@
 // anticipacion + impacto + consecuencia, con pitch aleatorio para no sonar a
 // metralleta. El AudioContext nace perezoso en el primer gesto (autoplay).
 // Tecla M silencia; persiste en localStorage.
-import { matchesAction } from './keybinds.js?v=20260710g52';
+import { matchesAction } from './keybinds.js?v=20260710g54';
 
 const LS_MUTE = 'sauces_muted';
 

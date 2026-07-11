@@ -31,7 +31,10 @@ assert.deepEqual(mid.zone, ZONE_BALANCE.mid, 'park spot should use mid curve');
 assert.deepEqual(hard.zone, ZONE_BALANCE.hard, 'boulevard/hard park should use hard curve');
 assert.deepEqual(boss.zone, ZONE_BALANCE.boss, 'guardian should keep boss curve near the gruta');
 
-assert.ok(starter.hp <= 10 && starter.dmg <= 3, `starter too punishing: hp=${starter.hp} dmg=${starter.dmg}`);
+// Starter is a gentle RAMP, not a one-shot: a dark game never lets you delete the
+// tutorial enemy in a single tap. Still well under a normal walker (~55 hp).
+assert.ok(starter.hp >= 18 && starter.hp <= 34, `starter should be a real fight, not a one-shot: hp=${starter.hp}`);
+assert.ok(starter.dmg <= 4, `starter should stay light on damage: dmg=${starter.dmg}`);
 assert.ok(gruta.hp < normal.hp * 0.5, `gruta HP gap too small: ${gruta.hp}/${normal.hp}`);
 assert.ok(mid.hp > normal.hp && mid.dmg > normal.dmg, 'mid parks should be harder than ordinary streets');
 assert.ok(hard.hp >= 125 && hard.dmg >= 15, `hard zone too soft: hp=${hard.hp} dmg=${hard.dmg}`);
