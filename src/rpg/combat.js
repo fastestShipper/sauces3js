@@ -3,12 +3,12 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g58';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g58';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g58';
-import { matchesAction } from '../keybinds.js?v=20260710g58';
-import { BloodCoat } from './bloodcoat.js?v=20260710g58';
-import { killXpReward } from './balance.js?v=20260710g58';
+import { projectileSpeed } from './effects.js?v=20260710g59';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g59';
+import { attackReleaseDelay } from '../weapons.js?v=20260710g59';
+import { matchesAction } from '../keybinds.js?v=20260710g59';
+import { BloodCoat } from './bloodcoat.js?v=20260710g59';
+import { killXpReward } from './balance.js?v=20260710g59';
 
 const ATTACK_CD = 0.46;      // cadencia deliberada tipo GOW: cada tajo PESA y se compromete
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
@@ -147,6 +147,9 @@ export class Combat {
     this.prog = opts.progress;
     this.hud = opts.hud;
     this.effects = opts.effects || null;
+    // MODO DIOS (cuenta marcada `god` en el server): INMORTAL de verdad (el dano
+    // entrante se anula) + ropa holografica verde permanente. No cambia tu clase.
+    this.godMode = !!opts.godMode;
     this.onRespawn = opts.onRespawn || (() => {});
     this.onKillRewards = opts.onKillRewards || null;   // (info) -> oro/loot (etapa economia)
     this.skills = opts.skills || null;                 // SkillSystem (etapa skills)
@@ -1298,7 +1301,10 @@ export class Combat {
     // buff de dano (Grito de Guerra) expira solo
     if (this.dmgBuffT > 0) this.dmgBuffT -= dt;
     // gracia divina: holografico mientras dura, vuelve a normal al expirar
-    if (this.godSaveT > 0) {
+    // MODO DIOS: la ropa holografica verde es PERMANENTE. El char carga async, asi
+    // que reintentamos hasta que exista la malla.
+    if (this.godMode && !this._holoOn) this._setHolo(true);
+    if (this.godSaveT > 0 && !this.godMode) {
       this.godSaveT -= dt;
       if (this.godSaveT <= 0 || this.hp >= this.hpMax) { this.godSaveT = 0; this._setHolo(false); }
     }
@@ -1532,6 +1538,16 @@ export class Combat {
   }
 
   // Diosito NO muere: al borde queda a 1 HP, se vuelve holografico y roba vida 99%
+  // MODO DIOS: INMORTAL de verdad. El dano entrante se anula (no baja la vida) y
+  // rebota con un destello verde. Distinto de la GRACIA DIVINA de Diosito, que solo
+  // te deja a 1 HP cuando ibas a morir.
+  _godDeflect() {
+    if (!this.godMode) return false;
+    if (this.hp < this.hpMax) { this.hp = this.hpMax; this.hud.setHP(this.hp, this.hpMax); }
+    if (this.effects) this.effects.hitFlash({ x: this.player.pos.x, y: 1.3, z: this.player.pos.z }, 0x66ffaa);
+    return true;
+  }
+
   _godGrace() {
     if (!(this.classSpec && this.classSpec.god) || this.hp > 0) return false;
     this.hp = 1;
@@ -1562,6 +1578,7 @@ export class Combat {
   // dano PvP entrante (de otro jugador, ya validado por el server)
   takePvpHit(hit) {
     if (this.dead || !hit) return;
+    if (this._godDeflect()) return;   // INMORTAL: el golpe rebota
     let dmg = Math.max(0, Number(hit.dmg) || 0);
     if (!dmg) return;
     // el ESCUDO de party absorbe antes que la vida
@@ -1888,6 +1905,7 @@ export class Combat {
     // dodge activo: cubre el desplazamiento y el cierre visual para que no entre
     // una mordida mientras el personaje aun se ve esquivando.
     if (this._isDodgeActionActive()) { this._perfectDodgeCounter(hit); return; }
+    if (this._godDeflect()) return;   // INMORTAL: la mordida rebota
     let dmg = Math.max(0, Number(hit.dmg) || 0);
     if (!dmg) return;
     if (this.spawnGraceT > 0) return;
