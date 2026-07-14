@@ -556,7 +556,8 @@ function spawnInitialMobs() {
 // y las oleadas, una poblacion de zombies sueltos deriva por calles al azar,
 // se reubica cada tanto y al morir reaparece en OTRO punto. Encuentros
 // impredecibles: vas caminando y te cruzas uno donde "no deberia" haber.
-const ROAMER_COUNT = 16;
+const ROAMER_COUNT = 36;
+const ROAMER_PAIR_CHANCE = 0.4;   // ~40% caminan de a dos (nunca mas de 2 juntos)
 const ROAMER_WANDER_RADIUS = 26;    // deriva amplia: cruzan cuadras, no clavados
 const ROAMER_LEASH_RANGE = 70;      // te persiguen mas lejos que un mob de spot
 const ROAMER_RESPAWN_MS = 45000;    // al morir, la ciudad "repone" en otro lado
@@ -587,9 +588,7 @@ function pickRoamerSpawn() {
   return null;
 }
 
-function spawnRoamer(reuseId) {
-  const point = pickRoamerSpawn();
-  if (!point) return null;
+function makeRoamerAt(point, reuseId) {
   const spawn = { x: point.x, z: point.z, lvl: roamerLevel(point.x, point.z), zone: 'roam' };
   const id = Number.isFinite(reuseId) ? reuseId : nextMobId++;
   const mob = makeMob(id, spawn);
@@ -601,9 +600,25 @@ function spawnRoamer(reuseId) {
   return mob;
 }
 
+function spawnRoamer(reuseId) {
+  const point = pickRoamerSpawn();
+  return point ? makeRoamerAt(point, reuseId) : null;
+}
+
 function spawnRoamers() {
   let placed = 0;
-  for (let i = 0; i < ROAMER_COUNT; i++) if (spawnRoamer()) placed++;
+  let failures = 0;
+  while (placed < ROAMER_COUNT && failures < 12) {
+    const first = spawnRoamer();
+    if (!first) { failures++; continue; }
+    placed++;
+    // parejas: algunos merodean de a dos (el companero nace a 1.5-4 m); la
+    // deriva los junta y separa sola con el tiempo, nunca son mas de 2
+    if (placed < ROAMER_COUNT && Math.random() < ROAMER_PAIR_CHANCE) {
+      const side = findOpenSpawnAround(first.x, first.z, 1.5, 4, { attempts: 8 });
+      if (side && makeRoamerAt(side)) placed++;
+    }
+  }
   console.log('[roamers]', JSON.stringify({ requested: ROAMER_COUNT, placed }));
 }
 
@@ -973,7 +988,11 @@ console.log('[world-obstacles]', JSON.stringify(obstacleStats()));
 const WAVE_EVERY_MS = Math.max(1500000, Number(process.env.WAVE_EVERY_MS) || 1500000);
 const WAVE_BASE_SIZE = 3;
 const WAVE_MAX_SIZE = 5;
-const WAVE_TTL_MS = 60000;
+// TTL mas largo que antes (60s): la horda ahora nace DESPARRAMADA en grupos
+// de 1-2 hasta a 70 m, y los grupos lejanos necesitan tiempo para ser
+// encontrados o converger por ruido de combate. hasActiveWave() sigue
+// impidiendo que se acumulen oleadas.
+const WAVE_TTL_MS = 110000;
 const WAVE_BOSS_TTL_MS = 180000;
 let waveN = 0;
 function hasActiveWave() {
@@ -996,21 +1015,38 @@ const waveTimer = setInterval(() => {
   // La ABOMINACION debe sentirse especial, no aparecer cada pocos minutos.
   const withBoss = waveN % 10 === 0;
   let bossSpawned = false;
-  for (let i = 0; i < size; i++) {
-    const open = findOpenSpawnAround(c.x, c.z, 16, 40, { attempts: 32 });
-    if (!open) continue;
-    const spawn = {
-      x: open.x,
-      z: open.z,
-      lvl: 1 + Math.floor(Math.random() * lvlCap),
-      zone: 'oleada',
-    };
-    const id = nextMobId++;
-    const mob = makeMob(id, spawn);
-    mob._waveId = waveN;
-    mob._dieAtMs = Date.now() + WAVE_TTL_MS;
-    mobs.set(id, mob);
-    broadcastAll({ t: 'mspawn', mob: mobView(mob) });
+  // DESPARRAMO natural: la horda no nace como pelotón. Grupos de 1-2, cada
+  // grupo en su propio punto abierto entre 22 y 70 m del objetivo. Los
+  // cercanos te ven; los lejanos quedan rondando y REACCIONAN al ruido de
+  // combate (stirCombatNoise: skill 32 m, kill 36 m) cuando la pelea empieza.
+  let remaining = size;
+  let firstGroup = true;
+  while (remaining > 0) {
+    const group = Math.min(remaining, Math.random() < 0.5 ? 2 : 1);
+    // el primer grupo nace CERCA (la oleada anunciada tiene cara visible);
+    // el resto se desparrama lejos y llega por ruido de combate
+    const anchor = firstGroup
+      ? findOpenSpawnAround(c.x, c.z, 22, 40, { attempts: 32 })
+      : findOpenSpawnAround(c.x, c.z, 22, 70, { attempts: 32 });
+    firstGroup = false;
+    if (!anchor) { remaining -= group; continue; }
+    for (let g = 0; g < group; g++) {
+      const open = g === 0 ? anchor : findOpenSpawnAround(anchor.x, anchor.z, 1.5, 4, { attempts: 8 });
+      if (!open) continue;
+      const spawn = {
+        x: open.x,
+        z: open.z,
+        lvl: 1 + Math.floor(Math.random() * lvlCap),
+        zone: 'oleada',
+      };
+      const id = nextMobId++;
+      const mob = makeMob(id, spawn);
+      mob._waveId = waveN;
+      mob._dieAtMs = Date.now() + WAVE_TTL_MS;
+      mobs.set(id, mob);
+      broadcastAll({ t: 'mspawn', mob: mobView(mob) });
+    }
+    remaining -= group;
   }
   if (withBoss) {
     const open = findOpenSpawnAround(c.x, c.z, 24, 30, { attempts: 32 });
