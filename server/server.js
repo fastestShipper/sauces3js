@@ -100,6 +100,16 @@ const GOD_USER = process.env.GOD_USER || '';
 const GOD_PASS_SALT = process.env.GOD_PASS_SALT || '';
 const GOD_PASS_HASH = process.env.GOD_PASS_HASH || '';
 const GOD_ENABLED = !!(GOD_USER && GOD_PASS_SALT && GOD_PASS_HASH);
+
+// MODO DIOS POR CUENTA (`god: true` en la cuenta). Distinto del GOD_USER de arriba:
+// no cambia tu personaje a Cernunnos, solo te vuelve INMORTAL, te libera el techo de
+// nivel/oro y te deja pegar sin el cap de dano. Es un juguete para cuentas elegidas
+// por el duenio del juego; el anti-cheat sigue vivo para todos los demas.
+const GOD_MAX_LEVEL = 999;
+function isGodAccount(account) {
+  const acc = account && store.accounts ? store.accounts[account] : null;
+  return !!(acc && acc.god === true);
+}
 if (!GOD_ENABLED) console.warn('[auth] camino dios DESHABILITADO: faltan GOD_USER/GOD_PASS_SALT/GOD_PASS_HASH');
 
 // store en memoria. tokens NO se persiste. Unknown top-level keys are preserved for future phases.
@@ -358,16 +368,17 @@ function sanitizeChar(raw, account) {
   // modificado se declara nivel 200 con 1e9 de oro. Los niveles llegan de a uno:
   // acotamos el CRECIMIENTO contra lo ya persistido, no solo el valor absoluto.
   const prev = (store.accounts[account] && store.accounts[account].char) || null;
-  const prevLevel = prev ? clampInt(prev.level, 1, MAX_PLAYER_LEVEL) : 1;
+  // Las cuentas en MODO DIOS no pasan por el guard de progresion: pueden quedarse en
+  // nivel 420 sin que el clamp las devuelva a 99 en el siguiente save.
+  const godAcct = isGodAccount(account);
+  const prevLevel = prev ? clampInt(prev.level, 1, GOD_MAX_LEVEL) : 1;
   const prevGold = prev ? clampNum(prev.gold, 0, 1e9) : 0;
-  const level = Math.min(
-    clampInt(raw.level, 1, MAX_PLAYER_LEVEL),
-    prevLevel + MAX_LEVEL_GAIN_PER_SAVE,
-  );
-  const gold = Math.min(
-    clampNum(raw.gold, 0, 1e9),
-    prevGold + MAX_GOLD_GAIN_PER_SAVE,
-  );
+  const level = godAcct
+    ? clampInt(raw.level, 1, GOD_MAX_LEVEL)
+    : Math.min(clampInt(raw.level, 1, MAX_PLAYER_LEVEL), prevLevel + MAX_LEVEL_GAIN_PER_SAVE);
+  const gold = godAcct
+    ? clampNum(raw.gold, 0, 1e9)
+    : Math.min(clampNum(raw.gold, 0, 1e9), prevGold + MAX_GOLD_GAIN_PER_SAVE);
 
   return {
     className: clean(raw.className, 20),
@@ -1112,7 +1123,7 @@ wss.on('connection', (ws, req) => {
         me.account = existing;
         const token = newToken(existing);
         send(ws, {
-          t: 'auth', ok: true, god: existing === GOD_USER, user: existing,
+          t: 'auth', ok: true, god: existing === GOD_USER, godMode: isGodAccount(existing), user: existing,
           char: store.accounts[existing].char, token,
         });
         return;
@@ -1229,7 +1240,7 @@ wss.on('connection', (ws, req) => {
       }
       me.account = user;
       const token = newToken(user);
-      send(ws, { t: 'auth', ok: true, god: false, user, char: acc.char, token });
+      send(ws, { t: 'auth', ok: true, god: false, godMode: isGodAccount(user), user, char: acc.char, token });
       return;
     }
 
@@ -1375,7 +1386,10 @@ wss.on('connection', (ws, req) => {
       }
       // El cliente propone el dano; el server lo acota a lo que un jugador de
       // ese nivel puede producir. Sin esto, dmg=3000 mata cualquier boss.
-      const dmgCap = Math.min(MOB_DMG_MAX, maxPlayerHit(authoritativeLevel(me), hitKind));
+      // MODO DIOS: sin techo por nivel (igual respeta MOB_DMG_MAX como sanidad).
+      const dmgCap = isGodAccount(me.account)
+        ? MOB_DMG_MAX
+        : Math.min(MOB_DMG_MAX, maxPlayerHit(authoritativeLevel(me), hitKind));
       const dmg = clampNum(m.dmg, 0, dmgCap);
       const hpBefore = mob.hp;
       mob.hp -= dmg;

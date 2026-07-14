@@ -100,6 +100,15 @@ export function classById(id) {
 }
 
 // El personaje GOD (Cernunnos/Diosito): kit divino. La cuenta la valida el SERVER.
+// KIT DE MODO DIOS: RAYOS verdes. Va encima de la clase normal (no te cambia el
+// personaje). Solo lo reciben las cuentas marcadas `god: true` en el server.
+export const GODMODE_SKILLS = [
+  { key: 'Q', name: 'Rayo', desc: 'GOD: descarga de rayo verde', emoji: '⚡', cost: 0, cd: 0.5, type: 'bolt', dmgMult: 8, color: 0x66ffaa },
+  { key: 'E', name: 'Tormenta', desc: 'GOD: nova de rayos', emoji: '🌩️', cost: 0, cd: 3, type: 'nova', dmgMult: 10, radius: 9, color: 0x66ffaa },
+  { key: 'R', name: 'Cadena', desc: 'GOD: rayo encadenado', emoji: '⛓️', cost: 0, cd: 1.5, type: 'bolt', dmgMult: 9, color: 0x8affd0 },
+  { key: 'F', name: 'Juicio', desc: 'GOD: apocalipsis electrico', emoji: '☄️', cost: 0, cd: 7, type: 'meteor', dmgMult: 14, radius: 12, color: 0x66ffaa },
+];
+
 export const CERNUNNOS = {
   id: 'cernunnos',
   name: 'Diosito',

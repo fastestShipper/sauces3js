@@ -1,8 +1,8 @@
 // Barra de skills estilo Dota: 4 slots (Q/W/E/R) por heroe, un recurso comun
 // (furia sube al pegar; mana/energia regeneran) y cooldowns independientes.
 // Cada cast llama onCast(skillSpec) y combat.castSkill ejecuta el efecto.
-import { classById, CERNUNNOS } from './classes.js?v=20260710g58';
-import { actionLabel, keybindChangeEvent, matchesAction } from '../keybinds.js?v=20260710g58';
+import { classById, CERNUNNOS, GODMODE_SKILLS } from './classes.js?v=20260710g59';
+import { actionLabel, keybindChangeEvent, matchesAction } from '../keybinds.js?v=20260710g59';
 
 const STYLE_ID = 'rpg-skill-style';
 
@@ -225,11 +225,13 @@ const RES_SPEC = {
 };
 
 export class SkillSystem {
-  constructor(className, rootEl) {
+  constructor(className, rootEl, opts = {}) {
     injectStyle();
     const spec = className === 'cernunnos' ? CERNUNNOS : classById(className);
     this.spec = spec;
-    this.skills = spec.skills || [];
+    // MODO DIOS: cambia el kit por RAYOS verdes (sin costo). No toca la clase.
+    this.godMode = !!opts.godMode;
+    this.skills = this.godMode ? GODMODE_SKILLS : (spec.skills || []);
     this.resType = spec.resource || 'mana';
     const rs = RES_SPEC[this.resType] || RES_SPEC.mana;
     this.resMax = rs.max;
