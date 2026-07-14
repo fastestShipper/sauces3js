@@ -13,9 +13,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { plantClip, retargetRotationOnly } from '../animclip.js?v=20260710g59';
-import { PROJECTILE_BY_CHAR } from '../animmap.js?v=20260710g59';
-import { sanitizeImported } from '../glbutil.js?v=20260710g59';
+import { plantClip, retargetRotationOnly } from '../animclip.js?v=20260714a';
+import { PROJECTILE_BY_CHAR } from '../animmap.js?v=20260714a';
+import { sanitizeImported } from '../glbutil.js?v=20260714a';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)

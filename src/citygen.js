@@ -21,8 +21,16 @@ export const TRIM_COLORS = [
 
 // ancla del mundo: centro de la gruta del Parque Los Sauces (coord pinneada)
 export const WORLD_ANCHOR = [-62, -15];
-// radio jugable: 1 km a la redonda de la gruta
-export const WORLD_RADIUS = 1000;
+// WORLD_RADIUS: extension de la DATA (calles/edificios/verde). Es mayor que
+// el radio jugable para que el borde se lea como ciudad que sigue en la
+// niebla, nunca como suelo pelado. Todo el gameplay vive en <= 265 m.
+export const WORLD_RADIUS = 500;
+// PLAY_RADIUS: borde duro del jugador. Los 100 m entre PLAY y WORLD son solo
+// escenografia de transicion hacia la niebla (inalcanzables)
+export const PLAY_RADIUS = 400;
+// radio del relleno procedural (frontage/carpet): igual a WORLD_RADIUS para
+// que no exista ningun anillo pelado dentro de la data visible
+export const FILL_RADIUS = 500;
 
 // Recorta la data OSM a un radio desde el ancla. Calles y barreras se clipean
 // al circulo (con punto de interseccion exacto); poligonos (edificios/verde)
@@ -386,7 +394,6 @@ export class City {
   }
 
   fillFrontageStrips() {
-    const rng = mulberry32(99);
     const fillers = [];
     // SAN BORJA FABRIC: tiras continuas pared-con-pared en ambos frentes
     for (const r of this.data.roads) {
@@ -397,6 +404,13 @@ export class City {
         const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1];
         const L = Math.hypot(bx - ax, bz - az);
         if (L < 7.0) continue;
+        // rng POR SEGMENTO (seed por posicion): el layout de cada cuadra no
+        // depende del orden ni del recorte del resto de calles, asi cambiar
+        // WORLD_RADIUS/FILL_RADIUS nunca reordena los fillers del nucleo
+        const rng = mulberry32(((Math.round(ax * 8) * 73856093)
+          ^ (Math.round(az * 8) * 19349663)
+          ^ (Math.round(bx * 8) * 83492791)
+          ^ (Math.round(bz * 8) * 2654435761)) >>> 0);
         const ux = (bx - ax) / L, uz = (bz - az) / L;
         const nx = -uz, nz = ux;
         for (const side of [1, -1]) {
@@ -427,7 +441,12 @@ export class City {
               // repetida. Gratis para colision: el jugador solo usa el footprint 2D
               // y cachePolys() se rehace despues de fillGaps con esta h ya aplicada.
               const hj = 0.85 + (hashF(Math.trunc(mcx * 3.7) + Math.trunc(mcz * 5.3) * 57) - 0.5) * 0.6;
-              fillers.push({ p: corners, h: this.parcelHeight(full, rng, mcx, mcz) * hj, osm: false, generated: 'frontage' });
+              const ph = this.parcelHeight(full, rng, mcx, mcz);
+              // fuera del nucleo jugable el filler no se materializa (queda
+              // niebla); el rng ya consumio igual, asi el nucleo es estable
+              if (Math.hypot(mcx - WORLD_ANCHOR[0], mcz - WORLD_ANCHOR[1]) <= FILL_RADIUS) {
+                fillers.push({ p: corners, h: ph * hj, osm: false, generated: 'frontage' });
+              }
             }
             d += frontage;
           }
@@ -445,8 +464,12 @@ export class City {
       maxx = Math.max(maxx, p[0]); maxz = Math.max(maxz, p[1]);
     }
     const inner = [];
-    for (let gx = minx; gx < maxx; gx += 9.0) {
-      for (let gz = minz; gz < maxz; gz += 9.0) {
+    // grilla anclada a multiplos absolutos de 9 m: la fase de la alfombra no
+    // depende del bbox de calles recortado (estable ante cambios de radio)
+    for (let gx = Math.floor(minx / 9) * 9.0; gx < maxx; gx += 9.0) {
+      for (let gz = Math.floor(minz / 9) * 9.0; gz < maxz; gz += 9.0) {
+        // la alfombra tampoco se genera fuera del nucleo jugable
+        if (Math.hypot(gx - WORLD_ANCHOR[0], gz - WORLD_ANCHOR[1]) > FILL_RADIUS) continue;
         if (this.onAnyRoad(gx, gz, 5.5) || this.inAnyGreen(gx, gz) || this.inRealBuilding(gx, gz, 1.2)) continue;
         const dirv = this.nearestRoadDir(gx, gz);
         const nvx = -dirv[1], nvz = dirv[0];

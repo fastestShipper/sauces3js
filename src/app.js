@@ -3,44 +3,44 @@
 // Godot build, with full web control of tonemapping and color.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS } from './citygen.js?v=20260710g59';
-import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260710g59';
-import { buildOjedaStorefront } from './ojeda.js?v=20260710g59';
-import { buildParkBooth } from './parkbooth.js?v=20260710g59';
-import { GrassSystem } from './veg/grass.js?v=20260710g59';
-import { buildFlowerTuft } from './veg/flowers.js?v=20260710g59';
-import { Player } from './player.js?v=20260710g59';
-import { MiniMap } from './minimap.js?v=20260710g59';
-import { StreetLife } from './npcs.js?v=20260710g59';
-import { sanitizeImported } from './glbutil.js?v=20260710g59';
-import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260710g59';
-import { Net } from './net.js?v=20260710g59';
-import { ChatUI, showBubble } from './chat.js?v=20260710g59';
-import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260710g59';
-import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260710g59';
-import { equipWeapon } from './weapons.js?v=20260710g59';
-import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260710g59';
-import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260710g59';
-import { Inventory } from './rpg/loot.js?v=20260710g59';
-import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260710g59';
-import { Combat } from './rpg/combat.js?v=20260710g59';
-import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260710g59';
-import { Effects } from './rpg/effects.js?v=20260710g59';
-import { attachWeaponByName } from './weapons.js?v=20260710g59';
-import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260710g59';
-import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260710g59';
-import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260710g59';
-import { SocialPanel, showSocialInvite } from './social.js?v=20260710g59';
-import { SkillSystem } from './rpg/skills.js?v=20260710g59';
-import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260710g59';
-import { createSfx } from './sfx.js?v=20260710g59';
-import { installTouchControls } from './touch.js?v=20260710g59';
-import { createIntroScene } from './introscene.js?v=20260710g59';
-import { styleCarShell } from './carstyle.js?v=20260710g59';
-import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260710g59';
-import { FrameMeter, fpsBand } from './perf.js?v=20260710g59';
+import { City, mulberry32, ROAD_Y, WALK_Y, cropZoneData, WORLD_ANCHOR, WORLD_RADIUS, PLAY_RADIUS } from './citygen.js?v=20260714a';
+import { BUILDING_CHUNK_SIZE, buildBuildingGeometry, buildBuildings, buildRoads, buildParks } from './citymesh.js?v=20260714a';
+import { buildOjedaStorefront } from './ojeda.js?v=20260714a';
+import { buildParkBooth } from './parkbooth.js?v=20260714a';
+import { GrassSystem } from './veg/grass.js?v=20260714a';
+import { buildFlowerTuft } from './veg/flowers.js?v=20260714a';
+import { Player } from './player.js?v=20260714a';
+import { MiniMap } from './minimap.js?v=20260714a';
+import { StreetLife } from './npcs.js?v=20260714a';
+import { sanitizeImported } from './glbutil.js?v=20260714a';
+import { buildToonLamp, buildToonBench, buildToonHydrant, buildToonBin, buildToonStreetSign, buildToonPlanter } from './props.js?v=20260714a';
+import { Net } from './net.js?v=20260714a';
+import { ChatUI, showBubble } from './chat.js?v=20260714a';
+import { CLASS_LIST, CERNUNNOS, classById } from './rpg/classes.js?v=20260714a';
+import { composeCharacter, sanitizeCustom, defaultCustom, RIGS, RIG_IDS, ACCESSORIES, ACC_IDS, PALETTES_BY_CLASS } from './rpg/charcustom.js?v=20260714a';
+import { equipWeapon } from './weapons.js?v=20260714a';
+import { authRequest, privyAuthRequest, loadPrivy, PRIVY_APP_ID } from './rpg/account.js?v=20260714a';
+import { MobField, warmMobAssets } from './rpg/mobs.js?v=20260714a';
+import { Inventory } from './rpg/loot.js?v=20260714a';
+import { HUD, Progress, QuestLog, hpMaxForLevel, xpNextForLevel } from './rpg/hud.js?v=20260714a';
+import { Combat } from './rpg/combat.js?v=20260714a';
+import { applyWeaponTier, makeCharAura, updateAura } from './rpg/fx.js?v=20260714a';
+import { Effects } from './rpg/effects.js?v=20260714a';
+import { attachWeaponByName } from './weapons.js?v=20260714a';
+import { createTextureKit, createToonSkyTexture, createGroundVariationTexture } from './worldmat.js?v=20260714a';
+import { buildPoiSigns, installPoiInteractions, loadPublicPois } from './pois.js?v=20260714a';
+import { createTrailerMode, createTrailerNet, getTrailerAuth, getTrailerChoice, getTrailerConfig } from './trailer.js?v=20260714a';
+import { SocialPanel, showSocialInvite } from './social.js?v=20260714a';
+import { SkillSystem } from './rpg/skills.js?v=20260714a';
+import { goldRewardMultiplier, materialGoldValue, rollDrops, Wallet } from './rpg/economy.js?v=20260714a';
+import { createSfx } from './sfx.js?v=20260714a';
+import { installTouchControls } from './touch.js?v=20260714a';
+import { createIntroScene } from './introscene.js?v=20260714a';
+import { styleCarShell } from './carstyle.js?v=20260714a';
+import { actionLabel, createKeybindsPanel, keybindChangeEvent, matchesAction } from './keybinds.js?v=20260714a';
+import { FrameMeter, fpsBand } from './perf.js?v=20260714a';
 
-const APP_VERSION = '20260710g59';
+const APP_VERSION = '20260714a';
 const trailerConfig = getTrailerConfig();
 // EL PARQUE DE VERDAD como fondo del login/onboarding/carga (sauces GLB reales)
 const introScene = trailerConfig.enabled ? null : createIntroScene(APP_VERSION);
@@ -621,7 +621,9 @@ async function boot() {
   // da un gradiente top-down que le saca FORMA a las cajas planas de los edificios
   const hemi = new THREE.HemisphereLight(0xbfd9ff, 0xa8906a, 0.55);
   scene.add(hemi);
-  scene.fog = IS_MOBILE ? new THREE.Fog(0xdceefa, 120, 520) : new THREE.Fog(0xdceefa, 230, 1050);
+  // niebla mas cerrada en desktop: la data termina en WORLD_RADIUS (500) y el
+  // anillo de escenografia 400-500 debe disolverse en niebla, no cortarse
+  scene.fog = IS_MOBILE ? new THREE.Fog(0xdceefa, 120, 520) : new THREE.Fog(0xdceefa, 180, 520);
 
   // suelo base
   const groundVar = createGroundVariationTexture();
@@ -1827,10 +1829,11 @@ transformed.xz += vec2( sin( fPh ), cos( fPh * 0.83 ) ) * max( position.y, 0.0 )
     restoreGameplayCamera();
     player.update(dt, camera);
     {
-      // borde del mundo: nada de caminar hacia el vacio fuera del radio
+      // borde del mundo: el jugador queda dentro de PLAY_RADIUS; la ciudad
+      // visible sigue hasta WORLD_RADIUS y se disuelve en la niebla
       const dxw = player.pos.x - WORLD_ANCHOR[0], dzw = player.pos.z - WORLD_ANCHOR[1];
       const dw = Math.hypot(dxw, dzw);
-      const lim = WORLD_RADIUS - 3;
+      const lim = PLAY_RADIUS - 3;
       if (dw > lim) {
         player.pos.x = WORLD_ANCHOR[0] + (dxw / dw) * lim;
         player.pos.z = WORLD_ANCHOR[1] + (dzw / dw) * lim;

@@ -3,12 +3,12 @@
 // que avisa a TODOS los clientes. Al morir, si lo mataste tu (o tu party) recibes XP
 // y loot. Los mobs te pegan desde el server con aggro/chase/leash.
 import * as THREE from 'three';
-import { projectileSpeed } from './effects.js?v=20260710g59';
-import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260710g59';
-import { attackReleaseDelay } from '../weapons.js?v=20260710g59';
-import { matchesAction } from '../keybinds.js?v=20260710g59';
-import { BloodCoat } from './bloodcoat.js?v=20260710g59';
-import { killXpReward } from './balance.js?v=20260710g59';
+import { projectileSpeed } from './effects.js?v=20260714a';
+import { PROJECTILE_BY_CHAR, skillReleaseDelay } from '../animmap.js?v=20260714a';
+import { attackReleaseDelay } from '../weapons.js?v=20260714a';
+import { matchesAction } from '../keybinds.js?v=20260714a';
+import { BloodCoat } from './bloodcoat.js?v=20260714a';
+import { killXpReward } from './balance.js?v=20260714a';
 
 const ATTACK_CD = 0.46;      // cadencia deliberada tipo GOW: cada tajo PESA y se compromete
 const RANGE_MELEE = 3.05;    // CUERPO A CUERPO real: la espada toca al zombie
