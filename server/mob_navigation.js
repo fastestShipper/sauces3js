@@ -1,4 +1,4 @@
-const { SAFE_X, SAFE_Z, SAFE_R } = require('./mob_balance');
+const { SAFE_X, SAFE_Z, SAFE_R, OJEDA_X, OJEDA_Z, OJEDA_R } = require('./mob_balance');
 const { pointBlocked } = require('./world_obstacles');
 
 const MOB_CLEARANCE = 0.85;
@@ -9,6 +9,8 @@ function finitePoint(x, z) {
 }
 
 function outsideProtectedZones(x, z, safeRadius = SAFE_R - 3) {
+  // la bodega Ojeda tambien es refugio: ni spawns ni destinos de deriva adentro
+  if (Math.hypot(x - OJEDA_X, z - OJEDA_Z) < OJEDA_R) return false;
   return Math.hypot(x - SAFE_X, z - SAFE_Z) >= safeRadius;
 }
 

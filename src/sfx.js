@@ -3,7 +3,7 @@
 // anticipacion + impacto + consecuencia, con pitch aleatorio para no sonar a
 // metralleta. El AudioContext nace perezoso en el primer gesto (autoplay).
 // Tecla M silencia; persiste en localStorage.
-import { matchesAction } from './keybinds.js?v=20260714a';
+import { matchesAction } from './keybinds.js?v=20260714b';
 
 const LS_MUTE = 'sauces_muted';
 
@@ -301,9 +301,11 @@ class Sfx {
       this._growl({ f: 75 + Math.random() * 40, dur: 0.55, gain: 0.16 });
     }
   }
-  zombieHurt() {
-    if (!this._sample('flesh', { gain: 0.4, spread: 0.2 })) {
-      this._growl({ f: 130 + Math.random() * 60, dur: 0.22, gain: 0.18 });
+  zombieHurt(att = 1) {
+    // att = atenuacion por distancia (0..1); bajo el umbral ni se dispara
+    if (att <= 0.05) return;
+    if (!this._sample('flesh', { gain: 0.4 * att, spread: 0.2 })) {
+      this._growl({ f: 130 + Math.random() * 60, dur: 0.22, gain: 0.18 * att });
     }
   }
   zombieDeath() {
@@ -313,7 +315,7 @@ class Sfx {
     if (!this._sample('bones_real', { gain: 0.45, delay: 0.08 })) this.bones();
     this._sample('bass', { gain: 0.5, rate: 0.8, delay: 0.05 });
   }
-  bossRoar() { this._sample('boss_roar', { gain: 0.7, spread: 0.05 }); }
+  bossRoar(att = 1) { if (att > 0.05) this._sample('boss_roar', { gain: 0.7 * att, spread: 0.05 }); }
   // cada skill con su propio sonido (samples MuAPI, fallback al golpe base)
   skill(type) {
     const pool = SKILL_POOL[type];

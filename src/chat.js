@@ -2,7 +2,7 @@
 // texto sobre la cabeza de quien habla. El texto SIEMPRE se pinta con
 // textContent / canvas fillText (nunca innerHTML) -> sin XSS.
 import * as THREE from 'three';
-import { matchesAction } from './keybinds.js?v=20260714a';
+import { matchesAction } from './keybinds.js?v=20260714b';
 
 // burbuja de chat (sprite canvas) sobre la cabeza del personaje
 export function makeChatBubble(text) {

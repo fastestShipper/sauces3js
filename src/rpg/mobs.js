@@ -13,9 +13,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { plantClip, retargetRotationOnly } from '../animclip.js?v=20260714a';
-import { PROJECTILE_BY_CHAR } from '../animmap.js?v=20260714a';
-import { sanitizeImported } from '../glbutil.js?v=20260714a';
+import { plantClip, retargetRotationOnly } from '../animclip.js?v=20260714b';
+import { PROJECTILE_BY_CHAR } from '../animmap.js?v=20260714b';
+import { sanitizeImported } from '../glbutil.js?v=20260714b';
 
 const SCALE = 1.9 / 2.54;          // rig KayKit (~2.54u) escalado a ~1.9m como los jugadores
 const HP_W = 1.5;                  // ancho de la barra de vida (u)
@@ -692,7 +692,13 @@ export class MobField {
     if (v) this._playOnce(v, v.actions.Awaken ? 'Awaken' : 'Spawn_Ground');
     // la ABOMINACION ruge al nacer: encadena el Taunt cuando termina de levantarse
     if (v && mob && mob.b && v.actions.Taunt) v.queued = 'Taunt';
-    if (mob && mob.b && this.sfx) this.sfx.bossRoar?.();
+    // el rugido del boss tambien cae con la distancia (full <20 m, nada a 60 m):
+    // un boss naciendo al otro lado del mapa no ruge en tu oreja
+    if (mob && mob.b && this.sfx) {
+      const d = this._mobDistance(mob);
+      const att = Number.isFinite(d) ? Math.max(0, 1 - Math.max(0, d - 20) / 40) : 0;
+      this.sfx.bossRoar?.(att);
+    }
   }
 
   _mobDistance(mob) {
@@ -1066,7 +1072,14 @@ export class MobField {
         v.woundDripT = 0;
         for (const m of v.mats) if (m.color) m.color.multiplyScalar(0.72);
       }
-      if (this.sfx) this.sfx.zombieHurt();
+      if (this.sfx) {
+        // caida por distancia: la pelea de OTRO jugador (party o no) no debe
+        // sonar al lado tuyo si esta lejos. Full a <10 m, silencio a 30 m
+        const att = pp
+          ? Math.max(0, 1 - Math.max(0, Math.hypot(v.root.position.x - pp.x, v.root.position.z - pp.z) - 10) / 20)
+          : 0;
+        this.sfx.zombieHurt(att);
+      }
     }
   }
 

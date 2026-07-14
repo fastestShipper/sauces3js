@@ -16,6 +16,9 @@ const {
   SAFE_X,
   SAFE_Z,
   SAFE_R,
+  OJEDA_X,
+  OJEDA_Z,
+  OJEDA_R,
   MOB_ARCHETYPES,
   ARCHETYPE_GAIT,
   mobArchetype,
@@ -549,16 +552,71 @@ function spawnInitialMobs() {
   }
 }
 
+// MERODEADORES: la ciudad se siente TOMADA. Ademas de los spots fijos de farmeo
+// y las oleadas, una poblacion de zombies sueltos deriva por calles al azar,
+// se reubica cada tanto y al morir reaparece en OTRO punto. Encuentros
+// impredecibles: vas caminando y te cruzas uno donde "no deberia" haber.
+const ROAMER_COUNT = 16;
+const ROAMER_WANDER_RADIUS = 26;    // deriva amplia: cruzan cuadras, no clavados
+const ROAMER_LEASH_RANGE = 70;      // te persiguen mas lejos que un mob de spot
+const ROAMER_RESPAWN_MS = 45000;    // al morir, la ciudad "repone" en otro lado
+const ROAMER_RELOCATE_MIN_MS = 120000;
+const ROAMER_RELOCATE_MAX_MS = 260000;
+const ROAMER_MIN_PLAYER_DIST = 30;  // nunca nacen encima de un jugador
+const ROAMER_RING_MIN = 55;         // fuera del anillo suave de la gruta
+const ROAMER_RING_MAX = 330;        // dentro del radio jugable con margen
+
+function roamerLevel(x, z) {
+  // peligro por anillo: cerca del centro molestan, en la periferia muerden
+  const d = Math.hypot(x - SAFE_X, z - SAFE_Z);
+  const base = d < 130 ? 1 : d < 230 ? 2 : 3;
+  return Math.min(5, base + (Math.random() < 0.4 ? 1 : 0));
+}
+
+function pickRoamerSpawn() {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const point = findOpenSpawnAround(SAFE_X, SAFE_Z, ROAMER_RING_MIN, ROAMER_RING_MAX, { attempts: 40 });
+    if (!point) continue;
+    let nearPlayer = false;
+    for (const c of clients.values()) {
+      if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) continue;
+      if (Math.hypot(c.x - point.x, c.z - point.z) < ROAMER_MIN_PLAYER_DIST) { nearPlayer = true; break; }
+    }
+    if (!nearPlayer) return point;
+  }
+  return null;
+}
+
+function spawnRoamer(reuseId) {
+  const point = pickRoamerSpawn();
+  if (!point) return null;
+  const spawn = { x: point.x, z: point.z, lvl: roamerLevel(point.x, point.z), zone: 'roam' };
+  const id = Number.isFinite(reuseId) ? reuseId : nextMobId++;
+  const mob = makeMob(id, spawn);
+  mob._roamer = true;
+  mob._wanderR = ROAMER_WANDER_RADIUS;
+  mob._leash = ROAMER_LEASH_RANGE;
+  mob._relocateAtMs = Date.now() + ROAMER_RELOCATE_MIN_MS + Math.random() * (ROAMER_RELOCATE_MAX_MS - ROAMER_RELOCATE_MIN_MS);
+  mobs.set(id, mob);
+  return mob;
+}
+
+function spawnRoamers() {
+  let placed = 0;
+  for (let i = 0; i < ROAMER_COUNT; i++) if (spawnRoamer()) placed++;
+  console.log('[roamers]', JSON.stringify({ requested: ROAMER_COUNT, placed }));
+}
+
 function nearestMobTarget(mob) {
   let best = null;
   let bestD = mob.aggro || MOB_AGGRO_RANGE;
   for (const [id, c] of clients) {
     if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) continue;
-    // la gruta es refugio TOTAL: los refugiados no son targeteables (sin esto
-    // las oleadas campean el respawn = cadena de muertes sin escape)
-    if (Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R) continue;
+    // los refugios (gruta y Ojeda) son proteccion TOTAL: los refugiados no son
+    // targeteables (sin esto las oleadas campean el respawn = cadena de muertes)
+    if (inSafeZone(c)) continue;
     const leashD = Math.hypot(c.x - mob.spawnX, c.z - mob.spawnZ);
-    if (leashD > MOB_LEASH_RANGE) continue;
+    if (leashD > (mob._leash || MOB_LEASH_RANGE)) continue;
     const d = Math.hypot(c.x - mob.x, c.z - mob.z);
     if (d < bestD) { bestD = d; best = [id, c, d]; }
   }
@@ -618,7 +676,20 @@ function clearMobWander(mob) {
 }
 
 function setMobWanderTarget(mob, now) {
-  const target = findWanderTarget(mob.spawnX, mob.spawnZ, MOB_WANDER_RADIUS);
+  const wr = mob._wanderR || MOB_WANDER_RADIUS;
+  // merodeadores: DERIVA real. El ancla de patrulla se muda a donde esta parado,
+  // asi el disco de deriva avanza con el y termina cruzando el barrio entero.
+  if (mob._roamer) {
+    mob.spawnX = mob.x;
+    mob.spawnZ = mob.z;
+  }
+  let target = findWanderTarget(mob.spawnX, mob.spawnZ, wr);
+  // ciudad densa: con radio amplio casi todos los saltos caen en edificios y el
+  // fallback devuelve el propio spawn (mob clavado). Escalera de radios: intenta
+  // lejos, despues media cuadra, despues paso corto de calle.
+  const stuck = (t) => !t || Math.hypot(t.x - mob.spawnX, t.z - mob.spawnZ) < 2;
+  if (mob._roamer && stuck(target)) target = findWanderTarget(mob.spawnX, mob.spawnZ, wr * 0.5);
+  if (mob._roamer && stuck(target)) target = findWanderTarget(mob.spawnX, mob.spawnZ, wr * 0.2);
   if (target) {
     mob.wanderX = target.x;
     mob.wanderZ = target.z;
@@ -630,7 +701,7 @@ function setMobWanderTarget(mob, now) {
 
 function stepMobWander(mob, now, dt) {
   const distHome = Math.hypot(mob.x - mob.spawnX, mob.z - mob.spawnZ);
-  if (distHome > MOB_WANDER_RADIUS + 1.5) {
+  if (distHome > (mob._wanderR || MOB_WANDER_RADIUS) + 1.5) {
     clearMobWander(mob);
     return stepToward(mob, mob.spawnX, mob.spawnZ, MOB_RETURN_SPEED * dt);
   }
@@ -676,7 +747,7 @@ function validMobAttackTarget(mob, c) {
   if (!c || !c.ws || c.ws.readyState !== 1) return false;
   if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) return false;
   if (inSafeZone(c)) return false;
-  return Math.hypot(c.x - mob.spawnX, c.z - mob.spawnZ) <= MOB_LEASH_RANGE + 1;
+  return Math.hypot(c.x - mob.spawnX, c.z - mob.spawnZ) <= (mob._leash || MOB_LEASH_RANGE) + 1;
 }
 
 function scentMobTarget(mob, now) {
@@ -783,10 +854,27 @@ function mobTick() {
       broadcastAll({ t: 'mdead', id: mob.id, by: -1, party: [] });
       continue;
     }
+    // merodeador vencido su plazo: si nadie lo ve de cerca, se "va" y otro
+    // aparece en un punto distinto del barrio (presencia impredecible)
+    if (mob._roamer && mob._relocateAtMs && now > mob._relocateAtMs && mob.targetId == null) {
+      let nearPlayer = false;
+      for (const c of clients.values()) {
+        if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) continue;
+        if (Math.hypot(c.x - mob.x, c.z - mob.z) < 60) { nearPlayer = true; break; }
+      }
+      if (!nearPlayer) {
+        mobs.delete(mob.id);
+        broadcastAll({ t: 'mdead', id: mob.id, by: -1, party: [] });
+        const fresh = spawnRoamer();
+        if (fresh) broadcastAll({ t: 'mspawn', mob: mobView(fresh) });
+        continue;
+      }
+      mob._relocateAtMs = now + 60000;   // hay gente mirando: reintenta luego
+    }
     mob.hitCdMs = Math.max(0, (mob.hitCdMs || 0) - MOB_TICK_MS);
     const distHome = Math.hypot(mob.x - mob.spawnX, mob.z - mob.spawnZ);
     let state = 'idle';
-    if (distHome > MOB_LEASH_RANGE) {
+    if (distHome > (mob._leash || MOB_LEASH_RANGE)) {
       clearMobAttackWindup(mob);
       clearMobScent(mob);
       mob.targetId = null;
@@ -877,6 +965,7 @@ function mobTick() {
 }
 
 spawnInitialMobs();
+spawnRoamers();
 console.log('[world-obstacles]', JSON.stringify(obstacleStats()));
 
 // OLEADAS ZOMBIE: brotan de forma espaciada; evento fuerte, no ruido constante.
@@ -1011,7 +1100,9 @@ const PVP_DMG_MAX = 300;
 const PVP_CD_MS = 650;
 function inSafeZone(c) {
   if (!Number.isFinite(c.x) || !Number.isFinite(c.z)) return true;
-  return Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R;
+  // dos refugios reales del barrio: el parque de la gruta y la bodega Ojeda
+  return Math.hypot(c.x - SAFE_X, c.z - SAFE_Z) < SAFE_R
+    || Math.hypot(c.x - OJEDA_X, c.z - OJEDA_Z) < OJEDA_R;
 }
 
 // Nivel en el que el server CREE al jugador, para calcular su techo de dano.
@@ -1412,6 +1503,7 @@ wss.on('connection', (ws, req) => {
       } else {
         // muerto: sacar del mapa, calcular party del que lo mato, avisar a todos.
         const spawn = mob._spawn;
+        const wasRoamer = !!mob._roamer;
         const deadId = mob.id;
         const party = partyMemberIds(id);
         const deathMsg = {
@@ -1441,6 +1533,13 @@ wss.on('connection', (ws, req) => {
             mobs.set(deadId, fresh);
             broadcastAll({ t: 'mspawn', mob: mobView(fresh) });
           }, MOB_RESPAWN_MS);
+          if (timer.unref) timer.unref();
+        } else if (wasRoamer) {
+          // merodeador cazado: la ciudad repone en OTRO punto del barrio
+          const timer = setTimeout(() => {
+            const fresh = spawnRoamer(deadId);
+            if (fresh) broadcastAll({ t: 'mspawn', mob: mobView(fresh) });
+          }, ROAMER_RESPAWN_MS);
           if (timer.unref) timer.unref();
         }
       }

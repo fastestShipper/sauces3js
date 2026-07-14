@@ -6,6 +6,12 @@ const SAFE_X = -62;
 const SAFE_Z = -7;
 const SAFE_R = 30;
 
+// Bodega Ojeda: segundo refugio del barrio (la esquina real de Poussin).
+// Radio chico: cubre el local y la vereda, no la cuadra entera.
+const OJEDA_X = -53.24;
+const OJEDA_Z = 88.6;
+const OJEDA_R = 16;
+
 // ARQUETIPOS.
 //
 // Antes el RIG del mob salia de su NIVEL (`kind = lvl - 1`), asi que el esqueleto
@@ -122,6 +128,9 @@ module.exports = {
   SAFE_X,
   SAFE_Z,
   SAFE_R,
+  OJEDA_X,
+  OJEDA_Z,
+  OJEDA_R,
   MOB_ARCHETYPES,
   MOB_ARCHETYPE_ORDER,
   ARCHETYPE_GAIT,
