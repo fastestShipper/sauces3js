@@ -2,7 +2,7 @@
 
 Juego web estilo GTA del barrio **Los Sauces, San Borja (Lima, Perú)**, construido sobre datos reales de OpenStreetMap. three.js puro, sin bundler.
 
-> **FUENTE DE VERDAD DEL LIVE.** Este repo es la fuente del deploy en **https://sauces.controla.group**. NO confundir con `wow-monet` ni con la versión Godot (`lima-godot`). Cualquier cambio al sitio en vivo sale de aquí.
+> **LIVE.** El juego corre en https://sauces.controla.group. Cualquier cambio al sitio en vivo sale de este repo.
 
 ## Stack
 - three.js 0.161 via importmap CDN (sin build, sin node_modules)

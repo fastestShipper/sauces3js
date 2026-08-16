@@ -520,7 +520,7 @@ node scripts/audit_notes_store.mjs
 git add -A
 git commit -m "feat: add neighborhood notes and symbolic home claims"
 git push origin main
-scp -P 2222 -i ~/.ssh/id_ed25519_2026 -r index.html src assets scripts server CHANGELOG.md docs root@187.77.229.244:/var/www/sauces.controla.group/
+scp -P 2222 -i ~/.ssh/your_key -r index.html src assets scripts server CHANGELOG.md docs YOUR_HOST:/var/www/sauces.controla.group/
 ```
 
 Production checks:
